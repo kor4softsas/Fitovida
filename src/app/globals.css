@@ -1,0 +1,167 @@
+@import "tailwindcss";
+
+:root {
+  /* Brand Colors */
+  --tea-green: #c6ebbe;
+  --celadon: #a9dbb8;
+  --steel-blue: #7ca5b8;
+  --egyptian-blue: #38369a;
+  
+  /* Semantic Colors - Verde como protagonista */
+  --primary: #5a9e6f;
+  --primary-hover: #4a8b5e;
+  --primary-dark: #3d7a4f;
+  --secondary: #38369a;
+  --secondary-hover: #2d2b7a;
+  --accent: #a9dbb8;
+  --accent-light: #c6ebbe;
+  
+  /* Neutrals */
+  --background: #fafcfa;
+  --surface: #ffffff;
+  --foreground: #1a2e1a;
+  --muted: #5a7265;
+  --border: #dce8df;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Custom animations */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scroll {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(8px);
+  }
+}
+
+@keyframes sway {
+  0%, 100% { transform: rotate(-3deg) translateY(0); }
+  50% { transform: rotate(3deg) translateY(-2px); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+.animate-sway {
+  animation: sway 4s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.leaf-pattern {
+  background-color: rgba(255, 255, 255, 0.9);
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 30c0-5.5 4.5-10 10-10s10 4.5 10 10-4.5 10-10 10-10-4.5-10-10z' fill='%235a9e6f' fill-opacity='0.03'/%3E%3Cpath d='M0 30c0-5.5 4.5-10 10-10s10 4.5 10 10-4.5 10-10 10-10-4.5-10-10z' fill='%235a9e6f' fill-opacity='0.03'/%3E%3C/svg%3E");
+}
+
+.glass-natural {
+  background: rgba(250, 252, 250, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(90, 158, 111, 0.1);
+}
+
+.animation-delay-200 {
+  animation-delay: 200ms;
+}
+
+.animation-delay-400 {
+  animation-delay: 400ms;
+}
+
+.animation-delay-600 {
+  animation-delay: 600ms;
+}
+
+.animate-scroll {
+  animation: scroll 1.5s ease-in-out infinite;
+}
+
+/* Smooth scroll behavior */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Hide scrollbar but keep functionality */
+.hide-scrollbar,
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar,
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--steel-blue);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--egyptian-blue);
+}
+
+/* Smooth transitions globally */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Glass effect utility */
+.glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, var(--primary), var(--celadon));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Subtle shadow */
+.shadow-soft {
+  box-shadow: 0 4px 20px -2px rgba(56, 54, 154, 0.08);
+}
+
+/* Card hover effect */
+.card-hover {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px -8px rgba(56, 54, 154, 0.15);
+}
