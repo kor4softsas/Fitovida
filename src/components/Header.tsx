@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
 import { Leaf, Search, ShoppingCart, User, Menu, X } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
@@ -116,13 +117,28 @@ export default function Header() {
                 )}
               </button>
 
-              <Link
-                href="/login"
-                className="p-2.5 text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-xl transition-all duration-200 group"
-                aria-label="Iniciar sesión"
-              >
-                <User className="h-5 w-5 transition-transform group-hover:scale-110" />
-              </Link>
+              <SignedOut>
+                <Link
+                  href="/login"
+                  className="p-2.5 text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-xl transition-all duration-200 group"
+                  aria-label="Iniciar sesion"
+                >
+                  <User className="h-5 w-5 transition-transform group-hover:scale-110" />
+                </Link>
+              </SignedOut>
+              <SignedIn>
+                <UserButton 
+                  afterSignOutUrl="/"
+                  showName={false}
+                  appearance={{
+                    elements: {
+                      avatarBox: "h-9 w-9",
+                      userButtonPopoverCard: "shadow-xl border border-[var(--border)] rounded-xl",
+                      userButtonPopoverActionButton: "hover:bg-[var(--accent-light)]/30",
+                    }
+                  }}
+                />
+              </SignedIn>
 
               {/* Mobile menu button */}
               <button
@@ -152,14 +168,26 @@ export default function Header() {
               </button>
             ))}
             <div className="border-t border-[var(--border)] my-2" />
-            <Link 
-              href="/login"
-              onClick={() => setIsMenuOpen(false)}
-              className="flex items-center gap-3 py-3 px-4 text-[var(--foreground)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-xl transition-all duration-200 font-medium"
-            >
-              <User className="h-5 w-5" />
-              Iniciar sesión
-            </Link>
+            <SignedOut>
+              <Link 
+                href="/login"
+                onClick={() => setIsMenuOpen(false)}
+                className="flex items-center gap-3 py-3 px-4 text-[var(--foreground)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-xl transition-all duration-200 font-medium"
+              >
+                <User className="h-5 w-5" />
+                Iniciar sesion
+              </Link>
+            </SignedOut>
+            <SignedIn>
+              <Link
+                href="/perfil"
+                onClick={() => setIsMenuOpen(false)}
+                className="flex items-center gap-3 py-3 px-4 text-[var(--foreground)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-xl transition-all duration-200 font-medium"
+              >
+                <User className="h-5 w-5" />
+                Mi perfil
+              </Link>
+            </SignedIn>
           </nav>
         </div>
       </header>
