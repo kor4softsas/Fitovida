@@ -46,7 +46,7 @@ const ErrorMessage = memo(({ message }: { message?: string }) => {
 
 ErrorMessage.displayName = 'ErrorMessage';
 
-type AuthMode = 'login' | 'register' | 'forgot';
+type AuthMode = 'login' | 'register' | 'forgot' | 'verify';
 
 interface FormErrors {
   name?: string;
@@ -65,6 +65,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState<AuthMode>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [formData, setFormData] = useState({
@@ -91,6 +92,9 @@ export default function LoginPage() {
   const validatePassword = (password: string): string | undefined => {
     if (!password) return 'La contrasena es obligatoria';
     if (password.length < 8) return 'Minimo 8 caracteres';
+    if (!/[A-Z]/.test(password)) return 'Incluye al menos una mayuscula';
+    if (!/[a-z]/.test(password)) return 'Incluye al menos una minuscula';
+    if (!/[0-9]/.test(password)) return 'Incluye al menos un numero';
     return undefined;
   };
 
@@ -154,11 +158,34 @@ export default function LoginPage() {
       // Send email verification
       await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
       
-      // For now, redirect to Clerk's verification page
-      router.push('/sign-up/verify');
+      // Show verification form
+      setMode('verify');
+    } catch (err: unknown) {
+      const error = err as { errors?: { message: string; code?: string }[] };
+      const errorMessage = error.errors?.[0]?.message || 'Error al crear cuenta';
+      setErrors({ general: errorMessage });
+    }
+  };
+
+  // Handle email verification
+  const handleVerification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!signUp) return;
+    
+    setIsLoading(true);
+    try {
+      const result = await signUp.attemptEmailAddressVerification({
+        code: verificationCode,
+      });
+
+      if (result.status === 'complete') {
+        router.push('/');
+      }
     } catch (err: unknown) {
       const error = err as { errors?: { message: string }[] };
-      setErrors({ general: error.errors?.[0]?.message || 'Error al crear cuenta' });
+      setErrors({ general: error.errors?.[0]?.message || 'Codigo invalido' });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -325,6 +352,79 @@ export default function LoginPage() {
                 Volver a iniciar sesión
               </button>
             )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Email verification view
+  if (mode === 'verify') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-white via-[var(--accent-light)]/10 to-[var(--background)] flex items-center justify-center p-4 pt-24">
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-[var(--celadon)]/20 rounded-full blur-[120px]" />
+        </div>
+
+        <div className="w-full max-w-md relative z-10">
+          <div className="bg-white rounded-3xl shadow-xl shadow-black/5 border border-[var(--border)] p-8">
+            <button
+              onClick={() => { setMode('register'); setVerificationCode(''); setErrors({}); }}
+              className="flex items-center gap-2 text-[var(--muted)] hover:text-[var(--foreground)] mb-6 transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Volver
+            </button>
+
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--primary)]/10 rounded-full mb-4">
+                <Mail className="h-8 w-8 text-[var(--primary)]" />
+              </div>
+              <h1 className="text-xl font-semibold text-[var(--foreground)]">
+                Verifica tu correo
+              </h1>
+              <p className="text-sm text-[var(--muted)] mt-2">
+                Enviamos un codigo de 6 digitos a <span className="font-medium text-[var(--foreground)]">{formData.email}</span>
+              </p>
+            </div>
+
+            <form onSubmit={handleVerification} className="space-y-4">
+              {errors.general && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-600 text-sm">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  {errors.general}
+                </div>
+              )}
+              
+              <div>
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-1.5">
+                  Codigo de verificacion
+                </label>
+                <input
+                  type="text"
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  maxLength={6}
+                  className="w-full px-4 py-3 bg-[var(--background)] border border-[var(--border)] rounded-xl focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10 transition-all text-[var(--foreground)] placeholder:text-[var(--muted)]/50 text-center text-2xl tracking-widest font-mono"
+                />
+              </div>
+              
+              <button
+                type="submit"
+                disabled={isLoading || verificationCode.length !== 6}
+                className="w-full py-3.5 bg-[var(--primary)] hover:bg-[var(--primary-hover)] disabled:bg-[var(--muted)] text-white font-medium rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-[var(--primary)]/25 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Verificando...
+                  </>
+                ) : (
+                  'Verificar'
+                )}
+              </button>
+            </form>
           </div>
         </div>
       </div>
