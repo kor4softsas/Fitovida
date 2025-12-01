@@ -148,21 +148,45 @@ export default function LoginPage() {
     if (!signUp) return;
     
     try {
-      await signUp.create({
+      const result = await signUp.create({
         emailAddress: formData.email,
         password: formData.password,
         firstName: formData.name.split(' ')[0],
         lastName: formData.name.split(' ').slice(1).join(' ') || undefined,
       });
 
-      // Send email verification
-      await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
-      
-      // Show verification form
-      setMode('verify');
+      // If sign up is complete (no verification required)
+      if (result.status === 'complete') {
+        router.push('/');
+        return;
+      }
+
+      // If email verification is required
+      if (result.status === 'missing_requirements') {
+        // Send email verification
+        await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+        // Show verification form
+        setMode('verify');
+      }
     } catch (err: unknown) {
-      const error = err as { errors?: { message: string; code?: string }[] };
-      const errorMessage = error.errors?.[0]?.message || 'Error al crear cuenta';
+      const error = err as { errors?: { message: string; code?: string; longMessage?: string }[] };
+      const clerkError = error.errors?.[0];
+      
+      // Handle specific Clerk error codes
+      let errorMessage = 'Error al crear cuenta';
+      
+      if (clerkError?.code === 'form_identifier_exists') {
+        errorMessage = 'Este correo ya está registrado. Intenta iniciar sesión.';
+      } else if (clerkError?.code === 'form_password_pwned') {
+        errorMessage = 'Esta contraseña es muy común. Por favor elige otra más segura.';
+      } else if (clerkError?.code === 'form_password_length_too_short') {
+        errorMessage = 'La contraseña debe tener al menos 8 caracteres.';
+      } else if (clerkError?.code === 'captcha_invalid' || clerkError?.code === 'captcha_verification_failed') {
+        errorMessage = 'Error de verificación. Por favor intenta de nuevo.';
+      } else if (clerkError?.message) {
+        errorMessage = clerkError.message;
+      }
+      
       setErrors({ general: errorMessage });
     }
   };

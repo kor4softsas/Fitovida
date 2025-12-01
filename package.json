@@ -11,12 +11,17 @@
   "dependencies": {
     "@clerk/localizations": "^3.28.5",
     "@clerk/nextjs": "^6.35.5",
+    "@stripe/react-stripe-js": "^5.4.1",
+    "@stripe/stripe-js": "^8.5.3",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.86.0",
     "clsx": "^2.1.1",
     "gsap": "^3.13.0",
     "lucide-react": "^0.555.0",
     "next": "16.0.5",
     "react": "19.2.0",
     "react-dom": "19.2.0",
+    "stripe": "^20.0.0",
     "tailwind-merge": "^3.4.0",
     "zustand": "^5.0.8"
   },

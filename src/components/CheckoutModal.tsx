@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useRef, memo } from 'react';
 import Image from 'next/image';
-import { X, User, CreditCard, ShoppingBag, Lock, Check, AlertCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
+import { X, User, CreditCard, ShoppingBag, Lock, Check, AlertCircle, Building2, LogIn } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
 import { formatPrice, cn } from '@/lib/utils';
 import { CustomerInfo, PaymentMethod } from '@/types';
@@ -68,8 +70,12 @@ export default function CheckoutModal() {
     getFinalTotal,
     applyPromoCode,
     resetDiscount,
-    createOrder
+    createOrder,
+    setPendingOrder
   } = useCartStore();
+  
+  const router = useRouter();
+  const { user, isSignedIn, isLoaded } = useUser();
 
   const [formData, setFormData] = useState<CustomerInfo>({
     name: '',
@@ -260,7 +266,39 @@ export default function CheckoutModal() {
     
     if (!validateForm()) return;
     
-    const order = createOrder(formData, paymentMethod, notes);
+    // Si el método de pago es tarjeta o PSE, redirigir a la página de checkout correspondiente
+    if (paymentMethod === 'card' || paymentMethod === 'pse') {
+      // Calcular valores para el pending order
+      const subtotal = getSubtotal();
+      const discount = discountAmount > 100 ? discountAmount : (subtotal * discountAmount) / 100;
+      const total = subtotal + shippingCost - discount;
+      
+      // Guardar datos del pedido antes de redirigir
+      setPendingOrder({
+        customer: formData,
+        paymentMethod,
+        notes,
+        items: [...cart],
+        subtotal,
+        shipping: shippingCost,
+        discount,
+        discountCode,
+        total,
+      });
+      
+      // Cerrar modal y redirigir
+      closeCheckout();
+      
+      if (paymentMethod === 'card') {
+        router.push('/checkout');
+      } else {
+        router.push('/checkout/pse');
+      }
+      return;
+    }
+    
+    // Para transferencia bancaria, crear orden directamente (flujo original)
+    const order = createOrder(formData, paymentMethod, notes, user?.id);
     setOrderNumber(order.orderNumber);
     setShowSuccess(true);
     
@@ -286,6 +324,46 @@ export default function CheckoutModal() {
   const total = getFinalTotal();
 
   if (!isCheckoutOpen) return null;
+
+  // TEMPORALMENTE DESHABILITADO PARA PRUEBAS
+  // Mostrar pantalla de login si no está autenticado
+  // if (isLoaded && !isSignedIn) {
+  //   return (
+  //     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+  //       <div className="absolute inset-0 bg-[var(--foreground)]/40 backdrop-blur-sm" onClick={handleClose} />
+  //       <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center border border-[var(--border)]">
+  //         <button
+  //           onClick={handleClose}
+  //           className="absolute top-4 right-4 p-2 hover:bg-[var(--background)] rounded-full transition-colors"
+  //         >
+  //           <X className="h-5 w-5 text-[var(--muted)]" />
+  //         </button>
+  //         <div className="w-16 h-16 bg-[var(--accent-light)]/50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+  //           <LogIn className="h-10 w-10 text-[var(--primary)]" />
+  //         </div>
+  //         <h2 className="text-2xl font-bold text-[var(--foreground)] mb-2">
+  //           Inicia sesión para continuar
+  //         </h2>
+  //         <p className="text-[var(--muted)] mb-6">
+  //           Necesitas iniciar sesión o crear una cuenta para finalizar tu compra.
+  //         </p>
+  //         <button
+  //           onClick={() => {
+  //             closeCheckout();
+  //             router.push('/login');
+  //           }}
+  //           className="w-full py-3 bg-[var(--primary)] hover:bg-[var(--primary-dark)] text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+  //         >
+  //           <LogIn className="h-5 w-5" />
+  //           Iniciar Sesión
+  //         </button>
+  //         <p className="mt-4 text-sm text-[var(--muted)]">
+  //           ¿No tienes cuenta? Al iniciar sesión podrás crear una.
+  //         </p>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   // Success Modal
   if (showSuccess) {
@@ -471,8 +549,8 @@ export default function CheckoutModal() {
                 <div className="space-y-2">
                   {[
                     { id: 'card', label: 'Tarjeta de Crédito/Débito', icon: '💳' },
-                    { id: 'paypal', label: 'PayPal', icon: '🅿️' },
-                    { id: 'transfer', label: 'Transferencia Bancaria', icon: '🏦' }
+                    { id: 'pse', label: 'PSE (Débito Bancario)', icon: '🏦' },
+                    { id: 'transfer', label: 'Transferencia Bancaria', icon: '📋' }
                   ].map((method) => (
                     <label
                       key={method.id}

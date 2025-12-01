@@ -3,10 +3,7 @@ import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { esES } from "@clerk/localizations";
 import "./globals.css";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
-import CartSidebar from "@/components/CartSidebar";
-import CheckoutModal from "@/components/CheckoutModal";
+import LayoutWrapper from "@/components/LayoutWrapper";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -27,11 +24,7 @@ export default function RootLayout({
     <ClerkProvider localization={esES}>
       <html lang="es" className="scroll-smooth" data-scroll-behavior="smooth">
         <body className={`${inter.className} antialiased`}>
-          <Header />
-          <main>{children}</main>
-          <Footer />
-          <CartSidebar />
-          <CheckoutModal />
+          <LayoutWrapper>{children}</LayoutWrapper>
         </body>
       </html>
     </ClerkProvider>

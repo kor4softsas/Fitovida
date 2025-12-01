@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { CartItem, Product, Category, Order, CustomerInfo, PaymentMethod, PROMO_CODES } from '@/types';
+import { CartItem, Product, Category, Order, CustomerInfo, PaymentMethod, PendingOrder, OrderStatus, PROMO_CODES, ORDER_CANCELLATION_WINDOW_MS } from '@/types';
 import { generateOrderNumber } from './utils';
 
 interface CartStore {
@@ -16,6 +16,9 @@ interface CartStore {
   discountCode: string;
   discountAmount: number;
   shippingCost: number;
+  
+  // Pending order (para guardar datos antes de redirigir a pasarela de pago)
+  pendingOrder: PendingOrder | null;
   
   // Filter state
   currentCategory: Category;
@@ -38,13 +41,23 @@ interface CartStore {
   applyPromoCode: (code: string) => boolean;
   resetDiscount: () => void;
   
+  // Pending order actions
+  setPendingOrder: (order: PendingOrder) => void;
+  clearPendingOrder: () => void;
+  
   // Filter actions
   setCategory: (category: Category) => void;
   setSearchQuery: (query: string) => void;
   setSortBy: (sort: 'default' | 'price-low' | 'price-high' | 'name') => void;
   
   // Order actions
-  createOrder: (customer: CustomerInfo, paymentMethod: PaymentMethod, notes: string) => Order;
+  createOrder: (customer: CustomerInfo, paymentMethod: PaymentMethod, notes: string, userId?: string) => Order;
+  createOrderFromPending: (paymentId?: string, paymentProvider?: 'stripe' | 'wompi' | 'none', userId?: string) => Order | null;
+  updateOrderStatus: (orderNumber: string, status: OrderStatus, paymentId?: string) => void;
+  getOrderByNumber: (orderNumber: string) => Order | undefined;
+  getOrdersByUserId: (userId: string) => Order[];
+  cancelOrder: (orderNumber: string, reason?: string) => { success: boolean; error?: string };
+  canCancelOrder: (order: Order) => boolean;
   
   // Computed
   getCartTotal: () => number;
@@ -64,6 +77,7 @@ export const useCartStore = create<CartStore>()(
       discountCode: '',
       discountAmount: 0,
       shippingCost: 15000, // COP
+      pendingOrder: null,
       currentCategory: 'todos',
       searchQuery: '',
       sortBy: 'default',
@@ -139,6 +153,11 @@ export const useCartStore = create<CartStore>()(
       
       resetDiscount: () => set({ discountCode: '', discountAmount: 0 }),
       
+      // Pending order actions
+      setPendingOrder: (order) => set({ pendingOrder: order }),
+      
+      clearPendingOrder: () => set({ pendingOrder: null }),
+      
       // Filter actions
       setCategory: (category) => set({ currentCategory: category }),
       
@@ -147,7 +166,7 @@ export const useCartStore = create<CartStore>()(
       setSortBy: (sort) => set({ sortBy: sort }),
       
       // Order actions
-      createOrder: (customer, paymentMethod, notes) => {
+      createOrder: (customer, paymentMethod, notes, userId) => {
         const state = get();
         const subtotal = state.getSubtotal();
         const discount = state.discountAmount > 100 
@@ -166,7 +185,9 @@ export const useCartStore = create<CartStore>()(
           discountCode: state.discountCode,
           total: subtotal + state.shippingCost - discount,
           date: new Date().toISOString(),
-          status: 'pending'
+          status: 'pending',
+          paymentProvider: 'none',
+          userId,
         };
         
         set((state) => ({
@@ -178,6 +199,116 @@ export const useCartStore = create<CartStore>()(
         }));
         
         return order;
+      },
+      
+      // Crear orden desde pendingOrder (después del pago)
+      createOrderFromPending: (paymentId, paymentProvider = 'none', userId) => {
+        const state = get();
+        const pending = state.pendingOrder;
+        
+        if (!pending) return null;
+        
+        const order: Order = {
+          orderNumber: generateOrderNumber(),
+          customer: pending.customer,
+          paymentMethod: pending.paymentMethod,
+          notes: pending.notes,
+          items: [...pending.items],
+          subtotal: pending.subtotal,
+          shipping: pending.shipping,
+          discount: pending.discount,
+          discountCode: pending.discountCode,
+          total: pending.total,
+          date: new Date().toISOString(),
+          status: paymentProvider !== 'none' ? 'paid' : 'pending',
+          paymentId,
+          paymentProvider,
+          userId,
+        };
+        
+        set((state) => ({
+          orders: [...state.orders, order],
+          cart: [],
+          pendingOrder: null,
+          discountCode: '',
+          discountAmount: 0,
+          isCheckoutOpen: false
+        }));
+        
+        return order;
+      },
+      
+      // Actualizar estado de una orden
+      updateOrderStatus: (orderNumber, status, paymentId) => {
+        set((state) => ({
+          orders: state.orders.map(order => 
+            order.orderNumber === orderNumber
+              ? { ...order, status, ...(paymentId && { paymentId }) }
+              : order
+          )
+        }));
+      },
+      
+      // Buscar orden por número
+      getOrderByNumber: (orderNumber) => {
+        return get().orders.find(order => order.orderNumber === orderNumber);
+      },
+      
+      // Obtener pedidos de un usuario específico
+      getOrdersByUserId: (userId) => {
+        return get().orders
+          .filter(order => order.userId === userId)
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      },
+      
+      // Verificar si un pedido puede ser cancelado
+      canCancelOrder: (order) => {
+        // No se puede cancelar si ya está enviado, entregado o cancelado
+        if (['shipped', 'delivered', 'cancelled'].includes(order.status)) {
+          return false;
+        }
+        
+        // Verificar si está dentro del tiempo límite de cancelación
+        const orderDate = new Date(order.date).getTime();
+        const now = Date.now();
+        const timeSinceOrder = now - orderDate;
+        
+        return timeSinceOrder <= ORDER_CANCELLATION_WINDOW_MS;
+      },
+      
+      // Cancelar un pedido
+      cancelOrder: (orderNumber, reason) => {
+        const state = get();
+        const order = state.orders.find(o => o.orderNumber === orderNumber);
+        
+        if (!order) {
+          return { success: false, error: 'Pedido no encontrado' };
+        }
+        
+        if (!state.canCancelOrder(order)) {
+          if (['shipped', 'delivered'].includes(order.status)) {
+            return { success: false, error: 'No se puede cancelar un pedido que ya fue enviado o entregado' };
+          }
+          if (order.status === 'cancelled') {
+            return { success: false, error: 'Este pedido ya fue cancelado' };
+          }
+          return { success: false, error: 'El tiempo límite para cancelar este pedido ha expirado (24 horas)' };
+        }
+        
+        set((state) => ({
+          orders: state.orders.map(o => 
+            o.orderNumber === orderNumber
+              ? { 
+                  ...o, 
+                  status: 'cancelled' as OrderStatus,
+                  cancelledAt: new Date().toISOString(),
+                  cancellationReason: reason || 'Cancelado por el usuario'
+                }
+              : o
+          )
+        }));
+        
+        return { success: true };
       },
       
       // Computed values
@@ -209,7 +340,8 @@ export const useCartStore = create<CartStore>()(
       name: 'fitovida-cart',
       partialize: (state) => ({ 
         cart: state.cart,
-        orders: state.orders 
+        orders: state.orders,
+        pendingOrder: state.pendingOrder,
       })
     }
   )
