@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo } from 'react';
-import { LayoutGrid, Pill, Leaf, Droplet, Dumbbell, Sparkles } from 'lucide-react';
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { LayoutGrid, Pill, Leaf, Droplet, Dumbbell, Sparkles, ChevronDown, Check } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
+import gsap from 'gsap';
 import { products, searchProducts, getProductsByCategory } from '@/lib/products';
 import ProductCard from './ProductCard';
 import { Product, Category } from '@/types';
@@ -17,8 +18,101 @@ const categories = [
   { id: 'proteinas' as Category, name: 'Proteínas', icon: Dumbbell },
 ];
 
+const sortOptions = [
+  { value: 'default', label: 'Ordenar' },
+  { value: 'price-low', label: 'Menor precio' },
+  { value: 'price-high', label: 'Mayor precio' },
+  { value: 'name', label: 'Nombre A-Z' },
+];
+
 export default function ProductsGrid() {
   const { currentCategory, setCategory, searchQuery, sortBy, setSortBy } = useCartStore();
+  const [isSortOpen, setIsSortOpen] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const sortRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const optionsRef = useRef<(HTMLButtonElement | null)[]>([]);
+
+  // Close dropdown with animation (inverse of opening)
+  const closeDropdown = useCallback(() => {
+    if (!dropdownRef.current || isAnimating || !isSortOpen) return;
+    
+    setIsAnimating(true);
+    
+    // First animate options out in reverse stagger
+    const tl = gsap.timeline({
+      onComplete: () => {
+        setIsSortOpen(false);
+        setIsAnimating(false);
+        if (dropdownRef.current) {
+          gsap.set(dropdownRef.current, { display: 'none' });
+        }
+      }
+    });
+    
+    // Options slide out to the left in reverse order
+    tl.to([...optionsRef.current].reverse(), {
+      opacity: 0,
+      x: -10,
+      duration: 0.12,
+      stagger: 0.02,
+      ease: 'power2.in'
+    });
+    
+    // Then animate the container
+    tl.to(dropdownRef.current, {
+      opacity: 0,
+      y: -10,
+      scale: 0.95,
+      duration: 0.18,
+      ease: 'power2.in'
+    }, '-=0.08');
+    
+  }, [isAnimating, isSortOpen]);
+
+  // Toggle dropdown
+  const toggleDropdown = useCallback(() => {
+    if (isAnimating) return;
+    if (isSortOpen) {
+      closeDropdown();
+    } else {
+      setIsSortOpen(true);
+    }
+  }, [isAnimating, isSortOpen, closeDropdown]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (sortRef.current && !sortRef.current.contains(event.target as Node)) {
+        closeDropdown();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [closeDropdown]);
+
+  // GSAP animation for dropdown opening
+  useEffect(() => {
+    if (!dropdownRef.current) return;
+
+    if (isSortOpen) {
+      // Opening animation
+      gsap.set(dropdownRef.current, { display: 'block' });
+      gsap.fromTo(dropdownRef.current,
+        { opacity: 0, y: -10, scale: 0.95 },
+        { opacity: 1, y: 0, scale: 1, duration: 0.25, ease: 'power2.out' }
+      );
+      
+      // Stagger animate options
+      gsap.fromTo(optionsRef.current,
+        { opacity: 0, x: -10 },
+        { opacity: 1, x: 0, duration: 0.2, stagger: 0.03, ease: 'power2.out', delay: 0.05 }
+      );
+    }
+  }, [isSortOpen]);
+
+  const currentSortLabel = sortOptions.find(opt => opt.value === sortBy)?.label || 'Ordenar';
 
   const filteredProducts = useMemo(() => {
     let result: Product[] = [];
@@ -91,16 +185,53 @@ export default function ProductsGrid() {
             <span className="font-semibold text-[var(--foreground)]">{filteredProducts.length}</span> productos
           </p>
           
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="px-3 sm:px-4 py-2 sm:py-2.5 border border-[var(--border)] rounded-lg sm:rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)] text-xs sm:text-sm text-[var(--foreground)] cursor-pointer transition-all"
-          >
-            <option value="default">Ordenar</option>
-            <option value="price-low">Menor precio</option>
-            <option value="price-high">Mayor precio</option>
-            <option value="name">Nombre A-Z</option>
-          </select>
+          {/* Custom Sort Dropdown */}
+          <div ref={sortRef} className="relative">
+            <button
+              onClick={toggleDropdown}
+              className={cn(
+                "flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 border rounded-xl bg-white text-xs sm:text-sm font-medium transition-all duration-200",
+                isSortOpen 
+                  ? "border-[var(--primary)] ring-2 ring-[var(--primary)]/20 text-[var(--primary)]"
+                  : "border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)]/50"
+              )}
+            >
+              <span>{currentSortLabel}</span>
+              <ChevronDown className={cn(
+                "h-4 w-4 transition-transform duration-200",
+                isSortOpen && "rotate-180"
+              )} />
+            </button>
+
+            {/* Dropdown Menu - Always in DOM for GSAP animation */}
+            <div 
+              ref={dropdownRef}
+              className="absolute right-0 top-full mt-2 w-44 bg-white border border-[var(--border)] rounded-xl shadow-lg shadow-black/5 overflow-hidden z-50 origin-top-right"
+              style={{ display: 'none' }}
+            >
+              {sortOptions.map((option, index) => (
+                <button
+                  key={option.value}
+                  ref={(el) => { optionsRef.current[index] = el; }}
+                  onClick={() => {
+                    setSortBy(option.value as typeof sortBy);
+                    closeDropdown();
+                  }}
+                  className={cn(
+                    "w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors",
+                    sortBy === option.value
+                      ? "bg-[var(--primary)]/10 text-[var(--primary)] font-medium"
+                      : "text-[var(--foreground)] hover:bg-[var(--background)]"
+                  )}
+                >
+                  <span>{option.label}</span>
+                  {sortBy === option.value && (
+                    <Check className="h-4 w-4" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Products Grid - 2 cols mobile, scales up */}
