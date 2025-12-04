@@ -54,18 +54,26 @@ export async function PATCH(
     const supabase = await createServiceClient();
 
     // Obtener la orden actual
-    const { data: order, error: fetchError } = await supabase
+    const { data, error: fetchError } = await supabase
       .from('orders')
       .select('*')
       .eq('order_number', orderNumber)
       .single();
 
-    if (fetchError || !order) {
+    if (fetchError || !data) {
       return NextResponse.json(
         { error: 'Orden no encontrada' },
         { status: 404 }
       );
     }
+
+    // Cast para evitar error de tipo
+    const order = data as { 
+      user_id?: string; 
+      created_at: string; 
+      status: string;
+      [key: string]: unknown;
+    };
 
     // Verificar que el usuario es el dueño de la orden
     if (userId && order.user_id && order.user_id !== userId) {
@@ -105,7 +113,7 @@ export async function PATCH(
           status: 'cancelled',
           cancelled_at: new Date().toISOString(),
           cancellation_reason: reason || 'Cancelado por el usuario'
-        })
+        } as never)
         .eq('order_number', orderNumber)
         .select()
         .single();
@@ -137,7 +145,7 @@ export async function PATCH(
 
       const { data: updatedOrder, error: updateError } = await supabase
         .from('orders')
-        .update({ status: body.status })
+        .update({ status: body.status } as never)
         .eq('order_number', orderNumber)
         .select()
         .single();
