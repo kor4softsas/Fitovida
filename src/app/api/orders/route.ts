@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
         discount: discount || 0,
         discount_code: discountCode || null,
         total
-      })
+      } as never)
       .select()
       .single();
 
@@ -110,8 +110,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Crear los items de la orden
+    const typedOrder = order as { id: string };
     const orderItems = items.map((item: { id: number; name: string; image: string; quantity: number; price: number }) => ({
-      order_id: order.id,
+      order_id: typedOrder.id,
       product_id: item.id,
       product_name: item.name,
       product_image: item.image,
@@ -121,12 +122,12 @@ export async function POST(request: NextRequest) {
 
     const { error: itemsError } = await supabase
       .from('order_items')
-      .insert(orderItems);
+      .insert(orderItems as never);
 
     if (itemsError) {
       console.error('Error creando items:', itemsError);
       // Intentar eliminar la orden si falló crear los items
-      await supabase.from('orders').delete().eq('id', order.id);
+      await supabase.from('orders').delete().eq('id', typedOrder.id);
       return NextResponse.json(
         { error: 'Error creando items de orden', details: itemsError.message },
         { status: 500 }
@@ -140,7 +141,7 @@ export async function POST(request: NextRequest) {
         *,
         order_items (*)
       `)
-      .eq('id', order.id)
+      .eq('id', typedOrder.id)
       .single();
 
     if (fetchError) {
