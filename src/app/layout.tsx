@@ -23,6 +23,13 @@ export default function RootLayout({
   return (
     <ClerkProvider localization={esES}>
       <html lang="es" className="scroll-smooth" data-scroll-behavior="smooth">
+        <head>
+          {/* Preconnect to Clerk for faster authentication loading */}
+          <link rel="preconnect" href="https://clerk.accounts.dev" />
+          <link rel="preconnect" href="https://img.clerk.com" />
+          {/* DNS prefetch for external resources */}
+          <link rel="dns-prefetch" href="https://clerk.accounts.dev" />
+        </head>
         <body className={`${inter.className} antialiased`}>
           <LayoutWrapper>{children}</LayoutWrapper>
         </body>

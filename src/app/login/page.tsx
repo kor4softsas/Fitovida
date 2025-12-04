@@ -419,14 +419,16 @@ export default function LoginPage() {
             {/* Name field - only for register */}
             {mode === 'register' && (
               <div>
-                <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
+                <label htmlFor="name" className="block text-sm font-medium text-[var(--foreground)] mb-1">
                   Nombre completo
                 </label>
                 <div className="relative">
                   <User className={cn("absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 transition-colors", errors.name ? "text-red-400" : "text-[var(--muted)]")} />
                   <input
                     type="text"
+                    id="name"
                     name="name"
+                    autoComplete="name"
                     value={formData.name}
                     onChange={handleChange}
                     onBlur={handleBlur}
@@ -445,14 +447,16 @@ export default function LoginPage() {
 
             {/* Email field */}
             <div>
-              <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
+              <label htmlFor="email" className="block text-sm font-medium text-[var(--foreground)] mb-1">
                 Correo electrónico
               </label>
               <div className="relative">
                 <Mail className={cn("absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 transition-colors", errors.email ? "text-red-400" : "text-[var(--muted)]")} />
                 <input
                   type="email"
+                  id="email"
                   name="email"
+                  autoComplete="email"
                   value={formData.email}
                   onChange={handleChange}
                   onBlur={handleBlur}
@@ -497,14 +501,16 @@ export default function LoginPage() {
 
             {/* Password field */}
             <div>
-              <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
+              <label htmlFor="password" className="block text-sm font-medium text-[var(--foreground)] mb-1">
                 Contraseña
               </label>
               <div className="relative">
                 <Lock className={cn("absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 transition-colors", errors.password ? "text-red-400" : "text-[var(--muted)]")} />
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  id="password"
                   name="password"
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   value={formData.password}
                   onChange={handleChange}
                   onBlur={handleBlur}
@@ -530,14 +536,16 @@ export default function LoginPage() {
             {/* Confirm password - only for register */}
             {mode === 'register' && (
               <div>
-                <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-[var(--foreground)] mb-1">
                   Confirmar contraseña
                 </label>
                 <div className="relative">
                   <Lock className={cn("absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 transition-colors", errors.confirmPassword ? "text-red-400" : "text-[var(--muted)]")} />
                   <input
                     type={showPassword ? 'text' : 'password'}
+                    id="confirmPassword"
                     name="confirmPassword"
+                    autoComplete="new-password"
                     value={formData.confirmPassword}
                     onChange={handleChange}
                     onBlur={handleBlur}

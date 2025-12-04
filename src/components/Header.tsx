@@ -296,7 +296,9 @@ export default function Header() {
           <div className="w-full relative group">
             <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-[var(--muted)] group-focus-within:text-[var(--primary)] transition-colors" />
             <input
-              type="text"
+              type="search"
+              id="product-search"
+              name="product-search"
               placeholder="¿Qué producto natural buscas hoy?"
               value={searchQuery}
               onChange={handleSearch}
