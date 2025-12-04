@@ -1,59 +1,58 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useUser, useClerk } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import { 
   User, Package, Settings, ChevronRight, Calendar, MapPin, Phone, Mail, 
   Edit2, Check, X, Loader2, ShoppingBag, Clock, AlertCircle, XCircle,
-  ChevronDown, ChevronUp, CreditCard, Truck, CheckCircle2, RefreshCw
+  ChevronDown, ChevronUp, CreditCard, Truck, CheckCircle2, RefreshCw,
+  Plus, Star, Trash2, Home, LogOut, Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatPrice } from '@/lib/utils';
 import { ORDER_CANCELLATION_WINDOW_MS } from '@/types';
+import { useAuthStore, UserAddress } from '@/lib/auth';
+import { useCartStore } from '@/lib/store';
+import { departments, getCitiesByDepartment } from '@/lib/colombiaData';
 import gsap from 'gsap';
 
-type Tab = 'perfil' | 'compras' | 'configuracion';
+type Tab = 'perfil' | 'direcciones' | 'compras' | 'configuracion';
 
-// Tipo para órdenes desde Supabase
-interface OrderItem {
-  id: string;
-  product_id: number;
-  product_name: string;
-  product_image: string;
-  quantity: number;
-  price: number;
-}
-
-interface DbOrder {
-  id: string;
-  order_number: string;
-  user_id: string | null;
-  customer_name: string;
-  customer_email: string;
-  customer_phone: string;
-  customer_address: string;
-  customer_city: string;
-  customer_zip: string;
-  payment_method: 'card' | 'pse' | 'transfer';
-  payment_id: string | null;
-  payment_provider: 'stripe' | 'wompi' | null;
-  status: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-  notes: string | null;
+// Tipo para órdenes locales del store
+interface LocalOrder {
+  orderNumber: string;
+  customer: {
+    name: string;
+    email: string;
+    phone: string;
+    address: string;
+    city: string;
+    zip: string;
+  };
+  paymentMethod: 'card' | 'pse' | 'transfer' | 'cash_on_delivery';
+  notes: string;
+  items: {
+    id: number;
+    name: string;
+    image: string;
+    price: number;
+    quantity: number;
+  }[];
   subtotal: number;
   shipping: number;
   discount: number;
-  discount_code: string | null;
+  discountCode: string;
   total: number;
-  cancelled_at: string | null;
-  cancellation_reason: string | null;
-  created_at: string;
-  updated_at: string;
-  order_items: OrderItem[];
+  date: string;
+  status: 'pending' | 'processing' | 'paid' | 'shipped' | 'delivered' | 'cancelled' | 'failed';
+  paymentId?: string;
+  paymentProvider?: 'stripe' | 'wompi' | 'none';
+  userId?: string;
+  cancelledAt?: string;
+  cancellationReason?: string;
 }
-
-type Tab = 'perfil' | 'compras' | 'configuracion';
 
 const statusConfig = {
   pending: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
@@ -69,6 +68,7 @@ const paymentMethodLabels = {
   card: 'Tarjeta de crédito/débito',
   pse: 'PSE - Transferencia bancaria',
   transfer: 'Transferencia manual',
+  cash_on_delivery: 'Pago contra entrega',
 };
 
 // Calcular tiempo restante para cancelar
@@ -91,8 +91,480 @@ function getTimeRemaining(orderDate: string): { canCancel: boolean; timeString: 
   };
 }
 
+// Componente de mensaje de error con animación
+const ErrorMessage = ({ message }: { message?: string }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const isVisible = useRef(false);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const content = contentRef.current;
+    if (!container || !content) return;
+
+    gsap.killTweensOf([container, content]);
+
+    if (message && !isVisible.current) {
+      isVisible.current = true;
+      gsap.set(container, { height: 0, opacity: 0, overflow: 'hidden' });
+      gsap.set(content, { y: -8, opacity: 0 });
+      gsap.to(container, { height: 'auto', opacity: 1, duration: 0.3, ease: 'power2.out' });
+      gsap.to(content, { y: 0, opacity: 1, duration: 0.3, ease: 'power2.out', delay: 0.05 });
+    } 
+    else if (!message && isVisible.current) {
+      isVisible.current = false;
+      gsap.to(content, { y: -8, opacity: 0, duration: 0.15, ease: 'power2.in' });
+      gsap.to(container, { height: 0, opacity: 0, duration: 0.2, ease: 'power2.in', delay: 0.05 });
+    }
+  }, [message]);
+
+  return (
+    <div ref={containerRef} style={{ height: 0, opacity: 0, overflow: 'hidden' }}>
+      <div ref={contentRef} className="flex items-center gap-1.5 text-red-500 text-xs pt-1" style={{ opacity: 0, transform: 'translateY(-8px)' }}>
+        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+        <span>{message || ''}</span>
+      </div>
+    </div>
+  );
+};
+
+// Modal para agregar/editar dirección con animación
+function AddressModal({ 
+  address,
+  onSave, 
+  onClose,
+  triggerRect
+}: { 
+  address?: UserAddress;
+  onSave: (data: Omit<UserAddress, 'id'>) => void; 
+  onClose: () => void;
+  triggerRect?: DOMRect | null;
+}) {
+  const [formData, setFormData] = useState({
+    label: address?.label || '',
+    address: address?.address || '',
+    city: address?.city || '',
+    department: address?.department || '',
+    zipCode: address?.zipCode || '',
+    phone: address?.phone || '',
+    instructions: address?.instructions || '',
+    isDefault: address?.isDefault || false,
+  });
+  
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [availableCities, setAvailableCities] = useState<string[]>(
+    formData.department ? getCitiesByDepartment(formData.department) : []
+  );
+  
+  // Update cities when department changes
+  const handleDepartmentChange = (department: string) => {
+    setFormData(prev => ({ ...prev, department, city: '' }));
+    setAvailableCities(getCitiesByDepartment(department));
+    if (errors.department) {
+      setErrors(prev => ({ ...prev, department: '' }));
+    }
+  };
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const isClosingRef = useRef(false);
+  
+  // Animación de entrada
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    const content = contentRef.current;
+    if (!overlay || !content) return;
+    
+    document.body.style.overflow = 'hidden';
+    
+    // Animate overlay
+    gsap.fromTo(overlay,
+      { opacity: 0 },
+      { opacity: 1, duration: 0.3, ease: 'power2.out' }
+    );
+    
+    // Animate content from trigger position
+    if (triggerRect) {
+      const centerX = window.innerWidth / 2;
+      const centerY = window.innerHeight / 2;
+      const startX = triggerRect.left + triggerRect.width / 2 - centerX;
+      const startY = triggerRect.top + triggerRect.height / 2 - centerY;
+      
+      gsap.fromTo(content,
+        { 
+          opacity: 0,
+          scale: 0.3,
+          x: startX,
+          y: startY,
+        },
+        { 
+          opacity: 1,
+          scale: 1,
+          x: 0,
+          y: 0,
+          duration: 0.4,
+          ease: 'power3.out'
+        }
+      );
+    } else {
+      gsap.fromTo(content,
+        { opacity: 0, scale: 0.9, y: 30 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.35, ease: 'power3.out' }
+      );
+    }
+    
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, [triggerRect]);
+  
+  // Animación de cierre
+  const handleClose = () => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
+    
+    const overlay = overlayRef.current;
+    const content = contentRef.current;
+    
+    if (overlay && content) {
+      gsap.to(content, {
+        opacity: 0,
+        scale: 0.9,
+        y: 20,
+        duration: 0.25,
+        ease: 'power2.in'
+      });
+      
+      gsap.to(overlay, {
+        opacity: 0,
+        duration: 0.25,
+        ease: 'power2.in',
+        onComplete: () => {
+          document.body.style.overflow = 'auto';
+          onClose();
+        }
+      });
+    } else {
+      onClose();
+    }
+  };
+  
+  const validateField = (name: string, value: string) => {
+    if (!value.trim() && ['label', 'address', 'city', 'department', 'zipCode', 'phone'].includes(name)) {
+      return 'Este campo es obligatorio';
+    }
+    if (name === 'phone' && value && !/^\d{7,}$/.test(value.replace(/\s/g, ''))) {
+      return 'Ingresa un número válido';
+    }
+    return '';
+  };
+  
+  const handleInputChange = (name: string, value: string) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+  
+  const handleBlur = (name: string, value: string) => {
+    const error = validateField(name, value);
+    if (error) {
+      setErrors(prev => ({ ...prev, [name]: error }));
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validate all fields
+    const newErrors: Record<string, string> = {};
+    Object.entries(formData).forEach(([key, value]) => {
+      if (key !== 'instructions' && key !== 'isDefault') {
+        const error = validateField(key, value as string);
+        if (error) newErrors[key] = error;
+      }
+    });
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+    
+    onSave(formData);
+  };
+
+
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+      {/* Overlay */}
+      <div 
+        ref={overlayRef}
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
+        onClick={handleClose}
+        style={{ opacity: 0 }}
+      />
+      
+      {/* Modal Content */}
+      <div 
+        ref={contentRef}
+        className="relative bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col"
+        style={{ opacity: 0 }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-[var(--border)]">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-[var(--primary)]/10 rounded-xl">
+              <MapPin className="h-5 w-5 text-[var(--primary)]" />
+            </div>
+            <h3 className="text-lg font-semibold text-[var(--foreground)]">
+              {address ? 'Editar dirección' : 'Nueva dirección'}
+            </h3>
+          </div>
+          <button
+            onClick={handleClose}
+            className="p-2 hover:bg-[var(--background)] rounded-xl transition-colors"
+          >
+            <X className="h-5 w-5 text-[var(--muted)]" />
+          </button>
+        </div>
+        
+        {/* Scrollable Form */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="space-y-4">
+            {/* Etiqueta */}
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[var(--foreground)]">
+                Etiqueta
+              </label>
+              <div className="relative group">
+                <Star className={cn(
+                  "absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 transition-colors",
+                  errors.label ? "text-red-400" : "text-[var(--muted)] group-focus-within:text-[var(--primary)]"
+                )} />
+                <input
+                  type="text"
+                  value={formData.label}
+                  onChange={(e) => handleInputChange('label', e.target.value)}
+                  onBlur={(e) => handleBlur('label', e.target.value)}
+                  placeholder="Ej: Casa, Oficina, Trabajo"
+                  className={cn(
+                    "w-full pl-10 pr-4 py-2.5 bg-[var(--background)] border rounded-xl focus:outline-none transition-all text-[var(--foreground)] placeholder:text-[var(--muted)]/50 text-sm",
+                    errors.label 
+                      ? "border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100" 
+                      : "border-[var(--border)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10"
+                  )}
+                />
+              </div>
+              <ErrorMessage message={errors.label} />
+            </div>
+            
+            {/* Dirección completa */}
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[var(--foreground)]">
+                Dirección completa
+              </label>
+              <div className="relative group">
+                <MapPin className={cn(
+                  "absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 transition-colors",
+                  errors.address ? "text-red-400" : "text-[var(--muted)] group-focus-within:text-[var(--primary)]"
+                )} />
+                <input
+                  type="text"
+                  value={formData.address}
+                  onChange={(e) => handleInputChange('address', e.target.value)}
+                  onBlur={(e) => handleBlur('address', e.target.value)}
+                  placeholder="Calle 123 #45-67, Apto 101"
+                  className={cn(
+                    "w-full pl-10 pr-4 py-2.5 bg-[var(--background)] border rounded-xl focus:outline-none transition-all text-[var(--foreground)] placeholder:text-[var(--muted)]/50 text-sm",
+                    errors.address 
+                      ? "border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100" 
+                      : "border-[var(--border)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10"
+                  )}
+                />
+              </div>
+              <ErrorMessage message={errors.address} />
+            </div>
+            
+            {/* Departamento y Ciudad - Grid responsive */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-[var(--foreground)]">
+                  Departamento
+                </label>
+                <div className="relative group">
+                  <Building2 className={cn(
+                    "absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 transition-colors pointer-events-none z-10",
+                    errors.department ? "text-red-400" : "text-[var(--muted)] group-focus-within:text-[var(--primary)]"
+                  )} />
+                  <select
+                    value={formData.department}
+                    onChange={(e) => handleDepartmentChange(e.target.value)}
+                    onBlur={(e) => handleBlur('department', e.target.value)}
+                    className={cn(
+                      "w-full pl-10 pr-10 py-2.5 bg-[var(--background)] border rounded-xl focus:outline-none transition-all text-[var(--foreground)] text-sm appearance-none cursor-pointer",
+                      errors.department 
+                        ? "border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100" 
+                        : "border-[var(--border)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10"
+                    )}
+                  >
+                    <option value="">Selecciona un departamento</option>
+                    {departments.map((dept) => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--muted)] pointer-events-none" />
+                </div>
+                <ErrorMessage message={errors.department} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-[var(--foreground)]">
+                  Ciudad
+                </label>
+                <div className="relative group">
+                  <MapPin className={cn(
+                    "absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 transition-colors pointer-events-none z-10",
+                    !formData.department ? "text-[var(--muted)]/50" :
+                    errors.city ? "text-red-400" : "text-[var(--muted)] group-focus-within:text-[var(--primary)]"
+                  )} />
+                  <select
+                    value={formData.city}
+                    onChange={(e) => handleInputChange('city', e.target.value)}
+                    onBlur={(e) => handleBlur('city', e.target.value)}
+                    disabled={!formData.department}
+                    className={cn(
+                      "w-full pl-10 pr-10 py-2.5 bg-[var(--background)] border rounded-xl focus:outline-none transition-all text-[var(--foreground)] text-sm appearance-none",
+                      !formData.department ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
+                      errors.city 
+                        ? "border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100" 
+                        : "border-[var(--border)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10"
+                    )}
+                  >
+                    <option value="">{formData.department ? 'Selecciona una ciudad' : 'Primero selecciona un departamento'}</option>
+                    {availableCities.map((city) => (
+                      <option key={city} value={city}>{city}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className={cn(
+                    "absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none transition-colors",
+                    !formData.department ? "text-[var(--muted)]/50" : "text-[var(--muted)]"
+                  )} />
+                </div>
+                <ErrorMessage message={errors.city} />
+              </div>
+            </div>
+            
+            {/* Código postal y Teléfono - Grid responsive */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-[var(--foreground)]">
+                  Código postal
+                </label>
+                <input
+                  type="text"
+                  value={formData.zipCode}
+                  onChange={(e) => handleInputChange('zipCode', e.target.value)}
+                  onBlur={(e) => handleBlur('zipCode', e.target.value)}
+                  placeholder="110111"
+                  className={cn(
+                    "w-full px-4 py-2.5 bg-[var(--background)] border rounded-xl focus:outline-none transition-all text-[var(--foreground)] placeholder:text-[var(--muted)]/50 text-sm",
+                    errors.zipCode 
+                      ? "border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100" 
+                      : "border-[var(--border)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10"
+                  )}
+                />
+                <ErrorMessage message={errors.zipCode} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-[var(--foreground)]">
+                  Teléfono de contacto
+                </label>
+                <div className="relative group">
+                  <Phone className={cn(
+                    "absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 transition-colors",
+                    errors.phone ? "text-red-400" : "text-[var(--muted)] group-focus-within:text-[var(--primary)]"
+                  )} />
+                  <input
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange('phone', e.target.value)}
+                    onBlur={(e) => handleBlur('phone', e.target.value)}
+                    placeholder="3001234567"
+                    className={cn(
+                      "w-full pl-10 pr-4 py-2.5 bg-[var(--background)] border rounded-xl focus:outline-none transition-all text-[var(--foreground)] placeholder:text-[var(--muted)]/50 text-sm",
+                      errors.phone 
+                        ? "border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100" 
+                        : "border-[var(--border)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10"
+                    )}
+                  />
+                </div>
+                <ErrorMessage message={errors.phone} />
+              </div>
+            </div>
+            
+            {/* Instrucciones */}
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[var(--foreground)]">
+                Instrucciones de entrega <span className="text-[var(--muted)]">(opcional)</span>
+              </label>
+              <textarea
+                value={formData.instructions}
+                onChange={(e) => handleInputChange('instructions', e.target.value)}
+                placeholder="Timbre del apartamento 101, dejar con el portero..."
+                rows={2}
+                className="w-full px-4 py-2.5 bg-[var(--background)] border border-[var(--border)] rounded-xl focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10 text-[var(--foreground)] placeholder:text-[var(--muted)]/50 text-sm resize-none transition-all"
+              />
+            </div>
+            
+            {/* Checkbox estilizado */}
+            <label className="flex items-center gap-3 cursor-pointer group py-2">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={formData.isDefault}
+                  onChange={(e) => setFormData(prev => ({ ...prev, isDefault: e.target.checked }))}
+                  className="sr-only peer"
+                />
+                <div className={cn(
+                  "w-5 h-5 rounded-md border-2 transition-all duration-200 flex items-center justify-center",
+                  formData.isDefault 
+                    ? "bg-[var(--primary)] border-[var(--primary)]" 
+                    : "bg-white border-[var(--border)] group-hover:border-[var(--primary)]/50"
+                )}>
+                  {formData.isDefault && (
+                    <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+                  )}
+                </div>
+              </div>
+              <span className="text-sm text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors">
+                Establecer como dirección predeterminada
+              </span>
+            </label>
+          </div>
+        </form>
+        
+        {/* Footer with Actions */}
+        <div className="flex flex-col-reverse sm:flex-row gap-3 p-4 sm:p-6 border-t border-[var(--border)] bg-[var(--background)]/50">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="flex-1 py-3 px-4 border border-[var(--border)] text-[var(--foreground)] font-medium rounded-xl hover:bg-[var(--background)] transition-all duration-200"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSubmit}
+            className="flex-1 py-3 px-4 bg-[var(--primary)] hover:bg-[var(--primary-dark)] text-white font-medium rounded-xl transition-all duration-200 shadow-lg shadow-[var(--primary)]/20 hover:shadow-xl hover:shadow-[var(--primary)]/30"
+          >
+            {address ? 'Guardar cambios' : 'Agregar dirección'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Componente para un pedido individual
-function OrderCard({ order, onCancel }: { order: DbOrder; onCancel: (orderNumber: string, reason?: string) => void }) {
+function OrderCard({ order, onCancel }: { order: LocalOrder; onCancel: (orderNumber: string, reason?: string) => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -100,10 +572,10 @@ function OrderCard({ order, onCancel }: { order: DbOrder; onCancel: (orderNumber
   
   const status = statusConfig[order.status];
   const StatusIcon = status.icon;
-  const timeRemaining = getTimeRemaining(order.created_at);
+  const timeRemaining = getTimeRemaining(order.date);
   
   // Verificar si se puede cancelar
-  const cancellableStatuses = ['pending', 'confirmed', 'processing'];
+  const cancellableStatuses = ['pending', 'processing'];
   const canCancel = cancellableStatuses.includes(order.status) && timeRemaining.canCancel;
 
   useEffect(() => {
@@ -129,9 +601,9 @@ function OrderCard({ order, onCancel }: { order: DbOrder; onCancel: (orderNumber
               <ShoppingBag className="h-5 w-5 text-[var(--primary)]" />
             </div>
             <div>
-              <p className="font-semibold text-[var(--foreground)]">{order.order_number}</p>
+              <p className="font-semibold text-[var(--foreground)]">{order.orderNumber}</p>
               <p className="text-xs text-[var(--muted)]">
-                {new Date(order.created_at).toLocaleDateString('es-CO', {
+                {new Date(order.date).toLocaleDateString('es-CO', {
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric',
@@ -160,7 +632,7 @@ function OrderCard({ order, onCancel }: { order: DbOrder; onCancel: (orderNumber
         {/* Resumen rápido */}
         <div className="flex items-center justify-between text-sm">
           <span className="text-[var(--muted)]">
-            {order.order_items.length} producto{order.order_items.length > 1 ? 's' : ''}
+            {order.items.length} producto{order.items.length > 1 ? 's' : ''}
           </span>
           <span className="font-semibold text-[var(--foreground)]">{formatPrice(order.total)}</span>
         </div>
@@ -172,13 +644,13 @@ function OrderCard({ order, onCancel }: { order: DbOrder; onCancel: (orderNumber
           {/* Productos */}
           <h4 className="text-sm font-medium text-[var(--foreground)] mb-3">Productos</h4>
           <div className="space-y-3 mb-4">
-            {order.order_items.map((item) => (
+            {order.items.map((item) => (
               <div key={item.id} className="flex items-center gap-3">
                 <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-[var(--background)] shrink-0">
-                  {item.product_image ? (
+                  {item.image ? (
                     <Image
-                      src={item.product_image}
-                      alt={item.product_name}
+                      src={item.image}
+                      alt={item.name}
                       fill
                       className="object-cover"
                     />
@@ -189,7 +661,7 @@ function OrderCard({ order, onCancel }: { order: DbOrder; onCancel: (orderNumber
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[var(--foreground)] truncate">{item.product_name}</p>
+                  <p className="text-sm font-medium text-[var(--foreground)] truncate">{item.name}</p>
                   <p className="text-xs text-[var(--muted)]">Cantidad: {item.quantity}</p>
                 </div>
                 <p className="text-sm font-medium text-[var(--foreground)]">
@@ -211,7 +683,7 @@ function OrderCard({ order, onCancel }: { order: DbOrder; onCancel: (orderNumber
             </div>
             {order.discount > 0 && (
               <div className="flex justify-between text-green-600">
-                <span>Descuento {order.discount_code && `(${order.discount_code})`}</span>
+                <span>Descuento {order.discountCode && `(${order.discountCode})`}</span>
                 <span>-{formatPrice(order.discount)}</span>
               </div>
             )}
@@ -225,17 +697,17 @@ function OrderCard({ order, onCancel }: { order: DbOrder; onCancel: (orderNumber
           <div className="bg-[var(--background)] rounded-lg p-3 mb-4 text-sm">
             <h4 className="font-medium text-[var(--foreground)] mb-2">Información de envío</h4>
             <div className="space-y-1 text-[var(--muted)]">
-              <p><span className="font-medium">Nombre:</span> {order.customer_name}</p>
-              <p><span className="font-medium">Dirección:</span> {order.customer_address}, {order.customer_city} {order.customer_zip}</p>
-              <p><span className="font-medium">Teléfono:</span> {order.customer_phone}</p>
-              <p><span className="font-medium">Email:</span> {order.customer_email}</p>
+              <p><span className="font-medium">Nombre:</span> {order.customer.name}</p>
+              <p><span className="font-medium">Dirección:</span> {order.customer.address}, {order.customer.city} {order.customer.zip}</p>
+              <p><span className="font-medium">Teléfono:</span> {order.customer.phone}</p>
+              <p><span className="font-medium">Email:</span> {order.customer.email}</p>
             </div>
           </div>
 
           {/* Método de pago */}
           <div className="flex items-center gap-2 text-sm text-[var(--muted)] mb-4">
             <CreditCard className="h-4 w-4" />
-            <span>{paymentMethodLabels[order.payment_method]}</span>
+            <span>{paymentMethodLabels[order.paymentMethod]}</span>
           </div>
 
           {/* Botón de cancelar */}
@@ -272,7 +744,7 @@ function OrderCard({ order, onCancel }: { order: DbOrder; onCancel: (orderNumber
                       No, mantener
                     </button>
                     <button
-                      onClick={() => { onCancel(order.order_number, cancelReason); setShowCancelConfirm(false); }}
+                      onClick={() => { onCancel(order.orderNumber, cancelReason); setShowCancelConfirm(false); }}
                       className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
                     >
                       Sí, cancelar
@@ -298,9 +770,9 @@ function OrderCard({ order, onCancel }: { order: DbOrder; onCancel: (orderNumber
             <div className="border-t border-[var(--border)] pt-4">
               <div className="bg-red-50 rounded-lg p-3 text-sm">
                 <p className="font-medium text-red-700 mb-1">Pedido cancelado</p>
-                {order.cancelled_at && (
+                {order.cancelledAt && (
                   <p className="text-red-600 text-xs">
-                    Cancelado el {new Date(order.cancelled_at).toLocaleDateString('es-CO', {
+                    Cancelado el {new Date(order.cancelledAt).toLocaleDateString('es-CO', {
                       year: 'numeric',
                       month: 'long',
                       day: 'numeric',
@@ -309,8 +781,8 @@ function OrderCard({ order, onCancel }: { order: DbOrder; onCancel: (orderNumber
                     })}
                   </p>
                 )}
-                {order.cancellation_reason && (
-                  <p className="text-red-600 text-xs mt-1">Razón: {order.cancellation_reason}</p>
+                {order.cancellationReason && (
+                  <p className="text-red-600 text-xs mt-1">Razón: {order.cancellationReason}</p>
                 )}
               </div>
             </div>
@@ -322,8 +794,8 @@ function OrderCard({ order, onCancel }: { order: DbOrder; onCancel: (orderNumber
 }
 
 export default function ProfilePage() {
-  const { user, isLoaded } = useUser();
-  const { signOut } = useClerk();
+  const { user, isAuthenticated, logout, updateProfile, addAddress, updateAddress, deleteAddress, setDefaultAddress } = useAuthStore();
+  const { getOrdersByUserId, cancelOrder } = useCartStore();
   const router = useRouter();
   
   const [activeTab, setActiveTab] = useState<Tab>('perfil');
@@ -333,55 +805,50 @@ export default function ProfilePage() {
     firstName: '',
     lastName: '',
     phone: '',
-    address: '',
-    city: ''
   });
   const [cancelMessage, setCancelMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   
-  // Estado para órdenes desde Supabase
-  const [userOrders, setUserOrders] = useState<DbOrder[]>([]);
-  const [loadingOrders, setLoadingOrders] = useState(false);
-  const [ordersError, setOrdersError] = useState<string | null>(null);
-
-  // Función para cargar órdenes desde la API
-  const fetchOrders = useCallback(async () => {
-    if (!user?.id) return;
-    
-    setLoadingOrders(true);
-    setOrdersError(null);
-    
-    try {
-      const response = await fetch(`/api/orders?userId=${user.id}`);
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Error cargando órdenes');
-      }
-      
-      setUserOrders(data.orders || []);
-    } catch (error) {
-      console.error('Error fetching orders:', error);
-      setOrdersError(error instanceof Error ? error.message : 'Error cargando órdenes');
-    } finally {
-      setLoadingOrders(false);
-    }
-  }, [user?.id]);
-
-  // Cargar órdenes cuando el usuario esté disponible
-  useEffect(() => {
-    if (user?.id) {
-      fetchOrders();
-    }
-  }, [user?.id, fetchOrders]);
+  // Direcciones
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<UserAddress | undefined>(undefined);
+  const [addressModalTriggerRect, setAddressModalTriggerRect] = useState<DOMRect | null>(null);
+  
+  // Función para abrir el modal de dirección con animación
+  const openAddressModal = (e: React.MouseEvent, address?: UserAddress) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setAddressModalTriggerRect(rect);
+    setEditingAddress(address);
+    setShowAddressModal(true);
+  };
+  
+  const closeAddressModal = () => {
+    setShowAddressModal(false);
+    setEditingAddress(undefined);
+    setAddressModalTriggerRect(null);
+  };
+  
+  // Órdenes del usuario
+  const userOrders = user?.id ? getOrdersByUserId(user.id) : [];
 
   // Redirect if not logged in
   useEffect(() => {
-    if (isLoaded && !user) {
+    if (!isAuthenticated) {
       router.push('/login');
     }
-  }, [isLoaded, user, router]);
+  }, [isAuthenticated, router]);
 
-  if (!isLoaded) {
+  // Cargar datos del formulario
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+      });
+    }
+  }, [user]);
+
+  if (!isAuthenticated || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
@@ -389,94 +856,84 @@ export default function ProfilePage() {
     );
   }
 
-  if (!user) {
-    return null;
-  }
-
   const handleEdit = () => {
     setFormData({
-      firstName: user?.firstName || '',
-      lastName: user?.lastName || '',
-      phone: (user?.publicMetadata?.phone as string) || '',
-      address: (user?.publicMetadata?.address as string) || '',
-      city: (user?.publicMetadata?.city as string) || ''
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
     });
     setIsEditing(true);
   };
 
   const handleSave = async () => {
     setIsSaving(true);
-    try {
-      await user?.update({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-      });
-      setIsEditing(false);
-    } catch (error) {
-      console.error('Error updating profile:', error);
-    } finally {
-      setIsSaving(false);
-    }
+    // Simular guardado
+    await new Promise(resolve => setTimeout(resolve, 500));
+    updateProfile(formData);
+    setIsEditing(false);
+    setIsSaving(false);
   };
 
-  const handleCancelOrder = async (orderNumber: string, reason?: string) => {
-    try {
-      const response = await fetch(`/api/orders/${orderNumber}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'cancel',
-          reason: reason || 'Cancelado por el usuario',
-          userId: user?.id
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Error al cancelar el pedido');
-      }
-      
+  const handleCancelOrder = (orderNumber: string, reason?: string) => {
+    const result = cancelOrder(orderNumber, reason);
+    if (result.success) {
       setCancelMessage({ type: 'success', text: 'Pedido cancelado exitosamente' });
-      // Recargar órdenes
-      fetchOrders();
-    } catch (error) {
-      console.error('Error cancelling order:', error);
-      setCancelMessage({ 
-        type: 'error', 
-        text: error instanceof Error ? error.message : 'Error al cancelar el pedido' 
-      });
+    } else {
+      setCancelMessage({ type: 'error', text: result.error || 'Error al cancelar el pedido' });
     }
-    
-    // Limpiar mensaje después de 5 segundos
     setTimeout(() => setCancelMessage(null), 5000);
   };
 
-  const handleSignOut = async () => {
-    await signOut();
+  const handleAddAddress = (data: Omit<UserAddress, 'id'>) => {
+    addAddress(data);
+    setShowAddressModal(false);
+    setEditingAddress(undefined);
+  };
+
+  const handleEditAddress = (data: Omit<UserAddress, 'id'>) => {
+    if (editingAddress) {
+      updateAddress(editingAddress.id, data);
+    }
+    setShowAddressModal(false);
+    setEditingAddress(undefined);
+  };
+
+  const handleSignOut = () => {
+    logout();
     router.push('/');
   };
 
   const tabs = [
     { id: 'perfil' as Tab, label: 'Mi perfil', icon: User },
+    { id: 'direcciones' as Tab, label: 'Direcciones', icon: MapPin, count: user.addresses.length },
     { id: 'compras' as Tab, label: 'Mis compras', icon: Package, count: userOrders.length },
     { id: 'configuracion' as Tab, label: 'Configuración', icon: Settings },
   ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-[var(--accent-light)]/10 to-[var(--background)] pt-24 pb-12">
+      {/* Modal de dirección con animación */}
+      {showAddressModal && (
+        <AddressModal
+          address={editingAddress}
+          onSave={editingAddress ? handleEditAddress : handleAddAddress}
+          onClose={closeAddressModal}
+          triggerRect={addressModalTriggerRect}
+        />
+      )}
+
       <div className="max-w-5xl mx-auto px-4">
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-sm border border-[var(--border)] p-6 mb-6">
           <div className="flex items-center gap-4">
             <div className="h-16 w-16 rounded-full bg-[var(--primary)] flex items-center justify-center text-white text-2xl font-bold">
-              {user?.firstName?.[0]?.toUpperCase() || user?.emailAddresses[0]?.emailAddress[0]?.toUpperCase()}
+              {user.firstName[0]?.toUpperCase()}
             </div>
             <div>
               <h1 className="text-xl font-bold text-[var(--foreground)]">
-                {user?.firstName} {user?.lastName}
+                {user.firstName} {user.lastName}
               </h1>
-              <p className="text-[var(--muted)] text-sm">{user?.emailAddresses[0]?.emailAddress}</p>
+              <p className="text-[var(--muted)] text-sm">{user.email}</p>
               <span className="inline-block mt-1 px-2 py-0.5 bg-[var(--accent-light)]/50 text-[var(--primary)] text-xs font-medium rounded-full">
                 Cliente
               </span>
@@ -533,6 +990,7 @@ export default function ProfilePage() {
 
           {/* Content */}
           <div className="bg-white rounded-2xl shadow-sm border border-[var(--border)] p-6">
+            {/* Pestaña Perfil */}
             {activeTab === 'perfil' && (
               <div>
                 <div className="flex items-center justify-between mb-6">
@@ -577,7 +1035,7 @@ export default function ProfilePage() {
                         className="w-full px-4 py-2.5 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20"
                       />
                     ) : (
-                      <p className="text-[var(--foreground)] font-medium">{user?.firstName || '-'}</p>
+                      <p className="text-[var(--foreground)] font-medium">{user.firstName || '-'}</p>
                     )}
                   </div>
                   <div>
@@ -590,7 +1048,7 @@ export default function ProfilePage() {
                         className="w-full px-4 py-2.5 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20"
                       />
                     ) : (
-                      <p className="text-[var(--foreground)] font-medium">{user?.lastName || '-'}</p>
+                      <p className="text-[var(--foreground)] font-medium">{user.lastName || '-'}</p>
                     )}
                   </div>
                   <div>
@@ -598,7 +1056,23 @@ export default function ProfilePage() {
                       <Mail className="h-4 w-4 inline mr-1" />
                       Correo electrónico
                     </label>
-                    <p className="text-[var(--foreground)] font-medium">{user?.emailAddresses[0]?.emailAddress}</p>
+                    <p className="text-[var(--foreground)] font-medium">{user.email}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--muted)] mb-1">
+                      <Phone className="h-4 w-4 inline mr-1" />
+                      Teléfono
+                    </label>
+                    {isEditing ? (
+                      <input
+                        type="tel"
+                        value={formData.phone}
+                        onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                        className="w-full px-4 py-2.5 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20"
+                      />
+                    ) : (
+                      <p className="text-[var(--foreground)] font-medium">{user.phone || '-'}</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-[var(--muted)] mb-1">
@@ -606,7 +1080,7 @@ export default function ProfilePage() {
                       Miembro desde
                     </label>
                     <p className="text-[var(--foreground)] font-medium">
-                      {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('es-CO', { 
+                      {user.createdAt ? new Date(user.createdAt).toLocaleDateString('es-CO', { 
                         year: 'numeric', 
                         month: 'long', 
                         day: 'numeric' 
@@ -617,60 +1091,119 @@ export default function ProfilePage() {
               </div>
             )}
 
+            {/* Pestaña Direcciones */}
+            {activeTab === 'direcciones' && (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-lg font-semibold text-[var(--foreground)]">Mis direcciones</h2>
+                  <button
+                    onClick={(e) => openAddressModal(e)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)] rounded-lg transition-colors"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Agregar dirección
+                  </button>
+                </div>
+
+                {user.addresses.length === 0 ? (
+                  <div className="text-center py-12">
+                    <MapPin className="h-16 w-16 text-[var(--muted)]/50 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-[var(--foreground)] mb-2">No tienes direcciones guardadas</h3>
+                    <p className="text-[var(--muted)] mb-6">Agrega una dirección para facilitar tus próximas compras</p>
+                    <button
+                      onClick={(e) => openAddressModal(e)}
+                      className="px-6 py-3 bg-[var(--primary)] hover:bg-[var(--primary-dark)] text-white font-medium rounded-xl transition-colors"
+                    >
+                      Agregar primera dirección
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {user.addresses.map((addr) => (
+                      <div
+                        key={addr.id}
+                        className="p-4 border border-[var(--border)] rounded-xl hover:border-[var(--primary)]/30 transition-colors"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="font-semibold text-[var(--foreground)]">{addr.label}</span>
+                              {addr.isDefault && (
+                                <span className="px-2 py-0.5 bg-[var(--primary)]/10 text-[var(--primary)] text-xs rounded-full flex items-center gap-1">
+                                  <Star className="h-3 w-3" />
+                                  Predeterminada
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-[var(--foreground)]">{addr.address}</p>
+                            <p className="text-sm text-[var(--muted)]">{addr.city}, {addr.department} - {addr.zipCode}</p>
+                            <p className="text-sm text-[var(--muted)]">Tel: {addr.phone}</p>
+                            {addr.instructions && (
+                              <p className="text-xs text-[var(--muted)] mt-2 italic">&quot;{addr.instructions}&quot;</p>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            {!addr.isDefault && (
+                              <button
+                                onClick={() => setDefaultAddress(addr.id)}
+                                className="p-2 text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-lg transition-colors"
+                                title="Establecer como predeterminada"
+                              >
+                                <Star className="h-4 w-4" />
+                              </button>
+                            )}
+                            <button
+                              onClick={(e) => openAddressModal(e, addr)}
+                              className="p-2 text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--background)] rounded-lg transition-colors"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </button>
+                            {!addr.isDefault && (
+                              <button
+                                onClick={() => deleteAddress(addr.id)}
+                                className="p-2 text-[var(--muted)] hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Pestaña Compras */}
             {activeTab === 'compras' && (
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-lg font-semibold text-[var(--foreground)]">Historial de compras</h2>
-                  <div className="flex items-center gap-3">
-                    <p className="text-sm text-[var(--muted)]">
-                      {userOrders.length} pedido{userOrders.length !== 1 ? 's' : ''}
-                    </p>
-                    <button
-                      onClick={fetchOrders}
-                      disabled={loadingOrders}
-                      className="p-2 text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--background)] rounded-lg transition-colors"
-                      title="Actualizar órdenes"
-                    >
-                      <RefreshCw className={cn("h-4 w-4", loadingOrders && "animate-spin")} />
-                    </button>
-                  </div>
+                  <p className="text-sm text-[var(--muted)]">
+                    {userOrders.length} pedido{userOrders.length !== 1 ? 's' : ''}
+                  </p>
                 </div>
                 
-                {loadingOrders ? (
-                  <div className="text-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)] mx-auto mb-4" />
-                    <p className="text-[var(--muted)]">Cargando tus pedidos...</p>
-                  </div>
-                ) : ordersError ? (
-                  <div className="text-center py-12">
-                    <AlertCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-[var(--foreground)] mb-2">Error al cargar pedidos</h3>
-                    <p className="text-[var(--muted)] mb-4">{ordersError}</p>
-                    <button
-                      onClick={fetchOrders}
-                      className="px-6 py-2 bg-[var(--primary)] hover:bg-[var(--primary-dark)] text-white font-medium rounded-xl transition-colors"
-                    >
-                      Reintentar
-                    </button>
-                  </div>
-                ) : userOrders.length === 0 ? (
+                {userOrders.length === 0 ? (
                   <div className="text-center py-12">
                     <Package className="h-16 w-16 text-[var(--muted)]/50 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-[var(--foreground)] mb-2">Aún no tienes pedidos</h3>
                     <p className="text-[var(--muted)] mb-6">Cuando realices una compra, aparecerá aquí</p>
-                    <button
-                      onClick={() => router.push('/')}
-                      className="px-6 py-3 bg-[var(--primary)] hover:bg-[var(--primary-dark)] text-white font-medium rounded-xl transition-colors"
+                    <Link
+                      href="/"
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--primary)] hover:bg-[var(--primary-dark)] text-white font-medium rounded-xl transition-colors"
                     >
+                      <Home className="h-5 w-5" />
                       Explorar productos
-                    </button>
+                    </Link>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {userOrders.map((order) => (
                       <OrderCard 
                         key={order.orderNumber} 
-                        order={order} 
+                        order={order as LocalOrder} 
                         onCancel={handleCancelOrder}
                       />
                     ))}
@@ -679,6 +1212,7 @@ export default function ProfilePage() {
               </div>
             )}
 
+            {/* Pestaña Configuración */}
             {activeTab === 'configuracion' && (
               <div>
                 <h2 className="text-lg font-semibold text-[var(--foreground)] mb-6">Configuración de cuenta</h2>
@@ -713,8 +1247,9 @@ export default function ProfilePage() {
                   <div className="pt-6 border-t border-[var(--border)] space-y-4">
                     <button
                       onClick={handleSignOut}
-                      className="w-full py-3 text-[var(--muted)] hover:text-[var(--foreground)] font-medium transition-colors"
+                      className="w-full flex items-center justify-center gap-2 py-3 text-[var(--muted)] hover:text-[var(--foreground)] font-medium transition-colors"
                     >
+                      <LogOut className="h-5 w-5" />
                       Cerrar sesión
                     </button>
                     <button

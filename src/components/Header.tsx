@@ -1,30 +1,43 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
-import { Leaf, Search, ShoppingCart, User, Menu, X } from 'lucide-react';
+import { Leaf, Search, ShoppingCart, User, Menu, X, LogOut, Settings, Package } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
+import Image from 'next/image';
+import { useLocalAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const { toggleCart, getCartCount, setSearchQuery, searchQuery } = useCartStore();
+  const { user, isAuthenticated, logout } = useLocalAuth();
   const cartCount = getCartCount();
   const pathname = usePathname();
   const router = useRouter();
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMounted(true);
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20);
     };
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,7 +64,7 @@ export default function Header() {
       <header 
         className={cn(
           "fixed top-0 left-0 right-0 z-50 transition-all duration-500 ease-in-out",
-          isScrolled ? "py-2" : "py-4 md:py-6"
+          isScrolled ? "py-1.5" : "py-3 md:py-4"
         )}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -59,23 +72,24 @@ export default function Header() {
             className={cn(
               "relative flex items-center justify-between px-4 md:px-6 transition-all duration-500 rounded-2xl",
               isScrolled 
-                ? "h-14 bg-white/95 backdrop-blur-md shadow-lg shadow-black/5" 
-                : "h-16 bg-transparent"
+                ? "h-16 bg-white/95 backdrop-blur-md shadow-lg shadow-black/5" 
+                : "h-20 bg-transparent"
             )}
           >
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2.5 group relative z-10">
               <div className={cn(
-                "p-2 rounded-xl transition-all duration-300",
-                isScrolled 
-                  ? "bg-[var(--primary)] text-white" 
-                  : "bg-[var(--primary)] text-white"
+                "relative transition-all duration-300",
+                isScrolled ? "w-12 h-12" : "w-16 h-16"
               )}>
-                <Leaf className="h-5 w-5" />
+                <Image 
+                  src="/img/logo.png" 
+                  alt="Fitovida Logo" 
+                  fill
+                  className="object-contain"
+                  priority
+                />
               </div>
-              <span className="text-xl font-bold tracking-tight text-[var(--foreground)]">
-                Fitovida
-              </span>
             </Link>
 
             {/* Navigation Desktop */}
@@ -117,7 +131,7 @@ export default function Header() {
                 )}
               </button>
 
-              <SignedOut>
+              {mounted && !isAuthenticated && (
                 <Link
                   href="/login"
                   className="p-2.5 text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-xl transition-all duration-200 group"
@@ -125,20 +139,70 @@ export default function Header() {
                 >
                   <User className="h-5 w-5 transition-transform group-hover:scale-110" />
                 </Link>
-              </SignedOut>
-              <SignedIn>
-                <UserButton 
-                  afterSignOutUrl="/"
-                  showName={false}
-                  appearance={{
-                    elements: {
-                      avatarBox: "h-9 w-9",
-                      userButtonPopoverCard: "shadow-xl border border-[var(--border)] rounded-xl",
-                      userButtonPopoverActionButton: "hover:bg-[var(--accent-light)]/30",
-                    }
-                  }}
-                />
-              </SignedIn>
+              )}
+              {mounted && isAuthenticated && user && (
+                <div className="relative" ref={userMenuRef}>
+                  <button
+                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                    className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-[var(--accent-light)]/30 transition-all duration-200"
+                    aria-label="Menu de usuario"
+                  >
+                    <div className="h-8 w-8 rounded-full bg-[var(--primary)] text-white flex items-center justify-center text-sm font-semibold">
+                      {user.firstName.charAt(0)}{user.lastName?.charAt(0) || ''}
+                    </div>
+                  </button>
+                  
+                  {/* User Menu Dropdown */}
+                  <div className={cn(
+                    "absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl border border-[var(--border)] overflow-hidden transition-all duration-200 origin-top-right z-50",
+                    isUserMenuOpen ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
+                  )}>
+                    <div className="p-4 border-b border-[var(--border)] bg-[var(--background)]">
+                      <p className="font-semibold text-[var(--foreground)]">{user.firstName} {user.lastName}</p>
+                      <p className="text-sm text-[var(--muted)] truncate">{user.email}</p>
+                    </div>
+                    <div className="p-2">
+                      <Link
+                        href="/perfil"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-[var(--foreground)] hover:bg-[var(--accent-light)]/30 rounded-lg transition-colors"
+                      >
+                        <User className="h-4 w-4" />
+                        Mi Perfil
+                      </Link>
+                      <Link
+                        href="/perfil?tab=compras"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-[var(--foreground)] hover:bg-[var(--accent-light)]/30 rounded-lg transition-colors"
+                      >
+                        <Package className="h-4 w-4" />
+                        Mis Pedidos
+                      </Link>
+                      <Link
+                        href="/perfil?tab=configuracion"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-[var(--foreground)] hover:bg-[var(--accent-light)]/30 rounded-lg transition-colors"
+                      >
+                        <Settings className="h-4 w-4" />
+                        Configuración
+                      </Link>
+                    </div>
+                    <div className="p-2 border-t border-[var(--border)]">
+                      <button
+                        onClick={() => {
+                          logout();
+                          setIsUserMenuOpen(false);
+                          router.push('/');
+                        }}
+                        className="flex items-center gap-3 w-full px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Cerrar sesión
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Mobile menu button */}
               <button
@@ -168,26 +232,51 @@ export default function Header() {
               </button>
             ))}
             <div className="border-t border-[var(--border)] my-2" />
-            <SignedOut>
+            {!isAuthenticated && (
               <Link 
                 href="/login"
                 onClick={() => setIsMenuOpen(false)}
                 className="flex items-center gap-3 py-3 px-4 text-[var(--foreground)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-xl transition-all duration-200 font-medium"
               >
                 <User className="h-5 w-5" />
-                Iniciar sesion
+                Iniciar sesión
               </Link>
-            </SignedOut>
-            <SignedIn>
-              <Link
-                href="/perfil"
-                onClick={() => setIsMenuOpen(false)}
-                className="flex items-center gap-3 py-3 px-4 text-[var(--foreground)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-xl transition-all duration-200 font-medium"
-              >
-                <User className="h-5 w-5" />
-                Mi perfil
-              </Link>
-            </SignedIn>
+            )}
+            {isAuthenticated && user && (
+              <>
+                <div className="px-4 py-3 bg-[var(--background)] rounded-xl mb-1">
+                  <p className="font-semibold text-[var(--foreground)]">{user.firstName} {user.lastName}</p>
+                  <p className="text-sm text-[var(--muted)] truncate">{user.email}</p>
+                </div>
+                <Link
+                  href="/perfil"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center gap-3 py-3 px-4 text-[var(--foreground)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-xl transition-all duration-200 font-medium"
+                >
+                  <User className="h-5 w-5" />
+                  Mi perfil
+                </Link>
+                <Link
+                  href="/perfil?tab=compras"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center gap-3 py-3 px-4 text-[var(--foreground)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-xl transition-all duration-200 font-medium"
+                >
+                  <Package className="h-5 w-5" />
+                  Mis Pedidos
+                </Link>
+                <button
+                  onClick={() => {
+                    logout();
+                    setIsMenuOpen(false);
+                    router.push('/');
+                  }}
+                  className="flex items-center gap-3 w-full py-3 px-4 text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 font-medium"
+                >
+                  <LogOut className="h-5 w-5" />
+                  Cerrar sesión
+                </button>
+              </>
+            )}
           </nav>
         </div>
       </header>

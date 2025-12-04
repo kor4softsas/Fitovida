@@ -2,11 +2,11 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser } from '@clerk/nextjs';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowLeft, Building2, Lock, ShoppingBag, AlertCircle, Loader2, User, FileText, ChevronDown } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
+import { useLocalAuth } from '@/lib/auth';
 import { formatPrice, cn } from '@/lib/utils';
 import { DOCUMENT_TYPES, PERSON_TYPES } from '@/lib/wompi';
 import { WompiBank } from '@/types';
@@ -15,7 +15,7 @@ import gsap from 'gsap';
 // Componente del formulario PSE
 function PSEForm() {
   const router = useRouter();
-  const { user } = useUser();
+  const { user: localUser } = useLocalAuth();
   const { pendingOrder, createOrderFromPending } = useCartStore();
   
   const [banks, setBanks] = useState<WompiBank[]>([]);
@@ -114,7 +114,7 @@ function PSEForm() {
 
       if (data.paymentUrl) {
         // Crear orden en estado pendiente antes de redirigir (con userId si está autenticado)
-        createOrderFromPending(data.transactionId, 'wompi', user?.id);
+        createOrderFromPending(data.transactionId, 'wompi', localUser?.id);
         
         // Redirigir al banco (simulación en sandbox)
         window.location.href = data.paymentUrl;

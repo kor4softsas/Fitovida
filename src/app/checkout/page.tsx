@@ -2,13 +2,13 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser } from '@clerk/nextjs';
 import Image from 'next/image';
 import Link from 'next/link';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { ArrowLeft, CreditCard, Lock, ShoppingBag, AlertCircle, Loader2, CheckCircle, Check, Home } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
+import { useLocalAuth } from '@/lib/auth';
 import { formatPrice, cn } from '@/lib/utils';
 import { stripeAppearance } from '@/lib/stripe';
 import { Order } from '@/types';
@@ -77,7 +77,7 @@ function CheckoutForm({ onPaymentSuccess }: { onPaymentSuccess: (order: Order) =
   const stripe = useStripe();
   const elements = useElements();
   const router = useRouter();
-  const { user } = useUser();
+  const { user: localUser } = useLocalAuth();
   
   const { pendingOrder, createOrderFromPending, clearPendingOrder } = useCartStore();
   
@@ -174,7 +174,7 @@ function CheckoutForm({ onPaymentSuccess }: { onPaymentSuccess: (order: Order) =
 
       if (paymentIntent?.status === 'succeeded') {
         // 3. Crear la orden en el store (con userId si está autenticado)
-        const order = createOrderFromPending(paymentIntent.id, 'stripe', user?.id);
+        const order = createOrderFromPending(paymentIntent.id, 'stripe', localUser?.id);
         
         if (order) {
           // Mostrar modal de confirmación

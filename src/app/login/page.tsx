@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useRef, useEffect, memo } from 'react';
-import { useRouter } from 'next/navigation';
-import { useSignIn, useSignUp, useAuth } from '@clerk/nextjs';
-import { Leaf, Mail, Lock, User, Eye, EyeOff, ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { Leaf, Mail, Lock, User, Eye, EyeOff, ArrowLeft, AlertCircle, Loader2, Phone, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuthStore, TEST_USERS } from '@/lib/auth';
 import gsap from 'gsap';
 
 // Error message component with GSAP animation
@@ -46,11 +47,12 @@ const ErrorMessage = memo(({ message }: { message?: string }) => {
 
 ErrorMessage.displayName = 'ErrorMessage';
 
-type AuthMode = 'login' | 'register' | 'forgot' | 'verify';
+type AuthMode = 'login' | 'register' | 'forgot';
 
 interface FormErrors {
   name?: string;
   email?: string;
+  phone?: string;
   password?: string;
   confirmPassword?: string;
   general?: string;
@@ -58,51 +60,64 @@ interface FormErrors {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { isSignedIn } = useAuth();
-  const { signIn, isLoaded: signInLoaded } = useSignIn();
-  const { signUp, isLoaded: signUpLoaded } = useSignUp();
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams.get('redirect') || '/';
+  
+  const { login, register, isAuthenticated, isLoading } = useAuthStore();
   
   const [mode, setMode] = useState<AuthMode>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
-  const [verificationCode, setVerificationCode] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [localLoading, setLocalLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [showTestCredentials, setShowTestCredentials] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    phone: '',
     password: '',
     confirmPassword: ''
   });
 
   // Redirect if already signed in
   useEffect(() => {
-    if (isSignedIn) {
-      router.push('/');
+    if (isAuthenticated) {
+      router.push(redirectUrl);
     }
-  }, [isSignedIn, router]);
+  }, [isAuthenticated, router, redirectUrl]);
 
   const validateEmail = (email: string): string | undefined => {
     if (!email) return 'El correo es obligatorio';
     if (!email.includes('@')) return 'Incluye un @ en el correo';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'El formato del correo no es valido';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'El formato del correo no es válido';
     return undefined;
   };
 
   const validatePassword = (password: string): string | undefined => {
-    if (!password) return 'La contrasena es obligatoria';
-    if (password.length < 8) return 'Minimo 8 caracteres';
-    if (!/[A-Z]/.test(password)) return 'Incluye al menos una mayuscula';
-    if (!/[a-z]/.test(password)) return 'Incluye al menos una minuscula';
-    if (!/[0-9]/.test(password)) return 'Incluye al menos un numero';
+    if (!password) return 'La contraseña es obligatoria';
+    if (password.length < 8) return 'Mínimo 8 caracteres';
+    if (!/[A-Z]/.test(password)) return 'Incluye al menos una mayúscula';
+    if (!/[a-z]/.test(password)) return 'Incluye al menos una minúscula';
+    if (!/[0-9]/.test(password)) return 'Incluye al menos un número';
+    return undefined;
+  };
+
+  const validatePhone = (phone: string): string | undefined => {
+    if (!phone) return 'El teléfono es obligatorio';
+    if (!/^\d{7,}$/.test(phone.replace(/\s/g, ''))) return 'Ingresa un número válido (mínimo 7 dígitos)';
     return undefined;
   };
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
     
-    if (mode === 'register' && !formData.name.trim()) {
-      newErrors.name = 'El nombre es obligatorio';
+    if (mode === 'register') {
+      if (!formData.name.trim()) {
+        newErrors.name = 'El nombre es obligatorio';
+      } else if (formData.name.trim().length < 3) {
+        newErrors.name = 'Mínimo 3 caracteres';
+      }
+      newErrors.phone = validatePhone(formData.phone);
     }
     
     newErrors.email = validateEmail(formData.email);
@@ -110,9 +125,9 @@ export default function LoginPage() {
     
     if (mode === 'register') {
       if (!formData.confirmPassword) {
-        newErrors.confirmPassword = 'Confirma tu contrasena';
+        newErrors.confirmPassword = 'Confirma tu contraseña';
       } else if (formData.password !== formData.confirmPassword) {
-        newErrors.confirmPassword = 'Las contrasenas no coinciden';
+        newErrors.confirmPassword = 'Las contraseñas no coinciden';
       }
     }
     
@@ -124,126 +139,57 @@ export default function LoginPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handle email/password sign in
-  const handleSignIn = async () => {
-    if (!signIn) return;
+  // Handle login
+  const handleLogin = async () => {
+    setLocalLoading(true);
+    const result = await login(formData.email, formData.password);
+    setLocalLoading(false);
     
-    try {
-      const result = await signIn.create({
-        identifier: formData.email,
-        password: formData.password,
-      });
-
-      if (result.status === 'complete') {
-        router.push('/');
-      }
-    } catch (err: unknown) {
-      const error = err as { errors?: { message: string }[] };
-      setErrors({ general: error.errors?.[0]?.message || 'Error al iniciar sesion' });
+    if (result.success) {
+      router.push(redirectUrl);
+    } else {
+      setErrors({ general: result.error || 'Error al iniciar sesión' });
     }
   };
 
-  // Handle email/password sign up
-  const handleSignUp = async () => {
-    if (!signUp) return;
+  // Handle register
+  const handleRegister = async () => {
+    setLocalLoading(true);
     
-    try {
-      const result = await signUp.create({
-        emailAddress: formData.email,
-        password: formData.password,
-        firstName: formData.name.split(' ')[0],
-        lastName: formData.name.split(' ').slice(1).join(' ') || undefined,
-      });
-
-      // If sign up is complete (no verification required)
-      if (result.status === 'complete') {
-        router.push('/');
-        return;
-      }
-
-      // If email verification is required
-      if (result.status === 'missing_requirements') {
-        // Send email verification
-        await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
-        // Show verification form
-        setMode('verify');
-      }
-    } catch (err: unknown) {
-      const error = err as { errors?: { message: string; code?: string; longMessage?: string }[] };
-      const clerkError = error.errors?.[0];
-      
-      // Handle specific Clerk error codes
-      let errorMessage = 'Error al crear cuenta';
-      
-      if (clerkError?.code === 'form_identifier_exists') {
-        errorMessage = 'Este correo ya está registrado. Intenta iniciar sesión.';
-      } else if (clerkError?.code === 'form_password_pwned') {
-        errorMessage = 'Esta contraseña es muy común. Por favor elige otra más segura.';
-      } else if (clerkError?.code === 'form_password_length_too_short') {
-        errorMessage = 'La contraseña debe tener al menos 8 caracteres.';
-      } else if (clerkError?.code === 'captcha_invalid' || clerkError?.code === 'captcha_verification_failed') {
-        errorMessage = 'Error de verificación. Por favor intenta de nuevo.';
-      } else if (clerkError?.message) {
-        errorMessage = clerkError.message;
-      }
-      
-      setErrors({ general: errorMessage });
-    }
-  };
-
-  // Handle email verification
-  const handleVerification = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!signUp) return;
+    const nameParts = formData.name.trim().split(' ');
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ') || '';
     
-    setIsLoading(true);
-    try {
-      const result = await signUp.attemptEmailAddressVerification({
-        code: verificationCode,
-      });
-
-      if (result.status === 'complete') {
-        router.push('/');
-      }
-    } catch (err: unknown) {
-      const error = err as { errors?: { message: string }[] };
-      setErrors({ general: error.errors?.[0]?.message || 'Codigo invalido' });
-    } finally {
-      setIsLoading(false);
+    const result = await register({
+      email: formData.email,
+      password: formData.password,
+      firstName,
+      lastName,
+      phone: formData.phone,
+    });
+    
+    setLocalLoading(false);
+    
+    if (result.success) {
+      router.push(redirectUrl);
+    } else {
+      setErrors({ general: result.error || 'Error al crear cuenta' });
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateForm()) return;
     
-    setIsLoading(true);
-    setErrors({});
-    
-    try {
-      if (mode === 'login') {
-        await handleSignIn();
-      } else {
-        await handleSignUp();
+    // Para login, solo validar email y password básicamente
+    if (mode === 'login') {
+      if (!formData.email || !formData.password) {
+        setErrors({ general: 'Ingresa tu correo y contraseña' });
+        return;
       }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // OAuth sign in (Google, Facebook)
-  const handleOAuthSignIn = async (provider: 'oauth_google' | 'oauth_facebook') => {
-    if (!signIn) return;
-    
-    try {
-      await signIn.authenticateWithRedirect({
-        strategy: provider,
-        redirectUrl: '/sso-callback',
-        redirectUrlComplete: '/',
-      });
-    } catch (err: unknown) {
-      const error = err as { errors?: { message: string }[] };
-      setErrors({ general: error.errors?.[0]?.message || 'Error con el proveedor' });
+      await handleLogin();
+    } else {
+      if (!validateForm()) return;
+      await handleRegister();
     }
   };
 
@@ -252,6 +198,9 @@ export default function LoginPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name as keyof FormErrors]) {
       setErrors(prev => ({ ...prev, [name]: undefined }));
+    }
+    if (errors.general) {
+      setErrors(prev => ({ ...prev, general: undefined }));
     }
   };
 
@@ -264,15 +213,21 @@ export default function LoginPage() {
         error = validateEmail(value);
         break;
       case 'password':
-        error = validatePassword(value);
+        if (mode === 'register') error = validatePassword(value);
         break;
       case 'name':
-        if (mode === 'register' && !value.trim()) error = 'El nombre es obligatorio';
+        if (mode === 'register') {
+          if (!value.trim()) error = 'El nombre es obligatorio';
+          else if (value.trim().length < 3) error = 'Mínimo 3 caracteres';
+        }
+        break;
+      case 'phone':
+        if (mode === 'register') error = validatePhone(value);
         break;
       case 'confirmPassword':
         if (mode === 'register') {
-          if (!value) error = 'Confirma tu contrasena';
-          else if (value !== formData.password) error = 'Las contrasenas no coinciden';
+          if (!value) error = 'Confirma tu contraseña';
+          else if (value !== formData.password) error = 'Las contraseñas no coinciden';
         }
         break;
     }
@@ -285,30 +240,20 @@ export default function LoginPage() {
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!signIn) return;
-    
-    setIsLoading(true);
-    try {
-      await signIn.create({
-        strategy: 'reset_password_email_code',
-        identifier: formData.email,
-      });
-      setEmailSent(true);
-    } catch (err: unknown) {
-      const error = err as { errors?: { message: string }[] };
-      setErrors({ general: error.errors?.[0]?.message || 'Error al enviar correo' });
-    } finally {
-      setIsLoading(false);
-    }
+    setLocalLoading(true);
+    // Simular envío de correo
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    setEmailSent(true);
+    setLocalLoading(false);
   };
 
-  if (!signInLoaded || !signUpLoaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
-      </div>
-    );
-  }
+  const fillTestCredentials = (email: string, password: string) => {
+    setFormData(prev => ({ ...prev, email, password }));
+    setShowTestCredentials(false);
+    setErrors({});
+  };
+
+  const loading = isLoading || localLoading;
 
   // Forgot password view
   if (mode === 'forgot') {
@@ -363,8 +308,10 @@ export default function LoginPage() {
                 </div>
                 <button
                   type="submit"
-                  className="w-full py-3.5 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-medium rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-[var(--primary)]/25"
+                  disabled={loading}
+                  className="w-full py-3.5 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-medium rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-[var(--primary)]/25 flex items-center justify-center gap-2 disabled:opacity-50"
                 >
+                  {loading && <Loader2 className="h-4 w-4 animate-spin" />}
                   Enviar instrucciones
                 </button>
               </form>
@@ -376,79 +323,6 @@ export default function LoginPage() {
                 Volver a iniciar sesión
               </button>
             )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Email verification view
-  if (mode === 'verify') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-white via-[var(--accent-light)]/10 to-[var(--background)] flex items-center justify-center p-4 pt-24">
-        <div className="fixed inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-[var(--celadon)]/20 rounded-full blur-[120px]" />
-        </div>
-
-        <div className="w-full max-w-md relative z-10">
-          <div className="bg-white rounded-3xl shadow-xl shadow-black/5 border border-[var(--border)] p-8">
-            <button
-              onClick={() => { setMode('register'); setVerificationCode(''); setErrors({}); }}
-              className="flex items-center gap-2 text-[var(--muted)] hover:text-[var(--foreground)] mb-6 transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Volver
-            </button>
-
-            <div className="text-center mb-6">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--primary)]/10 rounded-full mb-4">
-                <Mail className="h-8 w-8 text-[var(--primary)]" />
-              </div>
-              <h1 className="text-xl font-semibold text-[var(--foreground)]">
-                Verifica tu correo
-              </h1>
-              <p className="text-sm text-[var(--muted)] mt-2">
-                Enviamos un codigo de 6 digitos a <span className="font-medium text-[var(--foreground)]">{formData.email}</span>
-              </p>
-            </div>
-
-            <form onSubmit={handleVerification} className="space-y-4">
-              {errors.general && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-600 text-sm">
-                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                  {errors.general}
-                </div>
-              )}
-              
-              <div>
-                <label className="block text-sm font-medium text-[var(--foreground)] mb-1.5">
-                  Codigo de verificacion
-                </label>
-                <input
-                  type="text"
-                  value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="000000"
-                  maxLength={6}
-                  className="w-full px-4 py-3 bg-[var(--background)] border border-[var(--border)] rounded-xl focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10 transition-all text-[var(--foreground)] placeholder:text-[var(--muted)]/50 text-center text-2xl tracking-widest font-mono"
-                />
-              </div>
-              
-              <button
-                type="submit"
-                disabled={isLoading || verificationCode.length !== 6}
-                className="w-full py-3.5 bg-[var(--primary)] hover:bg-[var(--primary-hover)] disabled:bg-[var(--muted)] text-white font-medium rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-[var(--primary)]/25 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Verificando...
-                  </>
-                ) : (
-                  'Verificar'
-                )}
-              </button>
-            </form>
           </div>
         </div>
       </div>
@@ -467,12 +341,12 @@ export default function LoginPage() {
         <div className="bg-white rounded-3xl shadow-xl shadow-black/5 border border-[var(--border)] p-6 sm:p-8 max-h-[calc(100vh-120px)] overflow-y-auto">
           {/* Logo */}
           <div className="text-center mb-6">
-            <div className="inline-flex items-center gap-2.5 mb-3">
+            <Link href="/" className="inline-flex items-center gap-2.5 mb-3">
               <div className="p-2 rounded-xl bg-[var(--primary)]">
                 <Leaf className="h-5 w-5 text-white" />
               </div>
               <span className="text-xl font-bold text-[var(--foreground)]">Fitovida</span>
-            </div>
+            </Link>
             <h1 className="text-lg font-semibold text-[var(--foreground)]">
               {mode === 'login' ? 'Bienvenido de vuelta' : 'Crear cuenta'}
             </h1>
@@ -486,7 +360,7 @@ export default function LoginPage() {
           {/* Toggle buttons */}
           <div className="flex bg-[var(--background)] rounded-xl p-1 mb-5">
             <button
-              onClick={() => setMode('login')}
+              onClick={() => { setMode('login'); setErrors({}); }}
               className={cn(
                 "flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-200",
                 mode === 'login'
@@ -497,7 +371,7 @@ export default function LoginPage() {
               Iniciar sesión
             </button>
             <button
-              onClick={() => setMode('register')}
+              onClick={() => { setMode('register'); setErrors({}); }}
               className={cn(
                 "flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-200",
                 mode === 'register'
@@ -508,6 +382,37 @@ export default function LoginPage() {
               Registrarse
             </button>
           </div>
+
+          {/* Test credentials button - only in login mode */}
+          {mode === 'login' && (
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={() => setShowTestCredentials(!showTestCredentials)}
+                className="w-full py-2.5 px-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700 hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+              >
+                <span>🧪</span>
+                Usar credenciales de prueba
+              </button>
+              
+              {showTestCredentials && (
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-2">
+                  <p className="text-xs text-blue-600 font-medium mb-2">Selecciona un usuario de prueba:</p>
+                  {TEST_USERS.map((user) => (
+                    <button
+                      key={user.id}
+                      type="button"
+                      onClick={() => fillTestCredentials(user.email, user.password)}
+                      className="w-full p-2 bg-white rounded-lg text-left hover:bg-blue-100 transition-colors border border-blue-100"
+                    >
+                      <p className="text-sm font-medium text-[var(--foreground)]">{user.firstName} {user.lastName}</p>
+                      <p className="text-xs text-[var(--muted)]">{user.email}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-3" noValidate>
@@ -525,7 +430,7 @@ export default function LoginPage() {
                     value={formData.name}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    placeholder="Tu nombre"
+                    placeholder="Tu nombre completo"
                     className={cn(
                       "w-full pl-10 pr-4 py-2.5 bg-[var(--background)] border rounded-xl focus:outline-none transition-all text-[var(--foreground)] placeholder:text-[var(--muted)]/50 text-sm",
                       errors.name 
@@ -562,6 +467,33 @@ export default function LoginPage() {
               </div>
               <ErrorMessage message={errors.email} />
             </div>
+
+            {/* Phone field - only for register */}
+            {mode === 'register' && (
+              <div>
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-1">
+                  Teléfono
+                </label>
+                <div className="relative">
+                  <Phone className={cn("absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 transition-colors", errors.phone ? "text-red-400" : "text-[var(--muted)]")} />
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    placeholder="3001234567"
+                    className={cn(
+                      "w-full pl-10 pr-4 py-2.5 bg-[var(--background)] border rounded-xl focus:outline-none transition-all text-[var(--foreground)] placeholder:text-[var(--muted)]/50 text-sm",
+                      errors.phone 
+                        ? "border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100" 
+                        : "border-[var(--border)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10"
+                    )}
+                  />
+                </div>
+                <ErrorMessage message={errors.phone} />
+              </div>
+            )}
 
             {/* Password field */}
             <div>
@@ -636,50 +568,43 @@ export default function LoginPage() {
             )}
 
             {/* General error */}
-            <ErrorMessage message={errors.general} />
+            {errors.general && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-600 text-sm">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                {errors.general}
+              </div>
+            )}
 
             {/* Submit button */}
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={loading}
               className="w-full py-3 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-medium rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-[var(--primary)]/25 mt-4 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {mode === 'login' ? 'Iniciar sesion' : 'Crear cuenta'}
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="flex items-center gap-4 my-5">
-            <div className="flex-1 h-px bg-[var(--border)]" />
-            <span className="text-xs text-[var(--muted)]">o continua con</span>
-            <div className="flex-1 h-px bg-[var(--border)]" />
-          </div>
-
-          {/* Social login */}
-          <div className="flex gap-3">
-            <button 
-              onClick={() => handleOAuthSignIn('oauth_google')}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-[var(--border)] rounded-xl hover:bg-[var(--background)] transition-colors"
-            >
-              <svg className="h-5 w-5" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-              <span className="text-sm font-medium text-[var(--foreground)]">Google</span>
-            </button>
-            <button 
-              onClick={() => handleOAuthSignIn('oauth_facebook')}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-[var(--border)] rounded-xl hover:bg-[var(--background)] transition-colors"
-            >
-              <svg className="h-5 w-5" fill="#1877F2" viewBox="0 0 24 24">
-                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-              </svg>
-              <span className="text-sm font-medium text-[var(--foreground)]">Facebook</span>
-            </button>
-          </div>
+          {/* Register benefits */}
+          {mode === 'register' && (
+            <div className="mt-5 p-4 bg-[var(--accent-light)]/30 rounded-xl">
+              <p className="text-sm font-medium text-[var(--foreground)] mb-2">Al registrarte podrás:</p>
+              <ul className="space-y-1.5">
+                {[
+                  'Guardar tus direcciones de envío',
+                  'Ver el historial de tus pedidos',
+                  'Hacer seguimiento a tus envíos',
+                  'Recibir ofertas exclusivas'
+                ].map((benefit, i) => (
+                  <li key={i} className="flex items-center gap-2 text-sm text-[var(--muted)]">
+                    <CheckCircle className="h-4 w-4 text-[var(--primary)]" />
+                    {benefit}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         {/* Footer text */}

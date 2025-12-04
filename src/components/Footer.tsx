@@ -70,16 +70,13 @@ export default function Footer() {
             <ul className="space-y-2 sm:space-y-3">
               <li className="flex items-center gap-2 text-xs sm:text-sm text-white/50">
                 <MapPin className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--primary)] flex-shrink-0" />
-                <span className="truncate">Calle Principal #123</span>
+                <span className="truncate">Cra.5 Norte #42-23</span>
               </li>
               <li className="flex items-center gap-2 text-xs sm:text-sm text-white/50">
                 <Phone className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--primary)] flex-shrink-0" />
-                +1 234 567 8900
+                602-400-36-11
               </li>
-              <li className="flex items-center gap-2 text-xs sm:text-sm text-white/50">
-                <Mail className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--primary)] flex-shrink-0" />
-                <span className="truncate">info@fitovida.com</span>
-              </li>
+              
             </ul>
           </div>
 

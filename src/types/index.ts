@@ -30,8 +30,8 @@ export interface CustomerInfo {
   zip: string;
 }
 
-// Actualizado: Removido PayPal, agregado PSE
-export type PaymentMethod = 'card' | 'pse' | 'transfer';
+// Métodos de pago disponibles
+export type PaymentMethod = 'card' | 'pse' | 'transfer' | 'cash_on_delivery';
 
 export type OrderStatus = 'pending' | 'processing' | 'paid' | 'shipped' | 'delivered' | 'cancelled' | 'failed';
 
