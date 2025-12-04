@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-04-30.basil',
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
@@ -81,9 +79,5 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Stripe webhooks requieren el body raw, no parseado
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+// Next.js App Router usa request.text() para obtener el body raw
+// No se necesita config adicional
