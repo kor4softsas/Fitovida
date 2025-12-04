@@ -1,12 +1,14 @@
 'use client';
 
-import { useMemo } from 'react';
-import { LayoutGrid, Pill, Leaf, Droplet, Dumbbell, Sparkles } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { LayoutGrid, Pill, Leaf, Droplet, Dumbbell, Sparkles, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
-import { products, searchProducts, getProductsByCategory } from '@/lib/products';
+import { searchProducts, getProductsByCategory } from '@/lib/products';
 import ProductCard from './ProductCard';
 import { Product, Category } from '@/types';
 import { cn } from '@/lib/utils';
+
+const PRODUCTS_PER_PAGE = 12;
 
 const categories = [
   { id: 'todos' as Category, name: 'Todos', icon: LayoutGrid },
@@ -19,6 +21,7 @@ const categories = [
 
 export default function ProductsGrid() {
   const { currentCategory, setCategory, searchQuery, sortBy, setSortBy } = useCartStore();
+  const [currentPage, setCurrentPage] = useState(1);
 
   const filteredProducts = useMemo(() => {
     let result: Product[] = [];
@@ -46,6 +49,64 @@ export default function ProductsGrid() {
     return result;
   }, [currentCategory, searchQuery, sortBy]);
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
+  
+  // Ensure current page is valid (clamp to valid range)
+  const validCurrentPage = Math.min(Math.max(1, currentPage), Math.max(1, totalPages));
+  
+  const startIndex = (validCurrentPage - 1) * PRODUCTS_PER_PAGE;
+  const endIndex = startIndex + PRODUCTS_PER_PAGE;
+  const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
+
+  // Generate page numbers to display
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisiblePages = 5;
+    
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push('...');
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // Scroll to products section
+    const element = document.getElementById('productos');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const handleCategoryChange = (category: Category) => {
+    setCategory(category);
+    setCurrentPage(1); // Reset to first page when category changes
+  };
+
+  const handleSortChange = (sort: typeof sortBy) => {
+    setSortBy(sort);
+    setCurrentPage(1); // Reset to first page when sort changes
+  };
+
   return (
     <section id="productos" className="py-12 md:py-20 lg:py-24 bg-[var(--background)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -69,7 +130,7 @@ export default function ProductsGrid() {
               return (
                 <button
                   key={category.id}
-                  onClick={() => setCategory(category.id)}
+                  onClick={() => handleCategoryChange(category.id)}
                   className={cn(
                     "flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap flex-shrink-0",
                     isActive 
@@ -93,7 +154,7 @@ export default function ProductsGrid() {
           
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            onChange={(e) => handleSortChange(e.target.value as typeof sortBy)}
             className="px-3 sm:px-4 py-2 sm:py-2.5 border border-[var(--border)] rounded-lg sm:rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)] text-xs sm:text-sm text-[var(--foreground)] cursor-pointer transition-all"
           >
             <option value="default">Ordenar</option>
@@ -109,11 +170,127 @@ export default function ProductsGrid() {
             <p className="text-[var(--muted)] text-base md:text-lg">No se encontraron productos.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
-            {filteredProducts.map((product, index) => (
-              <ProductCard key={product.id} product={product} priority={index < 8} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
+              {paginatedProducts.map((product, index) => (
+                <ProductCard key={product.id} product={product} priority={index < 8} />
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <nav 
+                className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10 md:mt-14"
+                aria-label="Paginación de productos"
+              >
+                {/* Page info for mobile */}
+                <p className="text-sm text-[var(--muted)] sm:hidden">
+                  Página <span className="font-semibold text-[var(--foreground)]">{currentPage}</span> de <span className="font-semibold text-[var(--foreground)]">{totalPages}</span>
+                </p>
+
+                <div className="flex items-center gap-1 sm:gap-2">
+                  {/* First page button */}
+                  <button
+                    onClick={() => handlePageChange(1)}
+                    disabled={currentPage === 1}
+                    className={cn(
+                      "flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl transition-all duration-200",
+                      currentPage === 1
+                        ? "bg-[var(--background)] text-[var(--muted)] cursor-not-allowed opacity-50"
+                        : "bg-white border border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:shadow-md"
+                    )}
+                    aria-label="Ir a la primera página"
+                    title="Primera página"
+                  >
+                    <ChevronsLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+                  </button>
+
+                  {/* Previous page button */}
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className={cn(
+                      "flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl transition-all duration-200",
+                      currentPage === 1
+                        ? "bg-[var(--background)] text-[var(--muted)] cursor-not-allowed opacity-50"
+                        : "bg-white border border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:shadow-md"
+                    )}
+                    aria-label="Ir a la página anterior"
+                    title="Página anterior"
+                  >
+                    <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+                  </button>
+
+                  {/* Page numbers - hidden on very small screens */}
+                  <div className="hidden xs:flex items-center gap-1 sm:gap-2">
+                    {getPageNumbers().map((page, index) => (
+                      typeof page === 'number' ? (
+                        <button
+                          key={index}
+                          onClick={() => handlePageChange(page)}
+                          className={cn(
+                            "flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl text-sm font-medium transition-all duration-200",
+                            currentPage === page
+                              ? "bg-[var(--primary)] text-white shadow-md shadow-[var(--primary)]/20"
+                              : "bg-white border border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:shadow-md"
+                          )}
+                          aria-label={`Ir a la página ${page}`}
+                          aria-current={currentPage === page ? 'page' : undefined}
+                        >
+                          {page}
+                        </button>
+                      ) : (
+                        <span 
+                          key={index} 
+                          className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 text-[var(--muted)]"
+                          aria-hidden="true"
+                        >
+                          ⋯
+                        </span>
+                      )
+                    ))}
+                  </div>
+
+                  {/* Next page button */}
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className={cn(
+                      "flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl transition-all duration-200",
+                      currentPage === totalPages
+                        ? "bg-[var(--background)] text-[var(--muted)] cursor-not-allowed opacity-50"
+                        : "bg-white border border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:shadow-md"
+                    )}
+                    aria-label="Ir a la página siguiente"
+                    title="Página siguiente"
+                  >
+                    <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+                  </button>
+
+                  {/* Last page button */}
+                  <button
+                    onClick={() => handlePageChange(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className={cn(
+                      "flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl transition-all duration-200",
+                      currentPage === totalPages
+                        ? "bg-[var(--background)] text-[var(--muted)] cursor-not-allowed opacity-50"
+                        : "bg-white border border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:shadow-md"
+                    )}
+                    aria-label="Ir a la última página"
+                    title="Última página"
+                  >
+                    <ChevronsRight className="h-4 w-4 sm:h-5 sm:w-5" />
+                  </button>
+                </div>
+
+                {/* Page info for desktop */}
+                <p className="hidden sm:block text-sm text-[var(--muted)]">
+                  Mostrando <span className="font-semibold text-[var(--foreground)]">{startIndex + 1}</span>-<span className="font-semibold text-[var(--foreground)]">{Math.min(endIndex, filteredProducts.length)}</span> de <span className="font-semibold text-[var(--foreground)]">{filteredProducts.length}</span> productos
+                </p>
+              </nav>
+            )}
+          </>
         )}
       </div>
     </section>
