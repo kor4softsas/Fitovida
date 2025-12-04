@@ -1,12 +1,21 @@
 'use client';
 
-import { useState, useRef, useEffect, memo } from 'react';
+import { useState, useRef, useEffect, memo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Leaf, Mail, Lock, User, Eye, EyeOff, ArrowLeft, AlertCircle, Loader2, Phone, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore, TEST_USERS } from '@/lib/auth';
 import gsap from 'gsap';
+
+// Loading fallback for Suspense
+function LoginLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
+    </div>
+  );
+}
 
 // Error message component with GSAP animation
 const ErrorMessage = memo(({ message }: { message?: string }) => {
@@ -58,7 +67,17 @@ interface FormErrors {
   general?: string;
 }
 
+// Main export with Suspense wrapper
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginLoading />}>
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+// Actual login content
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectUrl = searchParams.get('redirect') || '/';
