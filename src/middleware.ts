@@ -1,11 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// Rutas protegidas por Clerk (solo admin por ahora, ya que usamos auth local para perfil)
-const isProtectedRoute = createRouteMatcher([
-  '/admin(.*)',
-]);
-
 // Rutas públicas que no requieren autenticación de Clerk
+// Admin usa su propio sistema de autenticación local
 const isPublicRoute = createRouteMatcher([
   '/',
   '/login(.*)',
@@ -13,14 +9,13 @@ const isPublicRoute = createRouteMatcher([
   '/checkout(.*)',
   '/api/(.*)',
   '/sso-callback(.*)',
+  '/admin(.*)', // Admin usa autenticación local, no Clerk
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-  // Solo proteger rutas de admin con Clerk
-  if (isProtectedRoute(req)) {
-    await auth.protect();
-  }
-  // El resto de rutas (incluyendo /perfil) manejan su propia autenticación local
+  // No proteger ninguna ruta con Clerk por ahora
+  // Admin maneja su propia autenticación con useAdminAuthStore
+  // Perfil y checkout manejan autenticación local con useAuthStore
 });
 
 export const config = {

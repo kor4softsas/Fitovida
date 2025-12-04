@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, memo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Leaf, Mail, Lock, User, Eye, EyeOff, ArrowLeft, AlertCircle, Loader2, Phone, CheckCircle } from 'lucide-react';
+import { Leaf, Mail, Lock, User, Eye, EyeOff, ArrowLeft, AlertCircle, Loader2, Phone, CheckCircle, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore, TEST_USERS } from '@/lib/auth';
 import gsap from 'gsap';
@@ -632,6 +632,20 @@ function LoginContent() {
               </ul>
             </div>
           )}
+
+          {/* Admin access button */}
+          <div className="mt-6 pt-5 border-t border-[var(--border)]">
+            <Link
+              href="/admin/login"
+              className="flex items-center justify-center gap-2 w-full py-3 bg-gray-900 hover:bg-gray-800 text-white font-medium rounded-xl transition-all duration-200 hover:shadow-lg"
+            >
+              <Shield className="h-5 w-5" />
+              Acceder como Administrador
+            </Link>
+            <p className="text-center text-xs text-[var(--muted)] mt-2">
+              Solo para personal autorizado
+            </p>
+          </div>
         </div>
 
         {/* Footer text */}
