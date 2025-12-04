@@ -42,7 +42,23 @@ export async function GET(request: NextRequest) {
     }
 
     // Transformar al formato esperado por el frontend
-    const transformedProducts = products?.map(p => ({
+    interface ProductRow {
+      id: number;
+      name: string;
+      description: string;
+      price: number;
+      original_price?: number;
+      image: string;
+      category: string;
+      stock: number;
+      featured: boolean;
+      discount?: number;
+      rating: number;
+      reviews: number;
+      benefits?: string[];
+    }
+    
+    const transformedProducts = (products as ProductRow[])?.map(p => ({
       id: p.id,
       name: p.name,
       description: p.description,
