@@ -35,6 +35,8 @@ export default function ProductsGrid() {
   const sortRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<(HTMLButtonElement | null)[]>([]);
+  const productsGridRef = useRef<HTMLDivElement>(null);
+  const [isPageTransitioning, setIsPageTransitioning] = useState(false);
 
   // Close dropdown with animation (inverse of opening)
   const closeDropdown = useCallback(() => {
@@ -183,11 +185,42 @@ export default function ProductsGrid() {
   };
 
   const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-    // Scroll to products section
-    const element = document.getElementById('productos');
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (page === currentPage || isPageTransitioning) return;
+    
+    setIsPageTransitioning(true);
+    
+    // Animate out current products
+    if (productsGridRef.current) {
+      gsap.to(productsGridRef.current, {
+        opacity: 0,
+        y: 20,
+        duration: 0.25,
+        ease: 'power2.in',
+        onComplete: () => {
+          setCurrentPage(page);
+          
+          // Scroll to products section
+          const element = document.getElementById('productos');
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+          
+          // Animate in new products
+          gsap.fromTo(productsGridRef.current,
+            { opacity: 0, y: -20 },
+            { 
+              opacity: 1, 
+              y: 0, 
+              duration: 0.35, 
+              ease: 'power2.out',
+              onComplete: () => setIsPageTransitioning(false)
+            }
+          );
+        }
+      });
+    } else {
+      setCurrentPage(page);
+      setIsPageTransitioning(false);
     }
   };
 
@@ -302,7 +335,10 @@ export default function ProductsGrid() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
+            <div 
+              ref={productsGridRef}
+              className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5"
+            >
               {paginatedProducts.map((product, index) => (
                 <ProductCard key={product.id} product={product} priority={index < 8} />
               ))}
@@ -311,14 +347,10 @@ export default function ProductsGrid() {
             {/* Pagination */}
             {totalPages > 1 && (
               <nav 
-                className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10 md:mt-14"
+                className="flex flex-col items-center gap-3 mt-10 md:mt-14"
                 aria-label="Paginación de productos"
               >
-                {/* Page info for mobile */}
-                <p className="text-sm text-[var(--muted)] sm:hidden">
-                  Página <span className="font-semibold text-[var(--foreground)]">{currentPage}</span> de <span className="font-semibold text-[var(--foreground)]">{totalPages}</span>
-                </p>
-
+                {/* Pagination buttons - centered */}
                 <div className="flex items-center gap-1 sm:gap-2">
                   {/* First page button */}
                   <button
@@ -352,18 +384,18 @@ export default function ProductsGrid() {
                     <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
                   </button>
 
-                  {/* Page numbers - hidden on very small screens */}
-                  <div className="hidden xs:flex items-center gap-1 sm:gap-2">
+                  {/* Page numbers */}
+                  <div className="flex items-center gap-1 sm:gap-2">
                     {getPageNumbers().map((page, index) => (
                       typeof page === 'number' ? (
                         <button
                           key={index}
                           onClick={() => handlePageChange(page)}
                           className={cn(
-                            "flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl text-sm font-medium transition-all duration-200",
+                            "flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl text-sm font-medium transition-all duration-300",
                             currentPage === page
-                              ? "bg-[var(--primary)] text-white shadow-md shadow-[var(--primary)]/20"
-                              : "bg-white border border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:shadow-md"
+                              ? "bg-[var(--primary)] text-white shadow-lg shadow-[var(--primary)]/30 scale-110"
+                              : "bg-white border border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:shadow-md hover:scale-105"
                           )}
                           aria-label={`Ir a la página ${page}`}
                           aria-current={currentPage === page ? 'page' : undefined}
@@ -373,7 +405,7 @@ export default function ProductsGrid() {
                       ) : (
                         <span 
                           key={index} 
-                          className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 text-[var(--muted)]"
+                          className="flex items-center justify-center w-6 h-8 sm:w-8 sm:h-10 text-[var(--muted)] text-sm"
                           aria-hidden="true"
                         >
                           ⋯
@@ -415,8 +447,8 @@ export default function ProductsGrid() {
                   </button>
                 </div>
 
-                {/* Page info for desktop */}
-                <p className="hidden sm:block text-sm text-[var(--muted)]">
+                {/* Page info - below buttons */}
+                <p className="text-sm text-[var(--muted)]">
                   Mostrando <span className="font-semibold text-[var(--foreground)]">{startIndex + 1}</span>-<span className="font-semibold text-[var(--foreground)]">{Math.min(endIndex, filteredProducts.length)}</span> de <span className="font-semibold text-[var(--foreground)]">{filteredProducts.length}</span> productos
                 </p>
               </nav>
