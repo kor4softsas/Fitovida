@@ -92,6 +92,9 @@ export default function Footer() {
             <form onSubmit={handleNewsletterSubmit} className="flex gap-2">
               <input
                 type="email"
+                id="newsletter-email"
+                name="newsletter-email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Tu email"

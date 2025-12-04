@@ -10,9 +10,10 @@ import ProductModal from './ProductModal';
 
 interface ProductCardProps {
   product: Product;
+  priority?: boolean;
 }
 
-export default function ProductCard({ product }: ProductCardProps) {
+export default function ProductCard({ product, priority = false }: ProductCardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -49,6 +50,7 @@ export default function ProductCard({ product }: ProductCardProps) {
               src={product.image}
               alt={product.name}
               fill
+              priority={priority}
               className="object-cover group-hover:scale-105 transition-transform duration-500"
               onError={() => setImageError(true)}
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
