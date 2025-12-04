@@ -1,5 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceClient } from '@/lib/supabase/server';
+import { query } from '@/lib/db';
+
+interface ProductRow {
+  id: number;
+  name: string;
+  description: string;
+  price: string;
+  original_price: string | null;
+  image: string;
+  category: string;
+  stock: number;
+  featured: boolean;
+  discount: number | null;
+  rating: string;
+  reviews: number;
+  benefits: string | null;
+}
 
 // GET - Obtener todos los productos o filtrar por categoría
 export async function GET(request: NextRequest) {
@@ -9,40 +25,34 @@ export async function GET(request: NextRequest) {
     const featured = searchParams.get('featured');
     const limit = searchParams.get('limit');
 
-    const supabase = await createServiceClient();
-    
-    let query = supabase.from('products').select('*');
+    // Construir query SQL
+    let sql = 'SELECT * FROM products WHERE 1=1';
+    const params: any[] = [];
 
     // Filtrar por categoría
     if (category && category !== 'todos') {
-      query = query.eq('category', category);
+      sql += ' AND category = ?';
+      params.push(category);
     }
 
     // Filtrar solo destacados
     if (featured === 'true') {
-      query = query.eq('featured', true);
-    }
-
-    // Limitar resultados
-    if (limit) {
-      query = query.limit(parseInt(limit));
+      sql += ' AND featured = true';
     }
 
     // Ordenar por destacados primero, luego por nombre
-    query = query.order('featured', { ascending: false }).order('name');
+    sql += ' ORDER BY featured DESC, name ASC';
 
-    const { data: products, error } = await query;
-
-    if (error) {
-      console.error('Error obteniendo productos:', error);
-      return NextResponse.json(
-        { error: 'Error obteniendo productos' },
-        { status: 500 }
-      );
+    // Limitar resultados
+    if (limit) {
+      sql += ' LIMIT ?';
+      params.push(parseInt(limit));
     }
 
+    const products = await query<ProductRow>(sql, params);
+
     // Transformar al formato esperado por el frontend
-    const transformedProducts = products?.map(p => ({
+    const transformedProducts = products.map(p => ({
       id: p.id,
       name: p.name,
       description: p.description,
@@ -55,8 +65,8 @@ export async function GET(request: NextRequest) {
       discount: p.discount,
       rating: Number(p.rating),
       reviews: p.reviews,
-      benefits: p.benefits || []
-    })) || [];
+      benefits: p.benefits ? JSON.parse(p.benefits) : []
+    }));
 
     return NextResponse.json({ 
       products: transformedProducts,

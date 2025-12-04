@@ -3,10 +3,19 @@
 -- =============================================
 -- Ejecutar este SQL en el Editor SQL de Supabase
 -- https://supabase.com/dashboard/project/TU_PROYECTO/sql
+--
+-- IMPORTANTE: Este esquema está diseñado para trabajar con:
+-- - Clerk para autenticación de usuarios (user_id como VARCHAR)
+-- - Supabase como base de datos
+-- - Sistema de órdenes con múltiples métodos de pago
+-- - Direcciones de envío múltiples por usuario
+--
+-- =============================================
 
--- Eliminar tablas si existen (para recrear)
+-- Eliminar tablas si existen (para recrear schema limpio)
 DROP TABLE IF EXISTS order_items CASCADE;
 DROP TABLE IF EXISTS orders CASCADE;
+DROP TABLE IF EXISTS user_addresses CASCADE;
 DROP TABLE IF EXISTS products CASCADE;
 
 -- =============================================
@@ -40,30 +49,33 @@ CREATE INDEX idx_products_featured ON products(featured);
 CREATE TABLE orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_number VARCHAR(50) UNIQUE NOT NULL,
-  user_id VARCHAR(100), -- ID de Clerk
+  user_id VARCHAR(100), -- ID de Clerk (puede ser NULL para invitados)
   
   -- Datos del cliente
   customer_name VARCHAR(255) NOT NULL,
   customer_email VARCHAR(255) NOT NULL,
   customer_phone VARCHAR(50) NOT NULL,
-  customer_address TEXT NOT NULL,
-  customer_city VARCHAR(100) NOT NULL,
-  customer_zip VARCHAR(20) NOT NULL,
+  
+  -- Dirección de envío (Solo Cali)
+  shipping_address TEXT NOT NULL,
+  shipping_city VARCHAR(100) NOT NULL DEFAULT 'Cali' CHECK (shipping_city = 'Cali'),
+  shipping_department VARCHAR(100) NOT NULL DEFAULT 'Valle del Cauca' CHECK (shipping_department = 'Valle del Cauca'),
+  shipping_zip VARCHAR(20) NOT NULL,
   
   -- Pago
-  payment_method VARCHAR(20) NOT NULL CHECK (payment_method IN ('card', 'pse', 'transfer')),
+  payment_method VARCHAR(30) NOT NULL CHECK (payment_method IN ('card', 'pse', 'transfer', 'cash_on_delivery')),
   payment_id VARCHAR(255),
-  payment_provider VARCHAR(20) CHECK (payment_provider IN ('stripe', 'wompi')),
+  payment_provider VARCHAR(20) CHECK (payment_provider IN ('stripe', 'wompi', 'none')),
   
   -- Estado
-  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled')),
+  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'paid', 'shipped', 'delivered', 'cancelled', 'failed')),
   
   -- Notas
   notes TEXT,
   
   -- Montos (en COP)
   subtotal DECIMAL(12, 2) NOT NULL,
-  shipping DECIMAL(12, 2) NOT NULL,
+  shipping DECIMAL(12, 2) NOT NULL DEFAULT 0,
   discount DECIMAL(12, 2) DEFAULT 0,
   discount_code VARCHAR(50),
   total DECIMAL(12, 2) NOT NULL,
@@ -74,7 +86,11 @@ CREATE TABLE orders (
   
   -- Timestamps
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  -- Constraints
+  CONSTRAINT positive_amounts CHECK (subtotal >= 0 AND shipping >= 0 AND discount >= 0 AND total >= 0),
+  CONSTRAINT valid_email CHECK (customer_email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
 );
 
 -- Índices para órdenes
@@ -82,6 +98,7 @@ CREATE INDEX idx_orders_user_id ON orders(user_id);
 CREATE INDEX idx_orders_status ON orders(status);
 CREATE INDEX idx_orders_created_at ON orders(created_at DESC);
 CREATE INDEX idx_orders_order_number ON orders(order_number);
+CREATE INDEX idx_orders_customer_email ON orders(customer_email);
 
 -- =============================================
 -- TABLA: order_items
@@ -99,6 +116,40 @@ CREATE TABLE order_items (
 
 -- Índice para items de orden
 CREATE INDEX idx_order_items_order_id ON order_items(order_id);
+CREATE INDEX idx_order_items_product_id ON order_items(product_id);
+
+-- =============================================
+-- TABLA: user_addresses
+-- =============================================
+-- Direcciones de envío guardadas por los usuarios
+CREATE TABLE user_addresses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id VARCHAR(100) NOT NULL, -- ID de Clerk
+  
+  -- Información de la dirección (Solo Cali)
+  label VARCHAR(100) NOT NULL, -- Ej: Casa, Oficina, Trabajo
+  address TEXT NOT NULL,
+  city VARCHAR(100) NOT NULL DEFAULT 'Cali' CHECK (city = 'Cali'),
+  department VARCHAR(100) NOT NULL DEFAULT 'Valle del Cauca' CHECK (department = 'Valle del Cauca'),
+  zip_code VARCHAR(20) NOT NULL,
+  phone VARCHAR(50) NOT NULL,
+  instructions TEXT, -- Instrucciones de entrega opcionales
+  
+  -- Control
+  is_default BOOLEAN DEFAULT false,
+  
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  -- Constraints
+  CONSTRAINT valid_phone CHECK (phone ~* '^\d{7,}$'),
+  UNIQUE(user_id, label) -- No permitir etiquetas duplicadas por usuario
+);
+
+-- Índices para direcciones
+CREATE INDEX idx_user_addresses_user_id ON user_addresses(user_id);
+CREATE INDEX idx_user_addresses_is_default ON user_addresses(is_default) WHERE is_default = true;
 
 -- =============================================
 -- FUNCIÓN: Actualizar updated_at automáticamente
@@ -122,40 +173,105 @@ CREATE TRIGGER update_orders_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_user_addresses_updated_at
+  BEFORE UPDATE ON user_addresses
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- =============================================
+-- FUNCIÓN: Garantizar solo una dirección predeterminada
+-- =============================================
+CREATE OR REPLACE FUNCTION ensure_single_default_address()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Si se está marcando como predeterminada
+  IF NEW.is_default = true THEN
+    -- Desmarcar cualquier otra dirección predeterminada del mismo usuario
+    UPDATE user_addresses
+    SET is_default = false
+    WHERE user_id = NEW.user_id 
+      AND id != NEW.id 
+      AND is_default = true;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Trigger para garantizar dirección predeterminada única
+CREATE TRIGGER ensure_single_default_address_trigger
+  BEFORE INSERT OR UPDATE ON user_addresses
+  FOR EACH ROW
+  EXECUTE FUNCTION ensure_single_default_address();
+
 -- =============================================
 -- POLÍTICAS RLS (Row Level Security)
 -- =============================================
--- Habilitar RLS
+-- NOTA: Las políticas están configuradas de forma permisiva para desarrollo.
+-- Para producción, integra auth.uid() con Clerk JWT personalizado.
+
+-- Habilitar RLS en todas las tablas
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_addresses ENABLE ROW LEVEL SECURITY;
 
--- Productos: lectura pública
-CREATE POLICY "Productos visibles para todos"
+-- ===== PRODUCTOS =====
+-- Lectura pública (cualquiera puede ver productos)
+CREATE POLICY "products_select_public"
   ON products FOR SELECT
   USING (true);
 
--- Órdenes: solo el propietario puede ver sus órdenes
-CREATE POLICY "Usuarios ven sus propias órdenes"
-  ON orders FOR SELECT
-  USING (true); -- Por ahora permitir todo, luego integrar con Clerk
+-- Solo admins pueden modificar productos (por ahora deshabilitado)
+-- CREATE POLICY "products_admin_all" ON products FOR ALL USING (auth.jwt() ->> 'role' = 'admin');
 
-CREATE POLICY "Usuarios pueden crear órdenes"
+-- ===== ÓRDENES =====
+-- Usuarios pueden ver sus propias órdenes
+CREATE POLICY "orders_select_own"
+  ON orders FOR SELECT
+  USING (true); -- TODO: Integrar con Clerk: user_id = auth.jwt() ->> 'sub'
+
+-- Cualquiera puede crear órdenes (incluso invitados)
+CREATE POLICY "orders_insert_all"
   ON orders FOR INSERT
   WITH CHECK (true);
 
-CREATE POLICY "Usuarios pueden actualizar sus órdenes"
+-- Solo el propietario puede actualizar su orden (ej: cancelar)
+CREATE POLICY "orders_update_own"
   ON orders FOR UPDATE
-  USING (true);
+  USING (true); -- TODO: Integrar con Clerk: user_id = auth.jwt() ->> 'sub' OR user_id IS NULL
 
--- Items de orden: acceso basado en la orden padre
-CREATE POLICY "Items de orden visibles"
+-- ===== ITEMS DE ORDEN =====
+-- Visibilidad basada en la orden padre
+CREATE POLICY "order_items_select_all"
   ON order_items FOR SELECT
-  USING (true);
+  USING (true); -- TODO: Filtrar por órdenes del usuario
 
-CREATE POLICY "Items de orden insertables"
+-- Permitir inserción durante creación de orden
+CREATE POLICY "order_items_insert_all"
   ON order_items FOR INSERT
   WITH CHECK (true);
+
+-- ===== DIRECCIONES DE USUARIO =====
+-- Usuarios solo ven sus propias direcciones
+CREATE POLICY "user_addresses_select_own"
+  ON user_addresses FOR SELECT
+  USING (true); -- TODO: Integrar con Clerk: user_id = auth.jwt() ->> 'sub'
+
+-- Usuarios solo pueden crear sus propias direcciones
+CREATE POLICY "user_addresses_insert_own"
+  ON user_addresses FOR INSERT
+  WITH CHECK (true); -- TODO: Integrar con Clerk: user_id = auth.jwt() ->> 'sub'
+
+-- Usuarios solo pueden actualizar sus propias direcciones
+CREATE POLICY "user_addresses_update_own"
+  ON user_addresses FOR UPDATE
+  USING (true); -- TODO: Integrar con Clerk: user_id = auth.jwt() ->> 'sub'
+
+-- Usuarios solo pueden eliminar sus propias direcciones
+CREATE POLICY "user_addresses_delete_own"
+  ON user_addresses FOR DELETE
+  USING (true); -- TODO: Integrar con Clerk: user_id = auth.jwt() ->> 'sub'
 
 -- =============================================
 -- DATOS INICIALES: Productos
@@ -189,5 +305,76 @@ INSERT INTO products (name, description, price, original_price, image, category,
 ('BCAA 2:1:1', 'Aminoácidos de cadena ramificada para recuperación muscular y resistencia.', 78000, NULL, '/img/productos/bcaa.jpg', 'energia', false, NULL, 4.7, 198, ARRAY['Recuperación muscular', 'Reduce fatiga', 'Preserva músculo', 'Hidratación mejorada']),
 ('Creatina Monohidrato', 'Creatina pura micronizada para fuerza, potencia y masa muscular.', 68000, 78000, '/img/productos/creatina.jpg', 'energia', true, 13, 4.9, 389, ARRAY['Mayor fuerza', 'Más potencia', 'Recuperación rápida', 'Masa muscular']);
 
+-- =============================================
+-- VISTAS ÚTILES
+-- =============================================
+
+-- Vista: Resumen de órdenes con totales
+CREATE OR REPLACE VIEW orders_summary AS
+SELECT 
+  o.id,
+  o.order_number,
+  o.user_id,
+  o.customer_name,
+  o.customer_email,
+  o.status,
+  o.payment_method,
+  o.total,
+  o.created_at,
+  COUNT(oi.id) as total_items,
+  SUM(oi.quantity) as total_products
+FROM orders o
+LEFT JOIN order_items oi ON o.id = oi.order_id
+GROUP BY o.id;
+
+-- Vista: Productos más vendidos
+CREATE OR REPLACE VIEW top_products AS
+SELECT 
+  oi.product_id,
+  oi.product_name,
+  COUNT(DISTINCT oi.order_id) as total_orders,
+  SUM(oi.quantity) as total_quantity,
+  SUM(oi.quantity * oi.price) as total_revenue
+FROM order_items oi
+JOIN orders o ON oi.order_id = o.id
+WHERE o.status NOT IN ('cancelled', 'failed')
+GROUP BY oi.product_id, oi.product_name
+ORDER BY total_quantity DESC;
+
+-- =============================================
+-- ESTADÍSTICAS Y VERIFICACIÓN
+-- =============================================
+
 -- Verificar datos insertados
 SELECT COUNT(*) as total_productos FROM products;
+
+-- Comentarios finales
+COMMENT ON TABLE products IS 'Catálogo de productos naturales y suplementos';
+COMMENT ON TABLE orders IS 'Órdenes de compra con soporte para múltiples métodos de pago';
+COMMENT ON TABLE order_items IS 'Items individuales de cada orden';
+COMMENT ON TABLE user_addresses IS 'Direcciones de envío guardadas por usuarios (Clerk)';
+
+-- =============================================
+-- INSTRUCCIONES DE INTEGRACIÓN CON CLERK
+-- =============================================
+-- 
+-- Para integrar correctamente con Clerk:
+--
+-- 1. En Clerk Dashboard, configura JWT Templates:
+--    - Ve a: Dashboard > JWT Templates > New Template
+--    - Agrega el claim: "sub" (ID del usuario)
+--    - Opcional: Agrega "role" para control de acceso basado en roles
+--
+-- 2. En Supabase, configura JWT personalizado:
+--    - Ve a: Settings > API > JWT Settings
+--    - Configura el JWT Secret de Clerk
+--
+-- 3. Actualiza las políticas RLS reemplazando:
+--    - `true` por `user_id = auth.jwt() ->> 'sub'`
+--    - Esto garantiza que cada usuario solo acceda a sus datos
+--
+-- 4. Ejemplo de política segura:
+--    CREATE POLICY "orders_select_own" ON orders FOR SELECT
+--    USING (user_id = auth.jwt() ->> 'sub' OR user_id IS NULL);
+--
+-- =============================================

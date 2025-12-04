@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-04-30.basil',
+  apiVersion: '2025-11-17.clover',
 });
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
@@ -41,9 +41,14 @@ export async function POST(request: NextRequest) {
           orderNumber: paymentIntent.metadata.orderNumber,
         });
 
-        // Aquí podrías actualizar la base de datos
-        // Por ahora, los pedidos se actualizan en localStorage desde el cliente
-        // En producción, aquí actualizarías la BD y enviarías emails de confirmación
+        // Actualizar la orden en la base de datos
+        if (paymentIntent.metadata.orderNumber) {
+          const { query } = await import('@/lib/db');
+          await query(
+            'UPDATE orders SET status = ?, payment_id = ? WHERE order_number = ?',
+            ['confirmed', paymentIntent.id, paymentIntent.metadata.orderNumber]
+          );
+        }
         
         break;
       }
@@ -80,10 +85,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-// Stripe webhooks requieren el body raw, no parseado
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};

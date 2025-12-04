@@ -1,8 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceClient } from '@/lib/supabase/server';
+import { query, queryOne } from '@/lib/db';
 
 // Ventana de cancelación: 24 horas
 const CANCELLATION_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+interface OrderRow {
+  id: number;
+  order_number: string;
+  user_id: string | null;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  customer_address: string;
+  customer_city: string;
+  customer_zip: string;
+  payment_method: string;
+  payment_id: string | null;
+  payment_provider: string | null;
+  status: string;
+  notes: string | null;
+  subtotal: string;
+  shipping: string;
+  discount: string;
+  discount_code: string | null;
+  total: string;
+  created_at: Date;
+  cancelled_at: Date | null;
+  cancellation_reason: string | null;
+}
+
+interface OrderItemRow {
+  id: number;
+  order_id: number;
+  product_id: number;
+  product_name: string;
+  product_image: string;
+  quantity: number;
+  price: string;
+}
 
 // GET - Obtener una orden específica
 export async function GET(
@@ -12,26 +47,29 @@ export async function GET(
   try {
     const { orderNumber } = await params;
     
-    const supabase = await createServiceClient();
-    
-    const { data: order, error } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        order_items (*)
-      `)
-      .eq('order_number', orderNumber)
-      .single();
+    const order = await queryOne<OrderRow>(
+      'SELECT * FROM orders WHERE order_number = ?',
+      [orderNumber]
+    );
 
-    if (error) {
-      console.error('Error obteniendo orden:', error);
+    if (!order) {
       return NextResponse.json(
         { error: 'Orden no encontrada' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ order });
+    const orderItems = await query<OrderItemRow>(
+      'SELECT * FROM order_items WHERE order_id = ?',
+      [order.id]
+    );
+
+    return NextResponse.json({ 
+      order: {
+        ...order,
+        order_items: orderItems
+      }
+    });
   } catch (error) {
     console.error('Error en GET /api/orders/[orderNumber]:', error);
     return NextResponse.json(
@@ -51,16 +89,13 @@ export async function PATCH(
     const body = await request.json();
     const { action, reason, userId } = body;
 
-    const supabase = await createServiceClient();
-
     // Obtener la orden actual
-    const { data: order, error: fetchError } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('order_number', orderNumber)
-      .single();
+    const order = await queryOne<OrderRow>(
+      'SELECT * FROM orders WHERE order_number = ?',
+      [orderNumber]
+    );
 
-    if (fetchError || !order) {
+    if (!order) {
       return NextResponse.json(
         { error: 'Orden no encontrada' },
         { status: 404 }
@@ -99,24 +134,16 @@ export async function PATCH(
       }
 
       // Actualizar la orden
-      const { data: updatedOrder, error: updateError } = await supabase
-        .from('orders')
-        .update({
-          status: 'cancelled',
-          cancelled_at: new Date().toISOString(),
-          cancellation_reason: reason || 'Cancelado por el usuario'
-        })
-        .eq('order_number', orderNumber)
-        .select()
-        .single();
+      await query(
+        'UPDATE orders SET status = ?, cancelled_at = NOW(), cancellation_reason = ? WHERE order_number = ?',
+        ['cancelled', reason || 'Cancelado por el usuario', orderNumber]
+      );
 
-      if (updateError) {
-        console.error('Error cancelando orden:', updateError);
-        return NextResponse.json(
-          { error: 'Error al cancelar la orden' },
-          { status: 500 }
-        );
-      }
+      // Obtener la orden actualizada
+      const updatedOrder = await queryOne<OrderRow>(
+        'SELECT * FROM orders WHERE order_number = ?',
+        [orderNumber]
+      );
 
       return NextResponse.json({
         success: true,
@@ -135,20 +162,16 @@ export async function PATCH(
         );
       }
 
-      const { data: updatedOrder, error: updateError } = await supabase
-        .from('orders')
-        .update({ status: body.status })
-        .eq('order_number', orderNumber)
-        .select()
-        .single();
+      await query(
+        'UPDATE orders SET status = ? WHERE order_number = ?',
+        [body.status, orderNumber]
+      );
 
-      if (updateError) {
-        console.error('Error actualizando orden:', updateError);
-        return NextResponse.json(
-          { error: 'Error al actualizar la orden' },
-          { status: 500 }
-        );
-      }
+      // Obtener la orden actualizada
+      const updatedOrder = await queryOne<OrderRow>(
+        'SELECT * FROM orders WHERE order_number = ?',
+        [orderNumber]
+      );
 
       return NextResponse.json({
         success: true,

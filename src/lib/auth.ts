@@ -44,7 +44,6 @@ export interface LocalUser {
   email: string;
   firstName: string;
   lastName: string;
-  phone: string;
   createdAt: string;
   addresses: UserAddress[];
 }
@@ -59,6 +58,7 @@ interface AuthStore {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
+  setClerkUser: (user: LocalUser) => void;
   
   // Acciones de perfil
   updateProfile: (data: Partial<LocalUser>) => void;
@@ -180,6 +180,15 @@ export const useAuthStore = create<AuthStore>()(
       // Cerrar sesión
       logout: () => {
         set({ user: null, isAuthenticated: false });
+      },
+      
+      // Establecer usuario desde Clerk (sincronización)
+      setClerkUser: (clerkUser) => {
+        set({ 
+          user: clerkUser, 
+          isAuthenticated: true,
+          isLoading: false 
+        });
       },
       
       // Actualizar perfil

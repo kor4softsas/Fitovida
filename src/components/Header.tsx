@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Leaf, Search, ShoppingCart, User, Menu, X, LogOut, Settings, Package } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
 import Image from 'next/image';
-import { useLocalAuth } from '@/lib/auth';
+import { useUser, useClerk } from '@clerk/nextjs';
 import { cn } from '@/lib/utils';
 
 export default function Header() {
@@ -14,16 +14,15 @@ export default function Header() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const { toggleCart, getCartCount, setSearchQuery, searchQuery } = useCartStore();
-  const { user, isAuthenticated, logout } = useLocalAuth();
+  const { user, isSignedIn, isLoaded } = useUser();
+  const { signOut } = useClerk();
   const cartCount = getCartCount();
   const pathname = usePathname();
   const router = useRouter();
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setMounted(true);
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20);
     };
@@ -124,14 +123,14 @@ export default function Header() {
                 aria-label="Carrito"
               >
                 <ShoppingCart className="h-5 w-5 transition-transform group-hover:scale-110" />
-                {mounted && cartCount > 0 && (
+                {cartCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-[var(--primary)] text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center shadow-sm border-2 border-white animate-in zoom-in">
                     {cartCount}
                   </span>
                 )}
               </button>
 
-              {mounted && !isAuthenticated && (
+              {isLoaded && !isSignedIn && (
                 <Link
                   href="/login"
                   className="p-2.5 text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-xl transition-all duration-200 group"
@@ -140,7 +139,7 @@ export default function Header() {
                   <User className="h-5 w-5 transition-transform group-hover:scale-110" />
                 </Link>
               )}
-              {mounted && isAuthenticated && user && (
+              {isLoaded && isSignedIn && user && (
                 <div className="relative" ref={userMenuRef}>
                   <button
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -148,7 +147,7 @@ export default function Header() {
                     aria-label="Menu de usuario"
                   >
                     <div className="h-8 w-8 rounded-full bg-[var(--primary)] text-white flex items-center justify-center text-sm font-semibold">
-                      {user.firstName.charAt(0)}{user.lastName?.charAt(0) || ''}
+                      {user.firstName?.charAt(0) || ''}{user.lastName?.charAt(0) || ''}
                     </div>
                   </button>
                   
@@ -159,7 +158,7 @@ export default function Header() {
                   )}>
                     <div className="p-4 border-b border-[var(--border)] bg-[var(--background)]">
                       <p className="font-semibold text-[var(--foreground)]">{user.firstName} {user.lastName}</p>
-                      <p className="text-sm text-[var(--muted)] truncate">{user.email}</p>
+                      <p className="text-sm text-[var(--muted)] truncate">{user.primaryEmailAddress?.emailAddress}</p>
                     </div>
                     <div className="p-2">
                       <Link
@@ -190,9 +189,8 @@ export default function Header() {
                     <div className="p-2 border-t border-[var(--border)]">
                       <button
                         onClick={() => {
-                          logout();
+                          signOut(() => router.push('/'));
                           setIsUserMenuOpen(false);
-                          router.push('/');
                         }}
                         className="flex items-center gap-3 w-full px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                       >
@@ -232,7 +230,7 @@ export default function Header() {
               </button>
             ))}
             <div className="border-t border-[var(--border)] my-2" />
-            {!isAuthenticated && (
+            {isLoaded && !isSignedIn && (
               <Link 
                 href="/login"
                 onClick={() => setIsMenuOpen(false)}
@@ -242,11 +240,11 @@ export default function Header() {
                 Iniciar sesión
               </Link>
             )}
-            {isAuthenticated && user && (
+            {isLoaded && isSignedIn && user && (
               <>
                 <div className="px-4 py-3 bg-[var(--background)] rounded-xl mb-1">
                   <p className="font-semibold text-[var(--foreground)]">{user.firstName} {user.lastName}</p>
-                  <p className="text-sm text-[var(--muted)] truncate">{user.email}</p>
+                  <p className="text-sm text-[var(--muted)] truncate">{user.primaryEmailAddress?.emailAddress}</p>
                 </div>
                 <Link
                   href="/perfil"
@@ -266,9 +264,8 @@ export default function Header() {
                 </Link>
                 <button
                   onClick={() => {
-                    logout();
+                    signOut(() => router.push('/'));
                     setIsMenuOpen(false);
-                    router.push('/');
                   }}
                   className="flex items-center gap-3 w-full py-3 px-4 text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 font-medium"
                 >

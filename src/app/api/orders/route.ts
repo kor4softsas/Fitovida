@@ -1,5 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceClient } from '@/lib/supabase/server';
+import { query } from '@/lib/db';
+
+interface OrderRow {
+  id: number;
+  order_number: string;
+  user_id: string | null;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  customer_address: string;
+  customer_city: string;
+  customer_zip: string;
+  payment_method: string;
+  payment_id: string | null;
+  payment_provider: string | null;
+  status: string;
+  notes: string | null;
+  subtotal: string;
+  shipping: string;
+  discount: string;
+  discount_code: string | null;
+  total: string;
+  created_at: Date;
+}
+
+interface OrderItemRow {
+  id: number;
+  order_id: number;
+  product_id: number;
+  product_name: string;
+  product_image: string;
+  quantity: number;
+  price: string;
+}
 
 // GET - Obtener órdenes de un usuario
 export async function GET(request: NextRequest) {
@@ -14,27 +47,27 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = await createServiceClient();
-    
-    // Obtener órdenes con sus items
-    const { data: orders, error } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        order_items (*)
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    // Obtener órdenes del usuario
+    const orders = await query<OrderRow>(
+      'SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC',
+      [userId]
+    );
 
-    if (error) {
-      console.error('Error obteniendo órdenes:', error);
-      return NextResponse.json(
-        { error: 'Error obteniendo órdenes' },
-        { status: 500 }
-      );
-    }
+    // Obtener items para cada orden
+    const ordersWithItems = await Promise.all(
+      orders.map(async (order) => {
+        const items = await query<OrderItemRow>(
+          'SELECT * FROM order_items WHERE order_id = ?',
+          [order.id]
+        );
+        return {
+          ...order,
+          order_items: items
+        };
+      })
+    );
 
-    return NextResponse.json({ orders: orders || [] });
+    return NextResponse.json({ orders: ordersWithItems });
   } catch (error) {
     console.error('Error en GET /api/orders:', error);
     return NextResponse.json(
@@ -73,83 +106,91 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createServiceClient();
-
     // 1. Crear la orden
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .insert({
-        order_number: orderNumber,
-        user_id: userId || null,
-        customer_name: customer.name,
-        customer_email: customer.email,
-        customer_phone: customer.phone,
-        customer_address: customer.address,
-        customer_city: customer.city,
-        customer_zip: customer.zip,
-        payment_method: paymentMethod,
-        payment_id: paymentId || null,
-        payment_provider: paymentProvider || null,
-        status: status || 'pending',
-        notes: notes || null,
+    const result = await query<{ insertId: number }>(
+      `INSERT INTO orders (
+        order_number, user_id, customer_name, customer_email, customer_phone,
+        customer_address, customer_city, customer_zip, payment_method,
+        payment_id, payment_provider, status, notes,
+        subtotal, shipping, discount, discount_code, total
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        orderNumber,
+        userId || null,
+        customer.name,
+        customer.email,
+        customer.phone,
+        customer.address,
+        customer.city,
+        customer.zip,
+        paymentMethod,
+        paymentId || null,
+        paymentProvider || null,
+        status || 'pending',
+        notes || null,
         subtotal,
         shipping,
-        discount: discount || 0,
-        discount_code: discountCode || null,
+        discount || 0,
+        discountCode || null,
         total
-      })
-      .select()
-      .single();
+      ]
+    );
 
-    if (orderError) {
-      console.error('Error creando orden:', orderError);
+    const orderId = (result as any).insertId;
+
+    if (!orderId) {
       return NextResponse.json(
-        { error: 'Error creando orden', details: orderError.message },
+        { error: 'Error creando orden' },
         { status: 500 }
       );
     }
 
     // 2. Crear los items de la orden
-    const orderItems = items.map((item: { id: number; name: string; image: string; quantity: number; price: number }) => ({
-      order_id: order.id,
-      product_id: item.id,
-      product_name: item.name,
-      product_image: item.image,
-      quantity: item.quantity,
-      price: item.price
-    }));
+    const orderItemsValues = items.map((item: { id: number; name: string; image: string; quantity: number; price: number }) => [
+      orderId,
+      item.id,
+      item.name,
+      item.image,
+      item.quantity,
+      item.price
+    ]);
 
-    const { error: itemsError } = await supabase
-      .from('order_items')
-      .insert(orderItems);
-
-    if (itemsError) {
+    try {
+      for (const itemValues of orderItemsValues) {
+        await query(
+          'INSERT INTO order_items (order_id, product_id, product_name, product_image, quantity, price) VALUES (?, ?, ?, ?, ?, ?)',
+          itemValues
+        );
+      }
+    } catch (itemsError) {
       console.error('Error creando items:', itemsError);
       // Intentar eliminar la orden si falló crear los items
-      await supabase.from('orders').delete().eq('id', order.id);
+      await query('DELETE FROM orders WHERE id = ?', [orderId]);
       return NextResponse.json(
-        { error: 'Error creando items de orden', details: itemsError.message },
+        { error: 'Error creando items de orden' },
         { status: 500 }
       );
     }
 
     // 3. Obtener la orden completa con items
-    const { data: completeOrder, error: fetchError } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        order_items (*)
-      `)
-      .eq('id', order.id)
-      .single();
+    const [order] = await query<OrderRow>(
+      'SELECT * FROM orders WHERE id = ?',
+      [orderId]
+    );
 
-    if (fetchError) {
-      console.error('Error obteniendo orden completa:', fetchError);
-    }
+    const orderItems = await query<OrderItemRow>(
+      'SELECT * FROM order_items WHERE order_id = ?',
+      [orderId]
+    );
+
+    const completeOrder = {
+      ...order,
+      order_items: orderItems
+    };
 
     return NextResponse.json({ 
       success: true, 
-      order: completeOrder || order,
+      order: completeOrder,
       message: 'Orden creada exitosamente'
     });
   } catch (error) {

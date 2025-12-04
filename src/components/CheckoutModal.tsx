@@ -5,13 +5,13 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { 
   X, User, CreditCard, ShoppingBag, Lock, Check, AlertCircle, 
-  Building2, LogIn, MapPin, Plus, Truck, Edit2, Trash2, Star, Phone, ChevronDown
+  Building2, LogIn, MapPin, Plus, Truck, Edit2, Trash2, Star, Phone
 } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
 import { useAuthStore, UserAddress } from '@/lib/auth';
 import { formatPrice, cn } from '@/lib/utils';
 import { CustomerInfo, PaymentMethod } from '@/types';
-import { departments, getCitiesByDepartment } from '@/lib/colombiaData';
+import { AVAILABLE_DEPARTMENT, AVAILABLE_CITY } from '@/lib/colombiaData';
 import gsap from 'gsap';
 
 // Error message component with GSAP animation
@@ -76,8 +76,8 @@ function AddressModal({
   const [formData, setFormData] = useState({
     label: address?.label || '',
     address: address?.address || '',
-    city: address?.city || '',
-    department: address?.department || '',
+    city: AVAILABLE_CITY, // Siempre Cali
+    department: AVAILABLE_DEPARTMENT, // Siempre Valle del Cauca
     zipCode: address?.zipCode || '',
     phone: address?.phone || '',
     instructions: address?.instructions || '',
@@ -85,18 +85,6 @@ function AddressModal({
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [availableCities, setAvailableCities] = useState<string[]>(
-    formData.department ? getCitiesByDepartment(formData.department) : []
-  );
-  
-  // Update cities when department changes
-  const handleDepartmentChange = (department: string) => {
-    setFormData(prev => ({ ...prev, department, city: '' }));
-    setAvailableCities(getCitiesByDepartment(department));
-    if (errors.department) {
-      setErrors(prev => ({ ...prev, department: '' }));
-    }
-  };
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const isClosingRef = useRef(false);
@@ -323,64 +311,31 @@ function AddressModal({
                   Departamento
                 </label>
                 <div className="relative group">
-                  <Building2 className={cn(
-                    "absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 transition-colors pointer-events-none z-10",
-                    errors.department ? "text-red-400" : "text-[var(--muted)] group-focus-within:text-[var(--primary)]"
-                  )} />
-                  <select
-                    value={formData.department}
-                    onChange={(e) => handleDepartmentChange(e.target.value)}
-                    onBlur={(e) => handleBlur('department', e.target.value)}
-                    className={cn(
-                      "w-full pl-10 pr-10 py-2.5 bg-[var(--background)] border rounded-xl focus:outline-none transition-all text-[var(--foreground)] text-sm appearance-none cursor-pointer",
-                      errors.department 
-                        ? "border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100" 
-                        : "border-[var(--border)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10"
-                    )}
-                  >
-                    <option value="">Selecciona un departamento</option>
-                    {departments.map((dept) => (
-                      <option key={dept} value={dept}>{dept}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--muted)] pointer-events-none" />
+                  <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--muted)] pointer-events-none z-10" />
+                  <input
+                    type="text"
+                    value="Valle del Cauca"
+                    readOnly
+                    disabled
+                    className="w-full pl-10 pr-4 py-2.5 bg-[var(--muted)]/5 border border-[var(--border)] rounded-xl text-[var(--foreground)] text-sm cursor-not-allowed opacity-75"
+                  />
                 </div>
-                <ErrorMessage message={errors.department} />
+                <p className="text-xs text-[var(--muted)]">Por ahora solo enviamos a Cali</p>
               </div>
               <div className="space-y-1.5">
                 <label className="block text-sm font-medium text-[var(--foreground)]">
                   Ciudad
                 </label>
                 <div className="relative group">
-                  <MapPin className={cn(
-                    "absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 transition-colors pointer-events-none z-10",
-                    !formData.department ? "text-[var(--muted)]/50" :
-                    errors.city ? "text-red-400" : "text-[var(--muted)] group-focus-within:text-[var(--primary)]"
-                  )} />
-                  <select
-                    value={formData.city}
-                    onChange={(e) => handleInputChange('city', e.target.value)}
-                    onBlur={(e) => handleBlur('city', e.target.value)}
-                    disabled={!formData.department}
-                    className={cn(
-                      "w-full pl-10 pr-10 py-2.5 bg-[var(--background)] border rounded-xl focus:outline-none transition-all text-[var(--foreground)] text-sm appearance-none",
-                      !formData.department ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
-                      errors.city 
-                        ? "border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100" 
-                        : "border-[var(--border)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10"
-                    )}
-                  >
-                    <option value="">{formData.department ? 'Selecciona una ciudad' : 'Primero selecciona un departamento'}</option>
-                    {availableCities.map((city) => (
-                      <option key={city} value={city}>{city}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className={cn(
-                    "absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none transition-colors",
-                    !formData.department ? "text-[var(--muted)]/50" : "text-[var(--muted)]"
-                  )} />
+                  <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--muted)] pointer-events-none z-10" />
+                  <input
+                    type="text"
+                    value="Cali"
+                    readOnly
+                    disabled
+                    className="w-full pl-10 pr-4 py-2.5 bg-[var(--muted)]/5 border border-[var(--border)] rounded-xl text-[var(--foreground)] text-sm cursor-not-allowed opacity-75"
+                  />
                 </div>
-                <ErrorMessage message={errors.city} />
               </div>
             </div>
             
@@ -554,19 +509,27 @@ export default function CheckoutModal() {
     setAddressModalTriggerRect(null);
   };
 
-  // Cargar datos del usuario si está autenticado
+  // Cargar datos del usuario si está autenticado (solo una vez)
   useEffect(() => {
-    if (isAuthenticated && user) {
-      setFormData(prev => ({
-        ...prev,
-        name: `${user.firstName} ${user.lastName}`.trim(),
-        email: user.email,
-        phone: user.phone || prev.phone,
-      }));
+    if (isAuthenticated && user && isCheckoutOpen) {
+      setFormData(prev => {
+        // Solo actualizar si los datos han cambiado
+        const newName = `${user.firstName} ${user.lastName}`.trim();
+        if (prev.name === newName && prev.email === user.email) {
+          return prev;
+        }
+        
+        return {
+          ...prev,
+          name: newName,
+          email: user.email,
+          phone: prev.phone,
+        };
+      });
       
       // Seleccionar dirección predeterminada
       const defaultAddress = user.addresses.find(a => a.isDefault);
-      if (defaultAddress) {
+      if (defaultAddress && selectedAddressId !== defaultAddress.id) {
         setSelectedAddressId(defaultAddress.id);
         setFormData(prev => ({
           ...prev,
@@ -576,7 +539,8 @@ export default function CheckoutModal() {
         }));
       }
     }
-  }, [isAuthenticated, user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user?.id, isCheckoutOpen]);
 
   useEffect(() => {
     if (isCheckoutOpen && !isClosing) {

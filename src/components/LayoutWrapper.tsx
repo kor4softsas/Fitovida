@@ -5,6 +5,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import CartSidebar from '@/components/CartSidebar';
 import CheckoutModal from '@/components/CheckoutModal';
+import { useClerkSync } from '@/lib/useClerkSync';
 
 interface LayoutWrapperProps {
   children: React.ReactNode;
@@ -15,6 +16,9 @@ const CHECKOUT_ROUTES = ['/checkout', '/checkout/pse', '/checkout/success'];
 
 export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   const pathname = usePathname();
+  
+  // Sincronizar Clerk con el store local
+  useClerkSync();
   
   // Verificar si estamos en una página de checkout
   const isCheckoutPage = CHECKOUT_ROUTES.some(route => pathname?.startsWith(route));
