@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { X, ShoppingCart, Minus, Plus, Check } from 'lucide-react';
 import { Product } from '@/types';
@@ -131,7 +132,7 @@ export default function ProductModal({ product, isOpen, onClose, triggerRef }: P
 
   if (!isOpen) return null;
 
-  return (
+  const modalContent = (
     <div 
       ref={modalRef}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6"
@@ -251,4 +252,9 @@ export default function ProductModal({ product, isOpen, onClose, triggerRef }: P
       </div>
     </div>
   );
+
+  // Use portal to render modal at document body level
+  return typeof window !== 'undefined' 
+    ? createPortal(modalContent, document.body)
+    : null;
 }
