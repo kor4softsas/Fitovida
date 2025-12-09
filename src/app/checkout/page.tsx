@@ -8,7 +8,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { ArrowLeft, CreditCard, Lock, ShoppingBag, AlertCircle, Loader2, CheckCircle, Check, Home } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
-import { useLocalAuth } from '@/lib/auth';
+import { useAuthStore } from '@/lib/auth';
 import { formatPrice, cn } from '@/lib/utils';
 import { stripeAppearance } from '@/lib/stripe';
 import { Order } from '@/types';
@@ -77,7 +77,7 @@ function CheckoutForm({ onPaymentSuccess }: { onPaymentSuccess: (order: Order) =
   const stripe = useStripe();
   const elements = useElements();
   const router = useRouter();
-  const { user: localUser } = useLocalAuth();
+  const { user: localUser } = useAuthStore();
   
   const { pendingOrder, createOrderFromPending, clearPendingOrder } = useCartStore();
   

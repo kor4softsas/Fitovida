@@ -6,7 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowLeft, Building2, Lock, ShoppingBag, AlertCircle, Loader2, User, FileText, ChevronDown } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
-import { useLocalAuth } from '@/lib/auth';
+import { useAuthStore } from '@/lib/auth';
 import { formatPrice, cn } from '@/lib/utils';
 import { DOCUMENT_TYPES, PERSON_TYPES } from '@/lib/wompi';
 import { WompiBank } from '@/types';
@@ -15,7 +15,7 @@ import gsap from 'gsap';
 // Componente del formulario PSE
 function PSEForm() {
   const router = useRouter();
-  const { user: localUser } = useLocalAuth();
+  const { user: localUser } = useAuthStore();
   const { pendingOrder, createOrderFromPending } = useCartStore();
   
   const [banks, setBanks] = useState<WompiBank[]>([]);

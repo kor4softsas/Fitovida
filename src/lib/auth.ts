@@ -3,28 +3,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-// Usuarios de prueba para desarrollo local
-export const TEST_USERS = [
-  {
-    id: 'test-user-1',
-    email: 'demo@fitovida.com',
-    password: 'Demo1234',
-    firstName: 'María',
-    lastName: 'González',
-    phone: '3001234567',
-    createdAt: new Date('2024-01-15').toISOString(),
-  },
-  {
-    id: 'test-user-2',
-    email: 'cliente@fitovida.com',
-    password: 'Cliente123',
-    firstName: 'Carlos',
-    lastName: 'Rodríguez',
-    phone: '3009876543',
-    createdAt: new Date('2024-06-20').toISOString(),
-  },
-];
-
 // Tipo para direcciones de usuario
 export interface UserAddress {
   id: string;
@@ -38,12 +16,13 @@ export interface UserAddress {
   isDefault: boolean;
 }
 
-// Tipo para el usuario autenticado localmente
+// Tipo para el usuario autenticado
 export interface LocalUser {
   id: string;
   email: string;
   firstName: string;
   lastName: string;
+  phone?: string;
   createdAt: string;
   addresses: UserAddress[];
 }
@@ -55,266 +34,262 @@ interface AuthStore {
   isLoading: boolean;
   
   // Acciones de autenticación
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
-  logout: () => void;
-  setClerkUser: (user: LocalUser) => void;
+  setUser: (user: LocalUser) => void;
+  logout: () => Promise<void>;
+  checkAuth: () => Promise<void>;
+  loadAddresses: () => Promise<void>;
   
   // Acciones de perfil
   updateProfile: (data: Partial<LocalUser>) => void;
   
   // Acciones de direcciones
-  addAddress: (address: Omit<UserAddress, 'id'>) => void;
-  updateAddress: (id: string, address: Partial<UserAddress>) => void;
-  deleteAddress: (id: string) => void;
-  setDefaultAddress: (id: string) => void;
+  addAddress: (address: Omit<UserAddress, 'id'>) => Promise<void>;
+  updateAddress: (id: string, address: Partial<UserAddress>) => Promise<void>;
+  deleteAddress: (id: string) => Promise<void>;
+  setDefaultAddress: (id: string) => Promise<void>;
   getDefaultAddress: () => UserAddress | undefined;
 }
-
-interface RegisterData {
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
-}
-
-// Generar ID único para direcciones
-const generateAddressId = () => `addr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
       user: null,
       isAuthenticated: false,
-      isLoading: false,
+      isLoading: true,
       
-      // Login con usuarios de prueba o registrados
-      login: async (email, password) => {
-        set({ isLoading: true });
-        
-        // Simular delay de red
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Buscar en usuarios de prueba
-        const testUser = TEST_USERS.find(
-          u => u.email.toLowerCase() === email.toLowerCase() && u.password === password
-        );
-        
-        if (testUser) {
-          const { password: _, ...userWithoutPassword } = testUser;
-          set({ 
-            user: { ...userWithoutPassword, addresses: [] },
-            isAuthenticated: true, 
-            isLoading: false 
-          });
-          return { success: true };
-        }
-        
-        // Buscar en usuarios registrados (localStorage)
-        const registeredUsers = JSON.parse(localStorage.getItem('fitovida-registered-users') || '[]');
-        const registeredUser = registeredUsers.find(
-          (u: { email: string; password: string }) => 
-            u.email.toLowerCase() === email.toLowerCase() && u.password === password
-        );
-        
-        if (registeredUser) {
-          const { password: _, ...userWithoutPassword } = registeredUser;
-          set({ 
-            user: userWithoutPassword,
-            isAuthenticated: true, 
-            isLoading: false 
-          });
-          return { success: true };
-        }
-        
-        set({ isLoading: false });
-        return { success: false, error: 'Credenciales incorrectas' };
-      },
-      
-      // Registro de nuevos usuarios
-      register: async (data) => {
-        set({ isLoading: true });
-        
-        // Simular delay de red
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Verificar si el email ya existe
-        const existsInTest = TEST_USERS.some(
-          u => u.email.toLowerCase() === data.email.toLowerCase()
-        );
-        
-        const registeredUsers = JSON.parse(localStorage.getItem('fitovida-registered-users') || '[]');
-        const existsInRegistered = registeredUsers.some(
-          (u: { email: string }) => u.email.toLowerCase() === data.email.toLowerCase()
-        );
-        
-        if (existsInTest || existsInRegistered) {
-          set({ isLoading: false });
-          return { success: false, error: 'Este correo ya está registrado' };
-        }
-        
-        // Crear nuevo usuario
-        const newUser: LocalUser & { password: string } = {
-          id: `user-${Date.now()}`,
-          ...data,
-          createdAt: new Date().toISOString(),
-          addresses: [],
-        };
-        
-        // Guardar en localStorage
-        registeredUsers.push(newUser);
-        localStorage.setItem('fitovida-registered-users', JSON.stringify(registeredUsers));
-        
-        // Autenticar automáticamente
-        const { password: _, ...userWithoutPassword } = newUser;
+      // Establecer usuario después de login/register
+      setUser: (user) => {
         set({ 
-          user: userWithoutPassword, 
+          user, 
           isAuthenticated: true, 
           isLoading: false 
         });
-        
-        return { success: true };
       },
       
-      // Cerrar sesión
-      logout: () => {
-        set({ user: null, isAuthenticated: false });
+      // Verificar autenticación con el servidor
+      checkAuth: async () => {
+        try {
+          set({ isLoading: true });
+          
+          const response = await fetch('/api/auth/me');
+          const data = await response.json();
+          
+          if (data.authenticated && data.user) {
+            // Cargar direcciones desde la API
+            let addresses: UserAddress[] = [];
+            try {
+              const addrResponse = await fetch('/api/addresses');
+              const addrData = await addrResponse.json();
+              if (addrData.addresses) {
+                addresses = addrData.addresses;
+              }
+            } catch {
+              // Ignorar errores de carga de direcciones
+            }
+            
+            set({ 
+              user: {
+                id: data.user.id,
+                email: data.user.email,
+                firstName: data.user.firstName,
+                lastName: data.user.lastName,
+                phone: data.user.phone,
+                createdAt: data.user.createdAt,
+                addresses,
+              },
+              isAuthenticated: true,
+              isLoading: false,
+            });
+          } else {
+            set({ 
+              user: null, 
+              isAuthenticated: false, 
+              isLoading: false 
+            });
+          }
+        } catch {
+          set({ 
+            user: null, 
+            isAuthenticated: false, 
+            isLoading: false 
+          });
+        }
       },
       
-      // Establecer usuario desde Clerk (sincronización)
-      setClerkUser: (clerkUser) => {
+      // Logout
+      logout: async () => {
+        try {
+          await fetch('/api/auth/logout', { method: 'POST' });
+        } catch {
+          // Ignorar errores de logout
+        }
         set({ 
-          user: clerkUser, 
-          isAuthenticated: true,
+          user: null, 
+          isAuthenticated: false, 
           isLoading: false 
         });
+      },
+      
+      // Cargar direcciones desde la API
+      loadAddresses: async () => {
+        try {
+          const response = await fetch('/api/addresses');
+          const data = await response.json();
+          
+          if (data.addresses) {
+            const { user } = get();
+            if (user) {
+              set({
+                user: { ...user, addresses: data.addresses }
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Error cargando direcciones:', error);
+        }
       },
       
       // Actualizar perfil
       updateProfile: (data) => {
-        set((state) => ({
-          user: state.user ? { ...state.user, ...data } : null
-        }));
+        const { user } = get();
+        if (!user) return;
+        
+        set({
+          user: { ...user, ...data }
+        });
       },
       
       // Agregar dirección
-      addAddress: (address) => {
-        set((state) => {
-          if (!state.user) return state;
+      addAddress: async (addressData) => {
+        const { user } = get();
+        if (!user) return;
+        
+        try {
+          const response = await fetch('/api/addresses', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(addressData),
+          });
           
-          const newAddress: UserAddress = {
-            ...address,
-            id: generateAddressId(),
-            // Si es la primera dirección, hacerla predeterminada
-            isDefault: state.user.addresses.length === 0 ? true : address.isDefault,
-          };
+          const data = await response.json();
           
-          // Si la nueva dirección es predeterminada, quitar el default de las demás
-          const updatedAddresses = address.isDefault
-            ? state.user.addresses.map(a => ({ ...a, isDefault: false }))
-            : state.user.addresses;
-          
-          return {
-            user: {
-              ...state.user,
-              addresses: [...updatedAddresses, newAddress]
+          if (data.success && data.address) {
+            // Si es default, quitar default de las demás
+            let updatedAddresses = user.addresses;
+            if (data.address.isDefault) {
+              updatedAddresses = user.addresses.map(a => ({ ...a, isDefault: false }));
             }
-          };
-        });
+            
+            set({
+              user: { ...user, addresses: [...updatedAddresses, data.address] }
+            });
+          }
+        } catch (error) {
+          console.error('Error agregando dirección:', error);
+        }
       },
       
       // Actualizar dirección
-      updateAddress: (id, address) => {
-        set((state) => {
-          if (!state.user) return state;
+      updateAddress: async (id, addressData) => {
+        const { user } = get();
+        if (!user) return;
+        
+        try {
+          const response = await fetch('/api/addresses', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, ...addressData }),
+          });
           
-          let addresses = state.user.addresses.map(a => 
-            a.id === id ? { ...a, ...address } : a
-          );
-          
-          // Si esta dirección se marca como predeterminada, quitar de las demás
-          if (address.isDefault) {
-            addresses = addresses.map(a => ({
-              ...a,
-              isDefault: a.id === id
-            }));
-          }
-          
-          return {
-            user: {
-              ...state.user,
-              addresses
+          if (response.ok) {
+            let updatedAddresses = user.addresses.map(a => 
+              a.id === id ? { ...a, ...addressData } : a
+            );
+            
+            // Si se marcó como default, quitar default de las demás
+            if (addressData.isDefault) {
+              updatedAddresses = updatedAddresses.map(a => ({
+                ...a,
+                isDefault: a.id === id
+              }));
             }
-          };
-        });
+            
+            set({
+              user: { ...user, addresses: updatedAddresses }
+            });
+          }
+        } catch (error) {
+          console.error('Error actualizando dirección:', error);
+        }
       },
       
       // Eliminar dirección
-      deleteAddress: (id) => {
-        set((state) => {
-          if (!state.user) return state;
+      deleteAddress: async (id) => {
+        const { user } = get();
+        if (!user) return;
+        
+        try {
+          const response = await fetch(`/api/addresses?id=${id}`, {
+            method: 'DELETE',
+          });
           
-          const filteredAddresses = state.user.addresses.filter(a => a.id !== id);
-          
-          // Si se eliminó la dirección predeterminada, hacer la primera como default
-          if (filteredAddresses.length > 0 && !filteredAddresses.some(a => a.isDefault)) {
-            filteredAddresses[0].isDefault = true;
-          }
-          
-          return {
-            user: {
-              ...state.user,
-              addresses: filteredAddresses
+          if (response.ok) {
+            const filteredAddresses = user.addresses.filter(a => a.id !== id);
+            
+            // Si eliminamos la default, hacer default la primera que quede
+            if (filteredAddresses.length > 0 && !filteredAddresses.some(a => a.isDefault)) {
+              filteredAddresses[0].isDefault = true;
             }
-          };
-        });
+            
+            set({
+              user: { ...user, addresses: filteredAddresses }
+            });
+          }
+        } catch (error) {
+          console.error('Error eliminando dirección:', error);
+        }
       },
       
-      // Establecer dirección predeterminada
-      setDefaultAddress: (id) => {
-        set((state) => {
-          if (!state.user) return state;
+      // Establecer dirección como predeterminada
+      setDefaultAddress: async (id) => {
+        const { user } = get();
+        if (!user) return;
+        
+        try {
+          const response = await fetch('/api/addresses', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, isDefault: true }),
+          });
           
-          return {
-            user: {
-              ...state.user,
-              addresses: state.user.addresses.map(a => ({
-                ...a,
-                isDefault: a.id === id
-              }))
-            }
-          };
-        });
+          if (response.ok) {
+            const updatedAddresses = user.addresses.map(a => ({
+              ...a,
+              isDefault: a.id === id
+            }));
+            
+            set({
+              user: { ...user, addresses: updatedAddresses }
+            });
+          }
+        } catch (error) {
+          console.error('Error estableciendo dirección predeterminada:', error);
+        }
       },
       
       // Obtener dirección predeterminada
       getDefaultAddress: () => {
-        const state = get();
-        return state.user?.addresses.find(a => a.isDefault);
+        const { user } = get();
+        if (!user) return undefined;
+        return user.addresses.find(a => a.isDefault);
       },
     }),
     {
       name: 'fitovida-auth',
-      partialize: (state) => ({
+      partialize: (state) => ({ 
         user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),
     }
   )
 );
-
-// Hook para verificar si hay una sesión activa
-export function useLocalAuth() {
-  const { user, isAuthenticated, isLoading, login, logout, register } = useAuthStore();
-  
-  return {
-    user,
-    isAuthenticated,
-    isLoading,
-    isSignedIn: isAuthenticated,
-    login,
-    logout,
-    register,
-  };
-}

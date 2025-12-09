@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Leaf, Search, ShoppingCart, User, Menu, X, LogOut, Settings, Package } from 'lucide-react';
+import { Search, ShoppingCart, User, Menu, X, LogOut, Settings, Package } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
 import Image from 'next/image';
-import { useUser, useClerk } from '@clerk/nextjs';
+import { useAuthStore } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
 export default function Header() {
@@ -15,8 +15,7 @@ export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { toggleCart, getCartCount, setSearchQuery, searchQuery } = useCartStore();
-  const { user, isSignedIn, isLoaded } = useUser();
-  const { signOut } = useClerk();
+  const { user, isAuthenticated, isLoading, logout } = useAuthStore();
   const cartCount = getCartCount();
   const pathname = usePathname();
   const router = useRouter();
@@ -56,6 +55,13 @@ export default function Header() {
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
     }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    setIsUserMenuOpen(false);
+    setIsMenuOpen(false);
+    router.push('/');
   };
 
   return (
@@ -130,7 +136,7 @@ export default function Header() {
                 )}
               </button>
 
-              {isLoaded && !isSignedIn && (
+              {!isLoading && !isAuthenticated && (
                 <Link
                   href="/login"
                   className="p-2.5 text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-xl transition-all duration-200 group"
@@ -139,7 +145,8 @@ export default function Header() {
                   <User className="h-5 w-5 transition-transform group-hover:scale-110" />
                 </Link>
               )}
-              {isLoaded && isSignedIn && user && (
+              
+              {!isLoading && isAuthenticated && user && (
                 <div className="relative" ref={userMenuRef}>
                   <button
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -158,7 +165,7 @@ export default function Header() {
                   )}>
                     <div className="p-4 border-b border-[var(--border)] bg-[var(--background)]">
                       <p className="font-semibold text-[var(--foreground)]">{user.firstName} {user.lastName}</p>
-                      <p className="text-sm text-[var(--muted)] truncate">{user.primaryEmailAddress?.emailAddress}</p>
+                      <p className="text-sm text-[var(--muted)] truncate">{user.email}</p>
                     </div>
                     <div className="p-2">
                       <Link
@@ -188,10 +195,7 @@ export default function Header() {
                     </div>
                     <div className="p-2 border-t border-[var(--border)]">
                       <button
-                        onClick={() => {
-                          signOut(() => router.push('/'));
-                          setIsUserMenuOpen(false);
-                        }}
+                        onClick={handleLogout}
                         className="flex items-center gap-3 w-full px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                       >
                         <LogOut className="h-4 w-4" />
@@ -230,7 +234,7 @@ export default function Header() {
               </button>
             ))}
             <div className="border-t border-[var(--border)] my-2" />
-            {isLoaded && !isSignedIn && (
+            {!isLoading && !isAuthenticated && (
               <Link 
                 href="/login"
                 onClick={() => setIsMenuOpen(false)}
@@ -240,11 +244,11 @@ export default function Header() {
                 Iniciar sesión
               </Link>
             )}
-            {isLoaded && isSignedIn && user && (
+            {!isLoading && isAuthenticated && user && (
               <>
                 <div className="px-4 py-3 bg-[var(--background)] rounded-xl mb-1">
                   <p className="font-semibold text-[var(--foreground)]">{user.firstName} {user.lastName}</p>
-                  <p className="text-sm text-[var(--muted)] truncate">{user.primaryEmailAddress?.emailAddress}</p>
+                  <p className="text-sm text-[var(--muted)] truncate">{user.email}</p>
                 </div>
                 <Link
                   href="/perfil"
@@ -263,10 +267,7 @@ export default function Header() {
                   Mis Pedidos
                 </Link>
                 <button
-                  onClick={() => {
-                    signOut(() => router.push('/'));
-                    setIsMenuOpen(false);
-                  }}
+                  onClick={handleLogout}
                   className="flex items-center gap-3 w-full py-3 px-4 text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 font-medium"
                 >
                   <LogOut className="h-5 w-5" />

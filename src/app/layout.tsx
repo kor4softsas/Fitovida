@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { ClerkProvider } from "@clerk/nextjs";
-import { esES } from "@clerk/localizations";
 import "./globals.css";
 import LayoutWrapper from "@/components/LayoutWrapper";
 
@@ -21,19 +19,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider localization={esES}>
-      <html lang="es" className="scroll-smooth" data-scroll-behavior="smooth">
-        <head>
-          {/* Preconnect to Clerk for faster authentication loading */}
-          <link rel="preconnect" href="https://clerk.accounts.dev" />
-          <link rel="preconnect" href="https://img.clerk.com" />
-          {/* DNS prefetch for external resources */}
-          <link rel="dns-prefetch" href="https://clerk.accounts.dev" />
-        </head>
-        <body className={`${inter.className} antialiased`}>
-          <LayoutWrapper>{children}</LayoutWrapper>
-        </body>
-      </html>
-    </ClerkProvider>
+    <html lang="es" className="scroll-smooth" data-scroll-behavior="smooth">
+      <body className={`${inter.className} antialiased`}>
+        <LayoutWrapper>{children}</LayoutWrapper>
+      </body>
+    </html>
   );
 }
