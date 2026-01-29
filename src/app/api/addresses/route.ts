@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth-server';
+import { isDemoMode, findDemoUser } from '@/lib/demo-users';
 
 interface AddressRow {
   id: string;
@@ -27,6 +28,16 @@ export async function GET() {
       );
     }
 
+    // MODO DEMO: Retornar direcciones del usuario demo
+    if (isDemoMode()) {
+      const demoUser = findDemoUser(user.email);
+      if (demoUser) {
+        return NextResponse.json({ addresses: demoUser.addresses });
+      }
+      return NextResponse.json({ addresses: [] });
+    }
+
+    // MODO NORMAL: Obtener de la base de datos
     const addresses = await query<AddressRow>(
       'SELECT * FROM user_addresses WHERE user_id = ? ORDER BY is_default DESC, created_at DESC',
       [user.id]

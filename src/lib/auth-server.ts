@@ -4,6 +4,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import bcrypt from 'bcryptjs';
 import { query, queryOne } from './db';
+import { isDemoMode, verifyDemoCredentials, findDemoUser, type DemoUser } from './demo-users';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'fitovida-secret-key-change-in-production'
@@ -116,6 +117,31 @@ export async function loginUser(email: string, password: string): Promise<{
   token?: string;
 }> {
   try {
+    // MODO DEMO: Verificar credenciales demo
+    if (isDemoMode()) {
+      const demoUser = verifyDemoCredentials(email, password);
+      if (!demoUser) {
+        return { success: false, error: 'Correo electrónico o contraseña incorrectos' };
+      }
+
+      // Convertir DemoUser a User
+      const user: User = {
+        id: demoUser.id,
+        email: demoUser.email,
+        first_name: demoUser.firstName,
+        last_name: demoUser.lastName,
+        phone: demoUser.phone,
+        is_verified: true,
+        created_at: new Date(demoUser.createdAt),
+      };
+
+      // Crear token para el usuario demo
+      const token = await createToken(user);
+
+      return { success: true, user, token };
+    }
+
+    // MODO NORMAL: Verificar con base de datos
     // Buscar usuario por email
     const user = await queryOne<User & { password_hash: string }>(
       'SELECT id, email, password_hash, first_name, last_name, phone, is_verified, created_at FROM users WHERE email = ?',
@@ -167,6 +193,25 @@ export async function getCurrentUser(): Promise<User | null> {
       return null;
     }
 
+    // MODO DEMO: Obtener usuario demo
+    if (isDemoMode()) {
+      const demoUser = findDemoUser(payload.email);
+      if (!demoUser) {
+        return null;
+      }
+
+      return {
+        id: demoUser.id,
+        email: demoUser.email,
+        first_name: demoUser.firstName,
+        last_name: demoUser.lastName,
+        phone: demoUser.phone,
+        is_verified: true,
+        created_at: new Date(demoUser.createdAt),
+      };
+    }
+
+    // MODO NORMAL: Verificar con base de datos
     // Verificar que la sesión existe en la base de datos
     const session = await queryOne<{ user_id: string }>(
       'SELECT user_id FROM sessions WHERE token = ? AND expires_at > NOW()',
@@ -195,8 +240,8 @@ export async function logoutUser(): Promise<void> {
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get(COOKIE_NAME);
 
-    if (sessionCookie?.value) {
-      // Eliminar sesión de la base de datos
+    if (sessionCookie?.value && !isDemoMode()) {
+      // Solo eliminar sesión de BD si NO es modo demo
       await query('DELETE FROM sessions WHERE token = ?', [sessionCookie.value]);
     }
 
