@@ -88,6 +88,7 @@ export default function LoginPage() {
         router.push('/');
       } else {
         // Login
+        console.log('[CLIENT] Enviando login request con:', { email: formData.email });
         const response = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -97,7 +98,9 @@ export default function LoginPage() {
           }),
         });
 
+        console.log('[CLIENT] Response status:', response.status);
         const data = await response.json();
+        console.log('[CLIENT] Response data:', data);
 
         if (!response.ok) {
           setError(data.error || 'Error al iniciar sesión');

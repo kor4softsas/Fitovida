@@ -117,8 +117,12 @@ export async function loginUser(email: string, password: string): Promise<{
   token?: string;
 }> {
   try {
+    console.log('[AUTH] loginUser - Iniciando login para:', email);
+    console.log('[AUTH] DEMO_MODE:', isDemoMode());
+
     // MODO DEMO: Verificar credenciales demo
     if (isDemoMode()) {
+      console.log('[AUTH] Modo DEMO activado');
       const demoUser = verifyDemoCredentials(email, password);
       if (!demoUser) {
         return { success: false, error: 'Correo electrónico o contraseña incorrectos' };
@@ -142,38 +146,68 @@ export async function loginUser(email: string, password: string): Promise<{
     }
 
     // MODO NORMAL: Verificar con base de datos
+    console.log('[AUTH] Modo NORMAL - Consultando BD');
+    
     // Buscar usuario por email
-    const user = await queryOne<User & { password_hash: string }>(
-      'SELECT id, email, password_hash, first_name, last_name, phone, is_verified, created_at FROM users WHERE email = ?',
-      [email.toLowerCase()]
-    );
+    let user;
+    try {
+      user = await queryOne<User & { password_hash: string }>(
+        'SELECT id, email, password_hash, first_name, last_name, phone, is_verified, created_at FROM users WHERE email = ?',
+        [email.toLowerCase()]
+      );
+      console.log('[AUTH] Query BD completada. Usuario encontrado:', user ? 'SÍ' : 'NO');
+    } catch (dbError) {
+      console.error('[AUTH] Error en query BD:', dbError);
+      return { success: false, error: 'Error de conexión a base de datos' };
+    }
 
     if (!user) {
+      console.log('[AUTH] Usuario NO encontrado:', email);
       return { success: false, error: 'Correo electrónico o contraseña incorrectos' };
     }
 
+    console.log('[AUTH] Usuario encontrado. Verificando contraseña...');
+
     // Verificar contraseña
-    const isValid = await comparePassword(password, user.password_hash);
+    let isValid = false;
+    try {
+      isValid = await comparePassword(password, user.password_hash);
+      console.log('[AUTH] Contraseña válida:', isValid);
+    } catch (bcryptError) {
+      console.error('[AUTH] Error en bcrypt:', bcryptError);
+      return { success: false, error: 'Error al verificar contraseña' };
+    }
+    
     if (!isValid) {
+      console.log('[AUTH] Contraseña incorrecta para:', email);
       return { success: false, error: 'Correo electrónico o contraseña incorrectos' };
     }
+
+    console.log('[AUTH] Contraseña correcta. Creando token...');
 
     // Crear token
     const token = await createToken(user);
 
     // Guardar sesión en la base de datos
     const expiresAt = new Date(Date.now() + SESSION_DURATION);
-    await query(
-      'INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)',
-      [user.id, token, expiresAt]
-    );
+    try {
+      await query(
+        'INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)',
+        [user.id, token, expiresAt]
+      );
+      console.log('[AUTH] Sesión guardada en BD');
+    } catch (sessionError) {
+      console.error('[AUTH] Error al guardar sesión:', sessionError);
+      return { success: false, error: 'Error al crear sesión' };
+    }
 
     // Eliminar password_hash antes de devolver
     const { password_hash: _, ...userWithoutPassword } = user;
 
+    console.log('[AUTH] Login exitoso para:', email);
     return { success: true, user: userWithoutPassword, token };
   } catch (error) {
-    console.error('Error en loginUser:', error);
+    console.error('[AUTH] Error en loginUser:', error);
     return { success: false, error: 'Error al iniciar sesión' };
   }
 }
