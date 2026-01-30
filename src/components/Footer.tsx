@@ -44,10 +44,10 @@ export default function Footer() {
               Tu tienda naturista de confianza. Productos naturales para tu salud.
             </p>
             <div className="flex items-center gap-2">
-              <a href="#" className="p-2 bg-white/5 hover:bg-[var(--primary)] rounded-lg transition-colors" aria-label="Facebook">
+              <a href="https://www.facebook.com/fito.vida.sana?rdid=vFOzR36SuIkPnapR&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F1K7C7Gp5rR%2F#" target="_blank" rel="noopener noreferrer" className="p-2 bg-white/5 hover:bg-[var(--primary)] rounded-lg transition-colors" aria-label="Facebook">
                 <Facebook className="h-4 w-4" />
               </a>
-              <a href="#" className="p-2 bg-white/5 hover:bg-[var(--primary)] rounded-lg transition-colors" aria-label="Instagram">
+              <a href="https://www.instagram.com/fitovidasana?utm_source=qr&igsh=MTBrbzUzemJnNXk2dQ%3D%3D" target="_blank" rel="noopener noreferrer" className="p-2 bg-white/5 hover:bg-[var(--primary)] rounded-lg transition-colors" aria-label="Instagram">
                 <Instagram className="h-4 w-4" />
               </a>
               <a href="https://wa.me/573184024199" target="_blank" rel="noopener noreferrer" className="p-2 bg-white/5 hover:bg-green-500 rounded-lg transition-colors" aria-label="WhatsApp">
