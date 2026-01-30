@@ -14,12 +14,17 @@ export default function Header() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const { toggleCart, getCartCount, setSearchQuery, searchQuery } = useCartStore();
   const { user, isAuthenticated, isLoading, logout } = useAuthStore();
   const cartCount = getCartCount();
   const pathname = usePathname();
   const router = useRouter();
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -138,7 +143,7 @@ export default function Header() {
                 aria-label="Carrito"
               >
                 <ShoppingCart className="h-5 w-5 transition-transform group-hover:scale-110" />
-                {cartCount > 0 && (
+                {isMounted && cartCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-[var(--primary)] text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center shadow-sm border-2 border-white animate-in zoom-in">
                     {cartCount}
                   </span>
