@@ -2,9 +2,12 @@
 
 import { Leaf, Facebook, Instagram, MessageCircle, Send, MapPin, Phone, Mail, Clock } from 'lucide-react';
 import { useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 export default function Footer() {
   const [email, setEmail] = useState('');
+  const pathname = usePathname();
 
   const handleNewsletterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -13,6 +16,12 @@ export default function Footer() {
   };
 
   const scrollToSection = (id: string) => {
+    // Si no estamos en la página principal, navegar primero
+    if (pathname !== '/') {
+      window.location.href = `/#${id}`;
+      return;
+    }
+    
     const element = document.getElementById(id);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
@@ -51,16 +60,22 @@ export default function Footer() {
           <div>
             <h4 className="text-white font-medium text-sm sm:text-base mb-3 sm:mb-4">Navegación</h4>
             <ul className="space-y-2">
-              {['Inicio', 'Productos', 'Nosotros'].map((item) => (
-                <li key={item}>
-                  <button 
-                    onClick={() => scrollToSection(item.toLowerCase() === 'nosotros' ? 'sobre-nosotros' : item.toLowerCase())}
-                    className="text-xs sm:text-sm text-white/50 hover:text-white transition-colors"
-                  >
-                    {item}
-                  </button>
-                </li>
-              ))}
+              <li>
+                <button 
+                  onClick={() => scrollToSection('inicio')}
+                  className="text-xs sm:text-sm text-white/50 hover:text-white transition-colors"
+                >
+                  Inicio
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => scrollToSection('productos')}
+                  className="text-xs sm:text-sm text-white/50 hover:text-white transition-colors"
+                >
+                  Productos
+                </button>
+              </li>
             </ul>
           </div>
 
