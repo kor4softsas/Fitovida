@@ -6,6 +6,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import CartSidebar from '@/components/CartSidebar';
 import CheckoutModal from '@/components/CheckoutModal';
+import WhatsAppButton from '@/components/WhatsAppButton';
 import { useAuthStore } from '@/lib/auth';
 
 interface LayoutWrapperProps {
@@ -40,6 +41,7 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
       <Footer />
       <CartSidebar />
       <CheckoutModal />
+      <WhatsAppButton />
     </>
   );
 }

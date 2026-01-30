@@ -4,6 +4,7 @@ import { ArrowRight, Heart, Award, Users, Leaf, Target, Sparkles, Check } from '
 import Link from 'next/link';
 import Image from 'next/image';
 import ContactSection from '@/components/ContactSection';
+import ImageCarousel from '@/components/ImageCarousel';
 
 const values = [
   {
@@ -243,14 +244,9 @@ export default function NosotrosPage() {
               </button>
             </div>
 
-            {/* Imagen/Ilustración */}
-            <div className="relative h-[400px] md:h-[500px] rounded-3xl overflow-hidden border border-[var(--border)]">
-              <div className="absolute inset-0 bg-gradient-to-br from-[var(--primary)]/10 to-[var(--accent-light)]/10 flex items-center justify-center">
-                <div className="text-center">
-                  <Sparkles className="w-20 h-20 text-[var(--primary)] mx-auto mb-4 opacity-50" />
-                  <p className="text-[var(--muted)] font-semibold">Tu bienestar es nuestro compromiso</p>
-                </div>
-              </div>
+            {/* Carrusel de Imágenes */}
+            <div className="relative h-[400px] md:h-[500px]">
+              <ImageCarousel />
             </div>
           </div>
         </div>

@@ -50,7 +50,7 @@ export default function Footer() {
               <a href="#" className="p-2 bg-white/5 hover:bg-[var(--primary)] rounded-lg transition-colors" aria-label="Instagram">
                 <Instagram className="h-4 w-4" />
               </a>
-              <a href="#" className="p-2 bg-white/5 hover:bg-[var(--primary)] rounded-lg transition-colors" aria-label="WhatsApp">
+              <a href="https://wa.me/573184024199" target="_blank" rel="noopener noreferrer" className="p-2 bg-white/5 hover:bg-green-500 rounded-lg transition-colors" aria-label="WhatsApp">
                 <MessageCircle className="h-4 w-4" />
               </a>
             </div>
