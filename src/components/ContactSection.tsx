@@ -7,23 +7,19 @@ const contactInfo = [
   {
     icon: MapPin,
     title: 'Ubicación',
-    content: 'Calle Principal #123, Ciudad'
+    content: 'Cra.5 Norte #42-23'
   },
   {
     icon: Phone,
     title: 'Teléfono',
-    content: '+1 234 567 8900'
+    content: '602-400-36-11'
   },
-  {
-    icon: Mail,
-    title: 'Email',
-    content: 'info@fitovida.com'
-  },
-  {
-    icon: Clock,
-    title: 'Horario',
-    content: 'Lun - Sáb: 9:00 AM - 7:00 PM'
-  }
+  
+  // {
+  //   icon: Clock,
+  //   title: 'Horario',
+  //   content: 'Lun - Sáb: 9:00 AM - 7:00 PM'
+  // }
 ];
 
 export default function ContactSection() {

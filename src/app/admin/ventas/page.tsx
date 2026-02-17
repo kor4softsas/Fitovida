@@ -18,6 +18,11 @@ export default function VentasPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showNewSaleModal, setShowNewSaleModal] = useState(false);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const [products] = useState([
+    { id: 'prod-1', name: 'Proteína Whey 2kg', price: 150000, stock: 25, tax: 19 },
+    { id: 'prod-2', name: 'Creatina Monohidrato 300g', price: 50000, stock: 15, tax: 19 },
+    { id: 'prod-3', name: 'BCAA 5000 120 caps', price: 80000, stock: 10, tax: 19 },
+  ]);
 
   useEffect(() => {
     // TODO: Cargar ventas desde la API
@@ -267,7 +272,14 @@ export default function VentasPage() {
 
       {/* New Sale Modal */}
       {showNewSaleModal && (
-        <NewSaleModal onClose={() => setShowNewSaleModal(false)} />
+        <NewSaleModal 
+          products={products}
+          onClose={() => setShowNewSaleModal(false)}
+          onSave={(sale) => {
+            setSales([sale, ...sales]);
+            setShowNewSaleModal(false);
+          }}
+        />
       )}
     </div>
   );
@@ -388,34 +400,279 @@ function SaleDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void })
   );
 }
 
-// New Sale Modal Component (placeholder)
-function NewSaleModal({ onClose }: { onClose: () => void }) {
+// New Sale Modal Component
+function NewSaleModal({ 
+  products,
+  onClose,
+  onSave 
+}: { 
+  products: Array<{ id: string; name: string; price: number; stock: number; tax: number }>;
+  onClose: () => void;
+  onSave: (sale: Sale) => void;
+}) {
+  const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerDocument, setCustomerDocument] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<Sale['paymentMethod']>('cash');
+  const [selectedItems, setSelectedItems] = useState<SaleItem[]>([]);
+
+  const addItem = (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    const existingItem = selectedItems.find(item => item.productId === productId);
+    if (existingItem) {
+      setSelectedItems(selectedItems.map(item => 
+        item.productId === productId
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
+      ));
+    } else {
+      const newItem: SaleItem = {
+        id: `item-${Date.now()}`,
+        productId: product.id,
+        productName: product.name,
+        quantity: 1,
+        unitPrice: product.price,
+        discount: 0,
+        tax: (product.price * product.tax) / 100,
+        subtotal: product.price,
+        total: product.price + (product.price * product.tax) / 100
+      };
+      setSelectedItems([...selectedItems, newItem]);
+    }
+  };
+
+  const removeItem = (itemId: string) => {
+    setSelectedItems(selectedItems.filter(item => item.id !== itemId));
+  };
+
+  const updateQuantity = (itemId: string, quantity: number) => {
+    if (quantity <= 0) {
+      removeItem(itemId);
+      return;
+    }
+    setSelectedItems(selectedItems.map(item => {
+      if (item.id === itemId) {
+        const subtotal = item.unitPrice * quantity;
+        const tax = (subtotal * 19) / 100;
+        return {
+          ...item,
+          quantity,
+          subtotal,
+          total: subtotal + tax
+        };
+      }
+      return item;
+    }));
+  };
+
+  const subtotal = selectedItems.reduce((sum, item) => sum + item.subtotal, 0);
+  const tax = selectedItems.reduce((sum, item) => sum + item.tax, 0);
+  const total = subtotal + tax;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customerName || selectedItems.length === 0) return;
+
+    const newSale: Sale = {
+      id: `sale-${Date.now()}`,
+      saleNumber: `V-2026-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`,
+      date: new Date(),
+      customerName,
+      customerEmail,
+      customerPhone,
+      customerDocument,
+      items: selectedItems,
+      subtotal,
+      tax,
+      discount: 0,
+      total,
+      paymentMethod,
+      status: 'completed',
+      createdBy: 'admin',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    onSave(newSale);
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0
+    }).format(value);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
           <h2 className="text-xl font-bold text-gray-900">Nueva Venta</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={24} />
           </button>
         </div>
         
-        <div className="p-6">
-          <p className="text-gray-600">Formulario de nueva venta en desarrollo...</p>
-          {/* TODO: Implementar formulario completo de nueva venta */}
-        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Información del Cliente */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-gray-900">Información del Cliente</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nombre *</label>
+                <input
+                  type="text"
+                  required
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                <input
+                  type="email"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Teléfono</label>
+                <input
+                  type="tel"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Documento</label>
+                <input
+                  type="text"
+                  value={customerDocument}
+                  onChange={(e) => setCustomerDocument(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          </div>
 
-        <div className="p-6 border-t border-gray-200 flex gap-3 justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors">
-            Guardar Venta
-          </button>
-        </div>
+          {/* Productos */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-gray-900">Productos</h3>
+            <div className="flex gap-2 flex-wrap">
+              {products.map(product => (
+                <button
+                  key={product.id}
+                  type="button"
+                  onClick={() => addItem(product.id)}
+                  className="px-3 py-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 text-sm"
+                >
+                  + {product.name}
+                </button>
+              ))}
+            </div>
+
+            {selectedItems.length > 0 && (
+              <div className="border border-gray-300 rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Producto</th>
+                      <th className="px-4 py-2 text-center text-xs font-medium text-gray-500">Cant.</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">P. Unit.</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Total</th>
+                      <th className="px-4 py-2 text-center text-xs font-medium text-gray-500">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {selectedItems.map(item => (
+                      <tr key={item.id}>
+                        <td className="px-4 py-2 text-sm">{item.productName}</td>
+                        <td className="px-4 py-2 text-center">
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => updateQuantity(item.id, parseInt(e.target.value) || 0)}
+                            className="w-16 px-2 py-1 border border-gray-300 rounded text-center"
+                          />
+                        </td>
+                        <td className="px-4 py-2 text-right text-sm">{formatCurrency(item.unitPrice)}</td>
+                        <td className="px-4 py-2 text-right text-sm font-medium">{formatCurrency(item.total)}</td>
+                        <td className="px-4 py-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => removeItem(item.id)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <X size={18} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Método de Pago */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Método de Pago *</label>
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value as Sale['paymentMethod'])}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            >
+              <option value="cash">Efectivo</option>
+              <option value="card">Tarjeta</option>
+              <option value="transfer">Transferencia</option>
+              <option value="pse">PSE</option>
+              <option value="wompi">Wompi</option>
+            </select>
+          </div>
+
+          {/* Totales */}
+          {selectedItems.length > 0 && (
+            <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Subtotal:</span>
+                <span className="font-medium">{formatCurrency(subtotal)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">IVA (19%):</span>
+                <span className="font-medium">{formatCurrency(tax)}</span>
+              </div>
+              <div className="flex justify-between text-lg font-bold border-t pt-2">
+                <span>Total:</span>
+                <span>{formatCurrency(total)}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3 justify-end pt-4 border-t">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit"
+              disabled={!customerName || selectedItems.length === 0}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              Guardar Venta
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

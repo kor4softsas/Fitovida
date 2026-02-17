@@ -31,7 +31,7 @@ export default function Footer() {
   return (
     <footer className="bg-[var(--foreground)] text-white/70">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 md:py-16">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-6 lg:gap-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-8 md:gap-6 lg:gap-8">
           {/* Brand - Full width on mobile */}
           <div className="col-span-2 md:col-span-1 space-y-4">
             <div className="flex items-center gap-2">
@@ -96,32 +96,7 @@ export default function Footer() {
           </div>
 
           {/* Newsletter - Full width on mobile */}
-          <div className="col-span-2 md:col-span-1">
-            <h4 className="text-white font-medium text-sm sm:text-base mb-3 sm:mb-4">Newsletter</h4>
-            <p className="text-xs sm:text-sm text-white/50 mb-3">
-              Recibe ofertas exclusivas
-            </p>
-            <form onSubmit={handleNewsletterSubmit} className="flex gap-2">
-              <input
-                type="email"
-                id="newsletter-email"
-                name="newsletter-email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Tu email"
-                required
-                className="flex-1 min-w-0 px-3 py-2 sm:py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-[var(--primary)] text-white placeholder:text-white/30 text-xs sm:text-sm transition-all"
-              />
-              <button
-                type="submit"
-                className="px-3 py-2 sm:py-2.5 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white rounded-lg transition-colors flex-shrink-0"
-                aria-label="Suscribirse"
-              >
-                <Send className="h-4 w-4" />
-              </button>
-            </form>
-          </div>
+          
         </div>
 
         {/* Copyright */}

@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS inventory_products (
   id INT PRIMARY KEY AUTO_INCREMENT,
   product_id INT UNIQUE NOT NULL COMMENT 'FK a tabla products',
   sku VARCHAR(100) UNIQUE NULL COMMENT 'Código de producto',
+  barcode VARCHAR(100) UNIQUE NULL COMMENT 'Código de barras (EAN-13, UPC-A, EAN-8, Code128, personalizado)',
   
   -- Stock
   current_stock INT NOT NULL DEFAULT 0,
@@ -96,7 +97,6 @@ CREATE TABLE IF NOT EXISTS inventory_products (
   
   -- Proveedor
   supplier VARCHAR(255) NULL,
-  barcode VARCHAR(100) NULL,
   
   -- Estado
   status ENUM('active', 'inactive', 'discontinued') DEFAULT 'active',
@@ -106,9 +106,11 @@ CREATE TABLE IF NOT EXISTS inventory_products (
   
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
   INDEX idx_sku (sku),
+  INDEX idx_barcode (barcode),
   INDEX idx_status (status),
   INDEX idx_current_stock (current_stock)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Tabla de inventario con soporte para códigos de barras únicos';
 
 -- =============================================
 -- TABLA: inventory_movements (Movimientos de inventario)

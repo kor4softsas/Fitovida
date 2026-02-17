@@ -357,6 +357,14 @@ export default function FinanzasPage() {
         <TransactionModal
           type={transactionType}
           onClose={() => setShowTransactionModal(false)}
+          onSave={(transaction) => {
+            if (transaction.type === 'income') {
+              setIncomes([transaction as Income, ...incomes]);
+            } else {
+              setExpenses([transaction as Expense, ...expenses]);
+            }
+            setShowTransactionModal(false);
+          }}
         />
       )}
     </div>
@@ -366,12 +374,61 @@ export default function FinanzasPage() {
 // Transaction Modal Component
 function TransactionModal({ 
   type, 
-  onClose 
+  onClose,
+  onSave
 }: { 
   type: TransactionType; 
   onClose: () => void;
+  onSave: (transaction: Income | Expense) => void;
 }) {
   const isIncome = type === 'income';
+  const [formData, setFormData] = useState({
+    date: new Date().toISOString().split('T')[0],
+    amount: 0,
+    category: '',
+    description: '',
+    reference: '',
+    paymentMethod: 'cash' as const,
+    supplier: '',
+    notes: ''
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (isIncome) {
+      const newIncome: Income = {
+        id: `income-${Date.now()}`,
+        date: new Date(formData.date),
+        amount: formData.amount,
+        category: formData.category as Income['category'],
+        description: formData.description,
+        reference: formData.reference || undefined,
+        paymentMethod: formData.paymentMethod,
+        status: 'received',
+        notes: formData.notes || undefined,
+        createdBy: 'admin',
+        createdAt: new Date()
+      };
+      onSave(newIncome);
+    } else {
+      const newExpense: Expense = {
+        id: `expense-${Date.now()}`,
+        date: new Date(formData.date),
+        amount: formData.amount,
+        category: formData.category as Expense['category'],
+        description: formData.description,
+        supplier: formData.supplier || undefined,
+        reference: formData.reference || undefined,
+        paymentMethod: formData.paymentMethod,
+        status: 'paid',
+        notes: formData.notes || undefined,
+        createdBy: 'admin',
+        createdAt: new Date()
+      };
+      onSave(newExpense);
+    }
+  };
 
   const incomeCategories = ['sales', 'services', 'other'];
   const expenseCategories = ['inventory', 'services', 'salaries', 'rent', 'utilities', 'marketing', 'other'];
@@ -402,24 +459,31 @@ function TransactionModal({
           </button>
         </div>
         
-        <div className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fecha
+                Fecha *
               </label>
               <input
                 type="date"
-                defaultValue={new Date().toISOString().split('T')[0]}
+                required
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Monto
+                Monto *
               </label>
               <input
                 type="number"
+                required
+                min="0"
+                step="0.01"
+                value={formData.amount || ''}
+                onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 placeholder="$0"
               />
@@ -428,9 +492,14 @@ function TransactionModal({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Categoría
+              Categoría *
             </label>
-            <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+            <select 
+              required
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            >
               <option value="">Seleccionar categoría...</option>
               {(isIncome ? incomeCategories : expenseCategories).map(cat => (
                 <option key={cat} value={cat}>
@@ -449,10 +518,13 @@ function TransactionModal({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Descripción
+              Descripción *
             </label>
             <input
               type="text"
+              required
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
               placeholder="Descripción de la transacción"
             />
@@ -461,9 +533,14 @@ function TransactionModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Método de Pago
+                Método de Pago *
               </label>
-              <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+              <select 
+                required
+                value={formData.paymentMethod}
+                onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value as any })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              >
                 <option value="cash">Efectivo</option>
                 <option value="card">Tarjeta</option>
                 <option value="transfer">Transferencia</option>
@@ -481,6 +558,8 @@ function TransactionModal({
               </label>
               <input
                 type="text"
+                value={formData.reference}
+                onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 placeholder="Ej: V-001, C-001"
               />
@@ -494,6 +573,8 @@ function TransactionModal({
               </label>
               <input
                 type="text"
+                value={formData.supplier}
+                onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 placeholder="Nombre del proveedor"
               />
@@ -505,28 +586,34 @@ function TransactionModal({
               Notas (opcional)
             </label>
             <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
               rows={3}
               placeholder="Notas adicionales..."
             />
           </div>
-        </div>
 
-        <div className="p-6 border-t border-gray-200 flex gap-3 justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button className={`px-4 py-2 text-white rounded-lg transition-colors ${
-            isIncome 
-              ? 'bg-emerald-600 hover:bg-emerald-700' 
-              : 'bg-red-600 hover:bg-red-700'
-          }`}>
-            Guardar {isIncome ? 'Ingreso' : 'Gasto'}
-          </button>
-        </div>
+          <div className="flex gap-3 justify-end pt-4 border-t">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit"
+              className={`px-4 py-2 text-white rounded-lg transition-colors ${
+                isIncome 
+                  ? 'bg-emerald-600 hover:bg-emerald-700' 
+                  : 'bg-red-600 hover:bg-red-700'
+              }`}
+            >
+              Guardar {isIncome ? 'Ingreso' : 'Gasto'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

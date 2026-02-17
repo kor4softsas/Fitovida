@@ -11,9 +11,12 @@ import {
   AlertTriangle,
   Edit,
   Trash2,
-  X
+  X,
+  Scan,
+  Barcode
 } from 'lucide-react';
 import type { InventoryProduct, InventoryMovement } from '@/types/admin';
+import BarcodeInput, { validateBarcodeFormat } from '@/components/admin/BarcodeInput';
 
 export default function InventarioPage() {
   const [products, setProducts] = useState<InventoryProduct[]>([]);
@@ -23,6 +26,7 @@ export default function InventarioPage() {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [view, setView] = useState<'products' | 'movements'>('products');
   const [showMovementModal, setShowMovementModal] = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<InventoryProduct | null>(null);
 
   useEffect(() => {
@@ -42,6 +46,7 @@ export default function InventarioPage() {
         taxRate: 19,
         status: 'active',
         supplier: 'NutriSupply',
+        barcode: '7891234567890',
         createdAt: new Date(),
         updatedAt: new Date()
       },
@@ -56,6 +61,7 @@ export default function InventarioPage() {
         salePrice: 55000,
         taxRate: 19,
         status: 'active',
+        barcode: '7891234567891',
         createdAt: new Date(),
         updatedAt: new Date()
       },
@@ -120,6 +126,7 @@ export default function InventarioPage() {
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.sku?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = filterCategory === 'all' || product.category === filterCategory;
     return matchesSearch && matchesCategory;
@@ -141,13 +148,25 @@ export default function InventarioPage() {
           <h1 className="text-3xl font-bold text-gray-900">Inventario</h1>
           <p className="text-gray-600 mt-1">Control de productos y movimientos</p>
         </div>
-        <button
-          onClick={() => setShowMovementModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-        >
-          <Plus size={20} />
-          Nuevo Movimiento
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setSelectedProduct(null);
+              setShowProductModal(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={20} />
+            Nuevo Producto
+          </button>
+          <button
+            onClick={() => setShowMovementModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+          >
+            <Plus size={20} />
+            Movimiento
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -234,7 +253,7 @@ export default function InventarioPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   type="text"
-                  placeholder="Buscar por nombre o SKU..."
+                  placeholder="Buscar por nombre, SKU o código de barras..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
@@ -264,7 +283,7 @@ export default function InventarioPage() {
                       Producto
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      SKU
+                      SKU / Código Barras
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Categoría
@@ -297,8 +316,16 @@ export default function InventarioPage() {
                             <div className="text-xs text-gray-500">{product.description}</div>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">
-                          {product.sku || '-'}
+                        <td className="px-6 py-4">
+                          <div className="text-sm">
+                            <div className="font-medium text-gray-900">{product.sku || '-'}</div>
+                            {product.barcode && (
+                              <div className="flex items-center gap-1 text-gray-500 mt-1">
+                                <Barcode size={14} />
+                                <span className="text-xs">{product.barcode}</span>
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600">
                           {product.category}
@@ -319,7 +346,7 @@ export default function InventarioPage() {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex justify-center">
-                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${status.color}`}>
+                            <span className={`px-3 py-1 text-xs font-medium rounded-full ${status.color}`}>
                               {status.label}
                             </span>
                           </div>
@@ -327,7 +354,10 @@ export default function InventarioPage() {
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
-                              onClick={() => setSelectedProduct(product)}
+                              onClick={() => {
+                                setSelectedProduct(product);
+                                setShowProductModal(true);
+                              }}
                               className="text-blue-600 hover:text-blue-900"
                               title="Editar"
                             >
@@ -433,6 +463,376 @@ export default function InventarioPage() {
       {showMovementModal && (
         <MovementModal onClose={() => setShowMovementModal(false)} products={products} />
       )}
+
+      {/* Product Modal */}
+      {showProductModal && (
+        <ProductModal
+          product={selectedProduct}
+          products={products}
+          onClose={() => {
+            setShowProductModal(false);
+            setSelectedProduct(null);
+          }}
+          onSave={(product) => {
+            if (selectedProduct) {
+              // Editar
+              setProducts(products.map(p => p.id === product.id ? product : p));
+            } else {
+              // Crear
+              setProducts([...products, { ...product, id: `${Date.now()}` }]);
+            }
+            setShowProductModal(false);
+            setSelectedProduct(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Product Modal Component
+function ProductModal({
+  product,
+  products,
+  onClose,
+  onSave
+}: {
+  product: InventoryProduct | null;
+  products: InventoryProduct[];
+  onClose: () => void;
+  onSave: (product: InventoryProduct) => void;
+}) {
+  const [formData, setFormData] = useState<Partial<InventoryProduct>>({
+    name: product?.name || '',
+    sku: product?.sku || '',
+    barcode: product?.barcode || '',
+    category: product?.category || '',
+    description: product?.description || '',
+    currentStock: product?.currentStock || 0,
+    minStock: product?.minStock || 5,
+    maxStock: product?.maxStock || null,
+    unitCost: product?.unitCost || 0,
+    salePrice: product?.salePrice || 0,
+    taxRate: product?.taxRate || 19,
+    supplier: product?.supplier || '',
+    status: product?.status || 'active',
+  });
+
+  const [barcodeError, setBarcodeError] = useState('');
+  const [barcodeFormat, setBarcodeFormat] = useState<string | null>(null);
+
+  const handleBarcodeChange = (value: string) => {
+    setFormData({ ...formData, barcode: value });
+    setBarcodeError('');
+    setBarcodeFormat(null);
+  };
+
+  const handleBarcodeScan = (barcode: string) => {
+    // Validar formato
+    const validation = validateBarcodeFormat(barcode);
+    
+    if (!validation.isValid) {
+      setBarcodeError(validation.message);
+      return;
+    }
+
+    // Verificar si el código ya existe (excepto si es el mismo producto)
+    const exists = products.some(
+      p => p.barcode === barcode && p.id !== product?.id
+    );
+
+    if (exists) {
+      setBarcodeError('Este código de barras ya está registrado');
+      return;
+    }
+
+    setBarcodeFormat(validation.format);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validar código de barras si existe
+    if (formData.barcode) {
+      const validation = validateBarcodeFormat(formData.barcode);
+      if (!validation.isValid) {
+        setBarcodeError(validation.message);
+        return;
+      }
+
+      const exists = products.some(
+        p => p.barcode === formData.barcode && p.id !== product?.id
+      );
+      if (exists) {
+        setBarcodeError('Este código de barras ya está registrado');
+        return;
+      }
+    }
+
+    onSave({
+      ...product,
+      ...formData,
+      createdAt: product?.createdAt || new Date(),
+      updatedAt: new Date(),
+    } as InventoryProduct);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
+          <h2 className="text-xl font-bold text-gray-900">
+            {product ? 'Editar Producto' : 'Nuevo Producto'}
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X size={24} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Información Básica */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+              <Package size={20} />
+              Información Básica
+            </h3>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nombre del Producto *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="Ej: Proteína Whey 2kg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  SKU
+                </label>
+                <input
+                  type="text"
+                  value={formData.sku}
+                  onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="PROT-WHE-2K"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Categoría *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="Proteínas"
+                />
+              </div>
+
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Descripción
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  rows={2}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="Descripción del producto..."
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Código de Barras */}
+          <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+              <Scan size={20} className="text-blue-600" />
+              Código de Barras
+            </h3>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Escanea o ingresa el código de barras
+              </label>
+              <BarcodeInput
+                value={formData.barcode || ''}
+                onChange={handleBarcodeChange}
+                onScan={handleBarcodeScan}
+                placeholder="Escanea con el lector o ingresa manualmente"
+              />
+              
+              {barcodeFormat && !barcodeError && (
+                <p className="mt-2 text-sm text-emerald-600 flex items-center gap-1">
+                  <span className="font-medium">Formato detectado:</span> {barcodeFormat}
+                </p>
+              )}
+              
+              {barcodeError && (
+                <p className="mt-2 text-sm text-red-600">{barcodeError}</p>
+              )}
+              
+              <p className="mt-2 text-xs text-gray-500">
+                Formatos soportados: EAN-13, UPC-A, EAN-8, Code128, o código personalizado
+              </p>
+            </div>
+          </div>
+
+          {/* Stock */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-gray-900">Stock</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Stock Actual *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  value={formData.currentStock}
+                  onChange={(e) => setFormData({ ...formData, currentStock: parseInt(e.target.value) || 0 })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Stock Mínimo *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  value={formData.minStock}
+                  onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) || 0 })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Stock Máximo
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.maxStock || ''}
+                  onChange={(e) => setFormData({ ...formData, maxStock: parseInt(e.target.value) || null })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Precios */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-gray-900">Precios</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Costo Unitario *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="0.01"
+                  value={formData.unitCost}
+                  onChange={(e) => setFormData({ ...formData, unitCost: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Precio de Venta *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="0.01"
+                  value={formData.salePrice}
+                  onChange={(e) => setFormData({ ...formData, salePrice: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  IVA (%) *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={formData.taxRate}
+                  onChange={(e) => setFormData({ ...formData, taxRate: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Proveedor */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-gray-900">Proveedor</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nombre del Proveedor
+                </label>
+                <input
+                  type="text"
+                  value={formData.supplier}
+                  onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="NutriSupply"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Estado
+                </label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'inactive' | 'discontinued' })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                >
+                  <option value="active">Activo</option>
+                  <option value="inactive">Inactivo</option>
+                  <option value="discontinued">Descontinuado</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 justify-end pt-4 border-t">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+            >
+              {product ? 'Guardar Cambios' : 'Crear Producto'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
