@@ -6,8 +6,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { email, password } = body;
 
+    console.log('[LOGIN] Intento de login con email:', email);
+
     // Validaciones
     if (!email || !password) {
+      console.log('[LOGIN] Validación fallida: email o password faltantes');
       return NextResponse.json(
         { error: 'Correo electrónico y contraseña son obligatorios' },
         { status: 400 }
@@ -15,15 +18,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Intentar login
+    console.log('[LOGIN] Llamando a loginUser...');
     const result = await loginUser(email, password);
+    console.log('[LOGIN] Resultado:', { success: result.success, error: result.error });
 
     if (!result.success) {
+      console.log('[LOGIN] Login fallido:', result.error);
       return NextResponse.json(
         { error: result.error },
         { status: 401 }
       );
     }
 
+    console.log('[LOGIN] Login exitoso para:', email);
     // Crear respuesta con cookie de sesión
     const response = NextResponse.json({
       success: true,
@@ -41,9 +48,9 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error('Error en /api/auth/login:', error);
+    console.error('[LOGIN] Error en /api/auth/login:', error);
     return NextResponse.json(
-      { error: 'Error interno del servidor' },
+      { error: 'Error interno del servidor', details: String(error) },
       { status: 500 }
     );
   }

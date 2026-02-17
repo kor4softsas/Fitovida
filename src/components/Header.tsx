@@ -14,12 +14,17 @@ export default function Header() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const { toggleCart, getCartCount, setSearchQuery, searchQuery } = useCartStore();
   const { user, isAuthenticated, isLoading, logout } = useAuthStore();
   const cartCount = getCartCount();
   const pathname = usePathname();
   const router = useRouter();
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -99,15 +104,24 @@ export default function Header() {
 
             {/* Navigation Desktop */}
             <nav className="hidden md:flex items-center gap-1">
-              {['inicio', 'productos', 'sobre-nosotros'].map((item) => (
-                <button 
-                  key={item}
-                  onClick={() => scrollToSection(item)}
-                  className="px-4 py-2 text-sm font-medium text-[var(--muted)] hover:text-[var(--primary)] rounded-lg hover:bg-[var(--accent-light)]/20 transition-all duration-200"
-                >
-                  {item === 'sobre-nosotros' ? 'Nosotros' : item.charAt(0).toUpperCase() + item.slice(1)}
-                </button>
-              ))}
+              <button 
+                onClick={() => scrollToSection('inicio')}
+                className="px-4 py-2 text-sm font-medium text-[var(--muted)] hover:text-[var(--primary)] rounded-lg hover:bg-[var(--accent-light)]/20 transition-all duration-200"
+              >
+                Inicio
+              </button>
+              <button 
+                onClick={() => scrollToSection('productos')}
+                className="px-4 py-2 text-sm font-medium text-[var(--muted)] hover:text-[var(--primary)] rounded-lg hover:bg-[var(--accent-light)]/20 transition-all duration-200"
+              >
+                Productos
+              </button>
+              <Link 
+                href="/nosotros"
+                className="px-4 py-2 text-sm font-medium text-[var(--muted)] hover:text-[var(--primary)] rounded-lg hover:bg-[var(--accent-light)]/20 transition-all duration-200"
+              >
+                Nosotros
+              </Link>
             </nav>
 
             {/* Icons */}
@@ -129,7 +143,7 @@ export default function Header() {
                 aria-label="Carrito"
               >
                 <ShoppingCart className="h-5 w-5 transition-transform group-hover:scale-110" />
-                {cartCount > 0 && (
+                {isMounted && cartCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-[var(--primary)] text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center shadow-sm border-2 border-white animate-in zoom-in">
                     {cartCount}
                   </span>
@@ -224,15 +238,25 @@ export default function Header() {
           isMenuOpen ? "max-h-96 opacity-100 scale-y-100" : "max-h-0 opacity-0 scale-y-95"
         )}>
           <nav className="flex flex-col p-2 gap-1">
-            {['Inicio', 'Productos', 'Nosotros'].map((item) => (
-              <button 
-                key={item}
-                onClick={() => scrollToSection(item.toLowerCase() === 'nosotros' ? 'sobre-nosotros' : item.toLowerCase())}
-                className="text-left py-3 px-4 text-[var(--foreground)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-xl transition-all duration-200 font-medium"
-              >
-                {item}
-              </button>
-            ))}
+            <button 
+              onClick={() => scrollToSection('inicio')}
+              className="text-left py-3 px-4 text-[var(--foreground)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-xl transition-all duration-200 font-medium"
+            >
+              Inicio
+            </button>
+            <button 
+              onClick={() => scrollToSection('productos')}
+              className="text-left py-3 px-4 text-[var(--foreground)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-xl transition-all duration-200 font-medium"
+            >
+              Productos
+            </button>
+            <Link 
+              href="/nosotros"
+              onClick={() => setIsMenuOpen(false)}
+              className="text-left py-3 px-4 text-[var(--foreground)] hover:text-[var(--primary)] hover:bg-[var(--accent-light)]/30 rounded-xl transition-all duration-200 font-medium"
+            >
+              Nosotros
+            </Link>
             <div className="border-t border-[var(--border)] my-2" />
             {!isLoading && !isAuthenticated && (
               <Link 
