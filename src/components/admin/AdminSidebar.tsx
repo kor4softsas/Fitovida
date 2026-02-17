@@ -36,6 +36,8 @@ export default function AdminSidebar() {
   const { user, logout } = useAuthStore();
 
   const handleLogout = async () => {
+    // Limpiar autenticación de admin
+    sessionStorage.removeItem('fitovida_admin_auth');
     await logout();
     router.push('/');
   };
