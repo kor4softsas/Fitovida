@@ -97,7 +97,7 @@ export default function AdminSidebar() {
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
             {navigation.map((item) => {
-              const Icon = item.icon;
+              const IconComponent = item.icon;
               const isActive = pathname === item.href;
               
               return (
@@ -114,7 +114,7 @@ export default function AdminSidebar() {
                     }
                   `}
                 >
-                  <Icon size={20} />
+                  <IconComponent size={20} />
                   <span className="font-medium">{item.name}</span>
                 </Link>
               );

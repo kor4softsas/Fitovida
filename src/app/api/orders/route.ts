@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Crear los items de la orden
+    // 2. Crear los items de la orden y registrar movimientos de inventario
     const orderItemsValues = items.map((item: { id: number; name: string; image: string; quantity: number; price: number }) => [
       orderId,
       item.id,
@@ -156,11 +156,66 @@ export async function POST(request: NextRequest) {
     ]);
 
     try {
-      for (const itemValues of orderItemsValues) {
+      for (const item of items) {
+        // Insertar item de orden
         await query(
           'INSERT INTO order_items (order_id, product_id, product_name, product_image, quantity, price) VALUES (?, ?, ?, ?, ?, ?)',
-          itemValues
+          [orderId, item.id, item.name, item.image, item.quantity, item.price]
         );
+
+        // Obtener información de inventario
+        const inventoryProduct = await query(
+          `SELECT ip.*, p.name FROM inventory_products ip
+           JOIN products p ON ip.product_id = p.id
+           WHERE ip.product_id = ?`,
+          [item.id]
+        );
+
+        if (inventoryProduct && inventoryProduct.length > 0) {
+          const prod = inventoryProduct[0];
+          const previousStock = prod.current_stock;
+          const newStock = previousStock - item.quantity;
+
+          // Validar que hay stock suficiente
+          if (newStock < 0) {
+            // Eliminar orden creada
+            await query('DELETE FROM orders WHERE id = ?', [orderId]);
+            return NextResponse.json(
+              { error: `Stock insuficiente para ${item.name}` },
+              { status: 400 }
+            );
+          }
+
+          // Registrar movimiento de inventario
+          await query(
+            `INSERT INTO inventory_movements 
+             (product_id, product_name, type, quantity, previous_stock, new_stock, reason, reference, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              item.id,
+              item.name,
+              'exit',
+              item.quantity,
+              previousStock,
+              newStock,
+              'sale',
+              orderNumber,
+              userId || 'guest'
+            ]
+          );
+
+          // Actualizar stock en inventory_products
+          await query(
+            'UPDATE inventory_products SET current_stock = ? WHERE product_id = ?',
+            [newStock, item.id]
+          );
+
+          // Actualizar stock en tabla products
+          await query(
+            'UPDATE products SET stock = stock - ? WHERE id = ?',
+            [item.quantity, item.id]
+          );
+        }
       }
     } catch (itemsError) {
       console.error('Error creando items:', itemsError);

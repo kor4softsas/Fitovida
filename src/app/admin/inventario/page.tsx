@@ -30,78 +30,65 @@ export default function InventarioPage() {
   const [selectedProduct, setSelectedProduct] = useState<InventoryProduct | null>(null);
 
   useEffect(() => {
-    // TODO: Cargar desde API
-    const mockProducts: InventoryProduct[] = [
-      {
-        id: '1',
-        name: 'Proteína Whey 2kg',
-        sku: 'PROT-WHE-2K',
-        category: 'Proteínas',
-        description: 'Proteína de suero aislada',
-        currentStock: 25,
-        minStock: 10,
-        maxStock: 100,
-        unitCost: 120000,
-        salePrice: 180000,
-        taxRate: 19,
-        status: 'active',
-        supplier: 'NutriSupply',
-        barcode: '7891234567890',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      },
-      {
-        id: '2',
-        name: 'Creatina Monohidrato 300g',
-        sku: 'CREA-MONO-300',
-        category: 'Suplementos',
-        currentStock: 8,
-        minStock: 10,
-        unitCost: 35000,
-        salePrice: 55000,
-        taxRate: 19,
-        status: 'active',
-        barcode: '7891234567891',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      },
-      {
-        id: '3',
-        name: 'BCAA 500g',
-        sku: 'BCAA-500',
-        category: 'Aminoácidos',
-        currentStock: 0,
-        minStock: 5,
-        unitCost: 45000,
-        salePrice: 70000,
-        taxRate: 19,
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date()
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // Cargar productos
+        const productsRes = await fetch('/api/admin/inventory');
+        if (!productsRes.ok) throw new Error('Error cargando productos');
+        const productsData = await productsRes.json();
+        
+        // Mapear datos a formato esperado
+        const mappedProducts = productsData.products.map((p: any) => ({
+          id: String(p.product_id),
+          name: p.name,
+          sku: p.sku,
+          category: p.category,
+          currentStock: p.current_stock,
+          minStock: p.min_stock,
+          maxStock: p.max_stock,
+          unitCost: p.unit_cost,
+          salePrice: p.price,
+          taxRate: p.tax_rate,
+          status: p.status,
+          supplier: p.supplier,
+          barcode: p.barcode,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }));
+        
+        setProducts(mappedProducts);
+        
+        // Cargar movimientos recientes
+        const movementsRes = await fetch('/api/admin/inventory/movements?limit=50');
+        if (movementsRes.ok) {
+          const movementsData = await movementsRes.json();
+          const mappedMovements = movementsData.movements.map((m: any) => ({
+            id: m.id,
+            productId: String(m.product_id),
+            productName: m.product_name,
+            type: m.type,
+            quantity: m.quantity,
+            previousStock: m.previous_stock,
+            newStock: m.new_stock,
+            unitCost: m.unit_cost,
+            totalCost: m.total_cost,
+            reason: m.reason,
+            reference: m.reference,
+            createdBy: m.created_by,
+            createdAt: new Date(m.created_at)
+          }));
+          setMovements(mappedMovements);
+        }
+      } catch (error) {
+        console.error('Error cargando datos:', error);
+      } finally {
+        setLoading(false);
       }
-    ];
+    };
 
-    const mockMovements: InventoryMovement[] = [
-      {
-        id: '1',
-        productId: '1',
-        productName: 'Proteína Whey 2kg',
-        type: 'entry',
-        quantity: 50,
-        previousStock: 0,
-        newStock: 50,
-        unitCost: 120000,
-        totalCost: 6000000,
-        reason: 'purchase',
-        reference: 'C-001',
-        createdBy: 'admin',
-        createdAt: new Date()
-      }
-    ];
-
-    setProducts(mockProducts);
-    setMovements(mockMovements);
-    setLoading(false);
+    fetchData();
   }, []);
 
   const formatCurrency = (value: number) => {
@@ -510,7 +497,7 @@ function ProductModal({
     description: product?.description || '',
     currentStock: product?.currentStock || 0,
     minStock: product?.minStock || 5,
-    maxStock: product?.maxStock || null,
+    maxStock: product?.maxStock || undefined,
     unitCost: product?.unitCost || 0,
     salePrice: product?.salePrice || 0,
     taxRate: product?.taxRate || 19,
@@ -726,7 +713,7 @@ function ProductModal({
                   type="number"
                   min="0"
                   value={formData.maxStock || ''}
-                  onChange={(e) => setFormData({ ...formData, maxStock: parseInt(e.target.value) || null })}
+                  onChange={(e) => setFormData({ ...formData, maxStock: parseInt(e.target.value) || undefined })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 />
               </div>

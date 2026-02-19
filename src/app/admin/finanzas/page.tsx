@@ -25,52 +25,56 @@ export default function FinanzasPage() {
   const [transactionType, setTransactionType] = useState<TransactionType>('income');
 
   useEffect(() => {
-    // TODO: Cargar desde API
-    const mockIncomes: Income[] = [
-      {
-        id: '1',
-        date: new Date(),
-        amount: 357000,
-        category: 'sales',
-        description: 'Venta V-2026-001',
-        reference: 'V-2026-001',
-        paymentMethod: 'card',
-        status: 'received',
-        createdBy: 'admin',
-        createdAt: new Date()
+    const fetchFinances = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/admin/finances');
+        if (!response.ok) throw new Error('Error cargando finanzas');
+        
+        const data = await response.json();
+        
+        // Mapear ingresos
+        const mappedIncomes = data.records
+          .filter((r: any) => r.type === 'income')
+          .map((i: any) => ({
+            id: i.id,
+            date: new Date(i.created_at),
+            amount: i.amount,
+            category: i.source || 'other',
+            description: i.description,
+            reference: i.reference || '',
+            paymentMethod: 'transfer',
+            status: 'received',
+            createdBy: i.created_by,
+            createdAt: new Date(i.created_at)
+          }));
+        
+        // Mapear gastos
+        const mappedExpenses = data.records
+          .filter((r: any) => r.type === 'expense')
+          .map((e: any) => ({
+            id: e.id,
+            date: new Date(e.created_at),
+            amount: e.amount,
+            category: e.category || 'other',
+            description: e.description,
+            reference: e.reference || '',
+            paymentMethod: 'transfer',
+            status: 'paid',
+            createdBy: e.created_by,
+            createdAt: new Date(e.created_at)
+          }));
+        
+        setIncomes(mappedIncomes);
+        setExpenses(mappedExpenses);
+      } catch (error) {
+        console.error('Error cargando finanzas:', error);
+      } finally {
+        setLoading(false);
       }
-    ];
+    };
 
-    const mockExpenses: Expense[] = [
-      {
-        id: '1',
-        date: new Date(),
-        amount: 6000000,
-        category: 'inventory',
-        description: 'Compra de proteínas',
-        supplier: 'NutriSupply',
-        reference: 'C-001',
-        paymentMethod: 'transfer',
-        status: 'paid',
-        createdBy: 'admin',
-        createdAt: new Date()
-      },
-      {
-        id: '2',
-        date: new Date(),
-        amount: 2000000,
-        category: 'rent',
-        description: 'Arriendo local comercial',
-        paymentMethod: 'transfer',
-        status: 'paid',
-        createdBy: 'admin',
-        createdAt: new Date()
-      }
-    ];
-
-    setIncomes(mockIncomes);
-    setExpenses(mockExpenses);
-    setLoading(false);
+    fetchFinances();
   }, []);
 
   const formatCurrency = (value: number) => {
@@ -358,7 +362,7 @@ export default function FinanzasPage() {
           type={transactionType}
           onClose={() => setShowTransactionModal(false)}
           onSave={(transaction) => {
-            if (transaction.type === 'income') {
+            if (transactionType === 'income') {
               setIncomes([transaction as Income, ...incomes]);
             } else {
               setExpenses([transaction as Expense, ...expenses]);

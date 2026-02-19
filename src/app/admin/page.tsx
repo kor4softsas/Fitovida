@@ -22,31 +22,42 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // TODO: Cargar datos reales desde la API
-    // Datos de ejemplo por ahora
-    setTimeout(() => {
-      setStats({
-        sales: {
-          today: 450000,
-          week: 2100000,
-          month: 8500000,
-          year: 95000000
-        },
-        inventory: {
-          totalProducts: 45,
-          lowStock: 5,
-          outOfStock: 2,
-          totalValue: 15000000
-        },
-        finances: {
-          totalIncome: 8500000,
-          totalExpenses: 3200000,
-          balance: 5300000,
-          pendingPayments: 450000
-        }
-      });
-      setLoading(false);
-    }, 500);
+    const fetchStats = async () => {
+      try {
+        const response = await fetch('/api/admin/dashboard/stats');
+        if (!response.ok) throw new Error('Error al cargar estadísticas');
+        
+        const data = await response.json();
+        
+        setStats({
+          sales: {
+            today: data.sales.today || 0,
+            week: data.sales.week || 0,
+            month: data.sales.month || 0,
+            year: data.sales.year || 0
+          },
+          inventory: {
+            totalProducts: data.inventory.total_products || 0,
+            lowStock: data.inventory.low_stock || 0,
+            outOfStock: data.inventory.out_of_stock || 0,
+            totalValue: data.inventory.total_value || 0
+          },
+          finances: {
+            totalIncome: data.finances.total_income || 0,
+            totalExpenses: data.finances.total_expenses || 0,
+            balance: data.finances.balance || 0,
+            pendingPayments: data.orders.pending || 0
+          }
+        });
+      } catch (error) {
+        console.error('Error cargando estadísticas:', error);
+        // Mantener con valores por defecto si hay error
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
   }, []);
 
   const formatCurrency = (value: number) => {

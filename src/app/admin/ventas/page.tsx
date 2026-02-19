@@ -25,44 +25,44 @@ export default function VentasPage() {
   ]);
 
   useEffect(() => {
-    // TODO: Cargar ventas desde la API
-    // Datos de ejemplo
-    const mockSales: Sale[] = [
-      {
-        id: '1',
-        saleNumber: 'V-2026-001',
-        date: new Date(),
-        customerName: 'Juan Pérez',
-        customerEmail: 'juan@example.com',
-        customerPhone: '+57 300 123 4567',
-        customerDocument: '1234567890',
-        items: [
-          {
-            id: '1',
-            productId: 'prod-1',
-            productName: 'Proteína Whey 2kg',
-            quantity: 2,
-            unitPrice: 150000,
-            discount: 0,
-            tax: 57000,
-            subtotal: 300000,
-            total: 357000
-          }
-        ],
-        subtotal: 300000,
-        tax: 57000,
-        discount: 0,
-        total: 357000,
-        paymentMethod: 'card',
-        status: 'completed',
-        createdBy: 'admin',
-        createdAt: new Date(),
-        updatedAt: new Date()
+    const fetchSales = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/admin/sales');
+        if (!response.ok) throw new Error('Error cargando ventas');
+        
+        const data = await response.json();
+        
+        // Mapear datos a formato esperado
+        const mappedSales = data.sales.map((s: any) => ({
+          id: s.id,
+          saleNumber: s.sale_number,
+          date: new Date(s.created_at),
+          customerName: s.customer_name,
+          customerEmail: s.customer_email,
+          customerPhone: s.customer_phone || '',
+          customerDocument: s.customer_document || '',
+          items: [],
+          subtotal: s.subtotal || s.total,
+          tax: s.tax || 0,
+          discount: s.discount || 0,  
+          total: s.total,
+          paymentMethod: s.payment_method,
+          status: s.status || 'completed',
+          createdBy: 'admin',
+          createdAt: new Date(s.created_at),
+          updatedAt: new Date(s.created_at)
+        }));
+        
+        setSales(mappedSales);
+      } catch (error) {
+        console.error('Error cargando ventas:', error);
+      } finally {
+        setLoading(false);
       }
-    ];
-    
-    setSales(mockSales);
-    setLoading(false);
+    };
+
+    fetchSales();
   }, []);
 
   const formatCurrency = (value: number) => {
