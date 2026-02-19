@@ -29,39 +29,44 @@ export default function FinanzasPage() {
       try {
         setLoading(true);
         const response = await fetch('/api/admin/finances');
-        if (!response.ok) throw new Error('Error cargando finanzas');
         
         const data = await response.json();
         
+        if (!data.records) {
+          setIncomes([]);
+          setExpenses([]);
+          return;
+        }
+        
         // Mapear ingresos
-        const mappedIncomes = data.records
+        const mappedIncomes = (data.records || [])
           .filter((r: any) => r.type === 'income')
           .map((i: any) => ({
             id: i.id,
-            date: new Date(i.created_at),
-            amount: i.amount,
-            category: i.source || 'other',
-            description: i.description,
+            date: new Date(i.date || i.created_at),
+            amount: Number(i.amount) || 0,
+            category: i.category || 'other',
+            description: i.description || '',
             reference: i.reference || '',
-            paymentMethod: 'transfer',
-            status: 'received',
-            createdBy: i.created_by,
+            paymentMethod: i.payment_method || 'transfer',
+            status: i.status || 'received',
+            createdBy: i.created_by || '',
             createdAt: new Date(i.created_at)
           }));
         
         // Mapear gastos
-        const mappedExpenses = data.records
+        const mappedExpenses = (data.records || [])
           .filter((r: any) => r.type === 'expense')
           .map((e: any) => ({
             id: e.id,
-            date: new Date(e.created_at),
-            amount: e.amount,
+            date: new Date(e.date || e.created_at),
+            amount: Number(e.amount) || 0,
             category: e.category || 'other',
-            description: e.description,
+            description: e.description || '',
             reference: e.reference || '',
-            paymentMethod: 'transfer',
-            status: 'paid',
-            createdBy: e.created_by,
+            paymentMethod: e.payment_method || 'transfer',
+            status: e.status || 'paid',
+            createdBy: e.created_by || '',
             createdAt: new Date(e.created_at)
           }));
         
@@ -69,6 +74,8 @@ export default function FinanzasPage() {
         setExpenses(mappedExpenses);
       } catch (error) {
         console.error('Error cargando finanzas:', error);
+        setIncomes([]);
+        setExpenses([]);
       } finally {
         setLoading(false);
       }

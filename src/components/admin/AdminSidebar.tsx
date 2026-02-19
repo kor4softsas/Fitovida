@@ -9,6 +9,10 @@ import {
   Package, 
   DollarSign, 
   TrendingUp,
+  FileText,
+  Users,
+  BarChart3,
+  Settings,
   LogOut,
   Menu,
   X
@@ -20,7 +24,7 @@ import { useRouter } from 'next/navigation';
 interface NavItem {
   name: string;
   href: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: any;
 }
 
 const navigation: NavItem[] = [
@@ -28,6 +32,10 @@ const navigation: NavItem[] = [
   { name: 'Ventas', href: '/admin/ventas', icon: ShoppingCart },
   { name: 'Inventario', href: '/admin/inventario', icon: Package },
   { name: 'Ingresos y Gastos', href: '/admin/finanzas', icon: DollarSign },
+  { name: 'Facturación', href: '/admin/facturas', icon: FileText },
+  { name: 'Clientes', href: '/admin/clientes', icon: Users },
+  { name: 'Reportes', href: '/admin/reportes', icon: BarChart3 },
+  { name: 'Configuración', href: '/admin/configuracion', icon: Settings },
 ];
 
 export default function AdminSidebar() {
