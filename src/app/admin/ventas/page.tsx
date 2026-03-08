@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Plus, 
   Search, 
@@ -10,6 +10,8 @@ import {
   Printer,
   X
 } from 'lucide-react';
+import { PDFDownloadLink, pdf } from '@react-pdf/renderer';
+import FacturaHTML from '@/components/admin/FacturaHTML';
 import type { Sale, SaleItem } from '@/types/admin';
 
 export default function VentasPage() {
@@ -23,6 +25,16 @@ export default function VentasPage() {
     { id: 'prod-2', name: 'Creatina Monohidrato 300g', price: 50000, stock: 15, tax: 19 },
     { id: 'prod-3', name: 'BCAA 5000 120 caps', price: 80000, stock: 10, tax: 19 },
   ]);
+  // Modal HTML para impresión nativa en la misma página
+  const [showFactura, setShowFactura] = useState(false);
+  const [facturaSale, setFacturaSale] = useState<Sale | null>(null);
+  const printFactura = (sale: Sale) => {
+    setFacturaSale(sale);
+    setShowFactura(true);
+    setTimeout(() => {
+      window.print();
+    }, 300);
+  };
 
   useEffect(() => {
     const fetchSales = async () => {
@@ -249,6 +261,7 @@ export default function VentasPage() {
                         <button
                           className="text-blue-600 hover:text-blue-900"
                           title="Imprimir"
+                          onClick={() => printFactura(sale)}
                         >
                           <Printer size={18} />
                         </button>
@@ -267,8 +280,19 @@ export default function VentasPage() {
         <SaleDetailModal
           sale={selectedSale}
           onClose={() => setSelectedSale(null)}
+          onPrint={() => printFactura(selectedSale)}
         />
       )}
+            {/* Modal HTML para impresión nativa */}
+            {showFactura && facturaSale && (
+              <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:10000,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <div style={{background:'#fff',borderRadius:12,padding:24,boxShadow:'0 2px 16px #0002',maxWidth:700,width:'100%',maxHeight:'90vh',overflow:'auto',position:'relative'}}>
+                  <button onClick={()=>setShowFactura(false)} style={{position:'absolute',top:12,right:12,fontSize:20,color:'#888',background:'none',border:'none',cursor:'pointer'}}>×</button>
+                  <FacturaHTML sale={facturaSale} />
+                </div>
+              </div>
+            )}
+      {/* Eliminado modal PDF personalizado, solo impresión nativa */}
 
       {/* New Sale Modal */}
       {showNewSaleModal && (
@@ -286,7 +310,7 @@ export default function VentasPage() {
 }
 
 // Sale Detail Modal Component
-function SaleDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void }) {
+function SaleDetailModal({ sale, onClose, onPrint }: { sale: Sale; onClose: () => void; onPrint: () => void }) {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
@@ -390,7 +414,10 @@ function SaleDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void })
           >
             Cerrar
           </button>
-          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+          <button
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            onClick={onPrint}
+          >
             <Printer size={18} />
             Imprimir
           </button>

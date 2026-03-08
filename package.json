@@ -10,6 +10,7 @@
     "sync-data": "node verify-data-sync.js"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^4.3.2",
     "@stripe/react-stripe-js": "^5.4.1",
     "@stripe/stripe-js": "^8.5.3",
     "@supabase/ssr": "^0.8.0",
