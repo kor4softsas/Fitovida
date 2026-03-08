@@ -1,4 +1,6 @@
 
+import type { Sale } from '@/types/admin';
+
 export default function FacturaHTML({ sale }: { sale: Sale }) {
   return (
     <div id="factura-html" style={{

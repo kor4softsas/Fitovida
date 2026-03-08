@@ -37,8 +37,9 @@ export default function BarcodeInput({
   const [isScanning, setIsScanning] = useState(false);
   const [scanSuccess, setScanSuccess] = useState<boolean | null>(null);
   const [scanButtonState, setScanButtonState] = useState<ScanButtonState>('idle');
-  const scanTimeoutRef = useRef<NodeJS.Timeout>();
+  const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastInputTimeRef = useRef<number>(0);
+  const isCurrentlyScanningRef = useRef(false);
 
   // Constantes para detección de lector
   const SCAN_SPEED_THRESHOLD = 50; // ms entre caracteres para detectar lector
@@ -117,6 +118,7 @@ export default function BarcodeInput({
     // Cambiar a estado de escaneo
     setScanButtonState('scanning');
     setIsScanning(true);
+    isCurrentlyScanningRef.current = true;
     
     // Focus en el input para recibir la lectura del dispositivo
     if (inputRef.current) {
@@ -131,6 +133,7 @@ export default function BarcodeInput({
         setScanButtonState('success');
         setIsScanning(false);
         setScanSuccess(true);
+        isCurrentlyScanningRef.current = false;
         
         if (onScan) {
           onScan(value.trim());
@@ -144,10 +147,11 @@ export default function BarcodeInput({
       } else {
         // Si no hay valor después de 5 segundos, marcar como error
         setTimeout(() => {
-          if (!value.trim() && scanButtonState === 'scanning') {
+          if (!value.trim() && isCurrentlyScanningRef.current) {
             setScanButtonState('error');
             setIsScanning(false);
             setScanSuccess(false);
+            isCurrentlyScanningRef.current = false;
           }
         }, 2000);
       }
@@ -164,6 +168,7 @@ export default function BarcodeInput({
       setScanButtonState('success');
       setIsScanning(false);
       setScanSuccess(true);
+      isCurrentlyScanningRef.current = false;
       
       if (onScan) {
         onScan(value.trim());
