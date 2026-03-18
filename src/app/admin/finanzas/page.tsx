@@ -368,13 +368,60 @@ export default function FinanzasPage() {
         <TransactionModal
           type={transactionType}
           onClose={() => setShowTransactionModal(false)}
-          onSave={(transaction) => {
-            if (transactionType === 'income') {
-              setIncomes([transaction as Income, ...incomes]);
-            } else {
-              setExpenses([transaction as Expense, ...expenses]);
+          onSave={async (transaction) => {
+            try {
+              const payload = {
+                type: transactionType,
+                date: new Date(transaction.date).toISOString().split('T')[0],
+                description: transaction.description,
+                amount: transaction.amount,
+                category: transaction.category,
+                supplier: 'supplier' in transaction ? (transaction as any).supplier : undefined,
+                reference: transaction.reference,
+                payment_method: transaction.paymentMethod,
+                status: transaction.status,
+                notes: transaction.notes,
+                created_by: 'admin'
+              };
+
+              const res = await fetch('/api/admin/finances', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+
+              if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || 'Error al guardar');
+              }
+
+              // Refetch para actualizar la lista desde la BD
+              const refreshRes = await fetch('/api/admin/finances');
+              if (refreshRes.ok) {
+                const data = await refreshRes.json();
+                const mappedIncomes = (data.records || [])
+                  .filter((r: any) => r.type === 'income')
+                  .map((i: any) => ({
+                    id: i.id, date: new Date(i.date || i.created_at), amount: Number(i.amount) || 0,
+                    category: i.category || 'other', description: i.description || '',
+                    reference: i.reference || '', paymentMethod: i.payment_method || 'transfer',
+                    status: i.status || 'received', createdBy: i.created_by || '', createdAt: new Date(i.created_at)
+                  }));
+                const mappedExpenses = (data.records || [])
+                  .filter((r: any) => r.type === 'expense')
+                  .map((e: any) => ({
+                    id: e.id, date: new Date(e.date || e.created_at), amount: Number(e.amount) || 0,
+                    category: e.category || 'other', description: e.description || '',
+                    reference: e.reference || '', paymentMethod: e.payment_method || 'transfer',
+                    status: e.status || 'paid', createdBy: e.created_by || '', createdAt: new Date(e.created_at)
+                  }));
+                setIncomes(mappedIncomes);
+                setExpenses(mappedExpenses);
+              }
+              setShowTransactionModal(false);
+            } catch (error) {
+              alert(error instanceof Error ? error.message : 'Error al guardar');
             }
-            setShowTransactionModal(false);
           }}
         />
       )}
