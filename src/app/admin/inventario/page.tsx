@@ -32,6 +32,33 @@ export default function InventarioPage() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [showBarcodePrinter, setShowBarcodePrinter] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<InventoryProduct | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async (ids: string[]) => {
+    if (!window.confirm(`¿Estás seguro de que quieres eliminar ${ids.length} producto(s)?`)) return;
+    
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/inventory/product?ids=${ids.join(',')}`, {
+        method: 'DELETE'
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Error al eliminar');
+      }
+      
+      // Update local state by filtering out deleted products
+      setProducts(prevProducts => prevProducts.filter(p => !ids.includes(p.id)));
+      setSelectedIds([]);
+    } catch (error: any) {
+      console.error(error);
+      alert(error.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -141,6 +168,16 @@ export default function InventarioPage() {
           <p className="text-gray-600 mt-1">Control de productos y movimientos</p>
         </div>
         <div className="flex gap-2">
+          {selectedIds.length > 0 && (
+            <button
+              onClick={() => handleDelete(selectedIds)}
+              disabled={isDeleting}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400"
+            >
+              <Trash2 size={20} />
+              Eliminar ({selectedIds.length})
+            </button>
+          )}
           <button
             onClick={() => {
               setSelectedProduct(null);
@@ -279,6 +316,20 @@ export default function InventarioPage() {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
+                    <th className="px-6 py-3 text-left w-10">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedIds.length === filteredProducts.length && filteredProducts.length > 0}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds(filteredProducts.map(p => p.id));
+                          } else {
+                            setSelectedIds([]);
+                          }
+                        }}
+                        className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                      />
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Imagen
                     </th>
@@ -313,6 +364,20 @@ export default function InventarioPage() {
                     const status = getStockStatus(product);
                     return (
                       <tr key={product.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4">
+                          <input 
+                            type="checkbox" 
+                            checked={selectedIds.includes(product.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedIds([...selectedIds, product.id]);
+                              } else {
+                                setSelectedIds(selectedIds.filter(id => id !== product.id));
+                              }
+                            }}
+                            className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          />
+                        </td>
                         <td className="px-6 py-4">
                           {product.image ? (
                             <img
@@ -380,7 +445,9 @@ export default function InventarioPage() {
                               <Edit size={18} />
                             </button>
                             <button
-                              className="text-red-600 hover:text-red-900"
+                              onClick={() => handleDelete([product.id])}
+                              disabled={isDeleting}
+                              className="text-red-600 hover:text-red-900 disabled:opacity-50"
                               title="Eliminar"
                             >
                               <Trash2 size={18} />
@@ -489,16 +556,49 @@ export default function InventarioPage() {
             setShowProductModal(false);
             setSelectedProduct(null);
           }}
-          onSave={(product) => {
-            if (selectedProduct) {
-              // Editar
-              setProducts(products.map(p => p.id === product.id ? product : p));
-            } else {
-              // Crear
-              setProducts([...products, { ...product, id: `${Date.now()}` }]);
+          onSave={async (product) => {
+            try {
+              const method = selectedProduct ? 'PUT' : 'POST';
+              const res = await fetch('/api/admin/inventory/product', {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(product)
+              });
+              
+              if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.error || 'Error saving product');
+              }
+              
+              // Recargar productos desde el servidor para tener los IDs reales
+              const productsRes = await fetch('/api/admin/inventory');
+              const productsData = await productsRes.json();
+              const mappedProducts = productsData.products.map((p: any) => ({
+                id: String(p.product_id),
+                name: p.name,
+                sku: p.sku,
+                category: p.category,
+                currentStock: p.current_stock,
+                minStock: p.min_stock,
+                maxStock: p.max_stock,
+                unitCost: p.unit_cost,
+                salePrice: p.price,
+                taxRate: p.tax_rate,
+                status: p.status,
+                supplier: p.supplier,
+                barcode: p.barcode,
+                image: p.image,
+                createdAt: new Date(),
+                updatedAt: new Date()
+              }));
+              
+              setProducts(mappedProducts);
+              setShowProductModal(false);
+              setSelectedProduct(null);
+            } catch (error) {
+              console.error(error);
+              alert("Error al guardar el producto");
             }
-            setShowProductModal(false);
-            setSelectedProduct(null);
           }}
         />
       )}
