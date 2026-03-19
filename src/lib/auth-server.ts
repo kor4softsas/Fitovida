@@ -87,15 +87,18 @@ export async function registerUser(data: {
     const passwordHash = await hashPassword(data.password);
 
     // Crear usuario
-      const userId = crypto.randomUUID();
-      await query(
-        `INSERT INTO users (id, email, password_hash, first_name, last_name, phone, is_verified)
-         VALUES (?, ?, ?, ?, ?, ?, true)`,
-        [userId, data.email.toLowerCase(), passwordHash, data.firstName, data.lastName, data.phone || null]
+    const userId = crypto.randomUUID();
+    await query(
+      `INSERT INTO users (id, email, password_hash, first_name, last_name, phone, is_verified)
+       VALUES (?, ?, ?, ?, ?, ?, true)`,
+      [userId, data.email.toLowerCase(), passwordHash, data.firstName, data.lastName, data.phone || null]
+    );
 
     // Obtener el usuario creado
     const user = await queryOne<User>(
         'SELECT id, email, first_name, last_name, phone, is_verified, is_admin, created_at FROM users WHERE email = ?',
+        [data.email.toLowerCase()]
+    );
 
     if (!user) {
       return { success: false, error: 'Error al crear el usuario' };
@@ -135,6 +138,7 @@ export async function loginUser(email: string, password: string): Promise<{
         last_name: demoUser.lastName,
         phone: demoUser.phone,
         is_verified: true,
+        is_admin: demoUser.email === 'admin@fitovida.com',
         created_at: new Date(demoUser.createdAt),
       };
 
@@ -240,6 +244,7 @@ export async function getCurrentUser(): Promise<User | null> {
         last_name: demoUser.lastName,
         phone: demoUser.phone,
         is_verified: true,
+        is_admin: demoUser.email === 'admin@fitovida.com',
         created_at: new Date(demoUser.createdAt),
       };
     }

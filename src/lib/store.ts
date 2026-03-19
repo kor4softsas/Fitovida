@@ -205,6 +205,14 @@ export const useCartStore = create<CartStore>()(
           body: JSON.stringify(order)
         }).catch(err => console.error('Error guardando la orden en DB:', err));
 
+        return order;
+      },
+
+      // Crear orden desde pendingOrder (después del pago)
+      createOrderFromPending: (paymentId, paymentProvider = 'none', userId) => {
+        const state = get();
+        const pending = state.pendingOrder;
+
         if (!pending) return null;
         
         const order: Order = {
@@ -241,6 +249,15 @@ export const useCartStore = create<CartStore>()(
           body: JSON.stringify(order)
         }).catch(err => console.error('Error guardando la orden pendiente en DB:', err));
 
+        return order;
+      },
+
+      // Actualizar estado de una orden
+      updateOrderStatus: (orderNumber, status, paymentId) => {
+        set((state) => ({
+          orders: state.orders.map(order =>
+            order.orderNumber === orderNumber
+              ? { ...order, status, ...(paymentId && { paymentId }) }
               : order
           )
         }));
