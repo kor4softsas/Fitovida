@@ -36,6 +36,31 @@ export default function InventarioPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const readErrorMessage = useCallback(async (response: Response, fallback: string) => {
+    try {
+      const raw = await response.text();
+      if (!raw) {
+        return fallback;
+      }
+
+      try {
+        const parsed = JSON.parse(raw) as { error?: string; message?: string };
+        if (typeof parsed.error === 'string' && parsed.error.trim()) {
+          return parsed.error;
+        }
+        if (typeof parsed.message === 'string' && parsed.message.trim()) {
+          return parsed.message;
+        }
+      } catch {
+        // Non-JSON response body.
+      }
+
+      return raw.length <= 180 ? raw : fallback;
+    } catch {
+      return fallback;
+    }
+  }, []);
+
   const fetchMovements = useCallback(async () => {
     setMovementsLoading(true);
     try {
@@ -69,7 +94,7 @@ export default function InventarioPage() {
     }
   }, []);
 
-  const handleDelete = async (ids: string[]) => {
+  const handleDelete = useCallback(async (ids: string[]) => {
     if (!window.confirm(`¿Estás seguro de que quieres eliminar ${ids.length} producto(s)?`)) return;
     
     setIsDeleting(true);
@@ -79,8 +104,8 @@ export default function InventarioPage() {
       });
       
       if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Error al eliminar');
+        const message = await readErrorMessage(res, 'Error al eliminar');
+        throw new Error(message);
       }
       
       // Update local state by filtering out deleted products
@@ -92,7 +117,7 @@ export default function InventarioPage() {
     } finally {
       setIsDeleting(false);
     }
-  };
+  }, [readErrorMessage]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -601,12 +626,16 @@ export default function InventarioPage() {
               });
               
               if (!res.ok) {
-                const error = await res.json();
-                throw new Error(error.error || 'Error saving product');
+                const message = await readErrorMessage(res, 'Error al guardar el producto');
+                throw new Error(message);
               }
               
               // Recargar productos desde el servidor para tener los IDs reales
               const productsRes = await fetch('/api/admin/inventory');
+              if (!productsRes.ok) {
+                throw new Error('Producto guardado, pero no se pudo recargar el listado de inventario');
+              }
+
               const productsData = await productsRes.json();
               const mappedProducts = productsData.products.map((p: any) => ({
                 id: String(p.product_id),
@@ -632,7 +661,7 @@ export default function InventarioPage() {
               setSelectedProduct(null);
             } catch (error) {
               console.error(error);
-              alert("Error al guardar el producto");
+              alert(error instanceof Error ? error.message : 'Error al guardar el producto');
             }
           }}
         />

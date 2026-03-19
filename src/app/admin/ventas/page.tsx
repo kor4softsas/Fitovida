@@ -24,6 +24,34 @@ export default function VentasPage() {
   // Modal HTML para impresión nativa en la misma página
   const [showFactura, setShowFactura] = useState(false);
   const [facturaSale, setFacturaSale] = useState<Sale | null>(null);
+
+  const readErrorMessage = async (response: Response, fallback: string) => {
+    try {
+      const raw = await response.text();
+      if (!raw) {
+        return fallback;
+      }
+
+      try {
+        const parsed = JSON.parse(raw) as { error?: string; message?: string; detail?: string };
+        if (typeof parsed.error === 'string' && parsed.error.trim()) {
+          return parsed.error;
+        }
+        if (typeof parsed.message === 'string' && parsed.message.trim()) {
+          return parsed.message;
+        }
+        if (typeof parsed.detail === 'string' && parsed.detail.trim()) {
+          return parsed.detail;
+        }
+      } catch {
+        // Non-JSON response body.
+      }
+
+      return raw.length <= 180 ? raw : fallback;
+    } catch {
+      return fallback;
+    }
+  };
   const printFactura = (sale: Sale) => {
     setFacturaSale(sale);
     setShowFactura(true);
@@ -335,11 +363,11 @@ export default function VentasPage() {
               });
 
               if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Error al guardar la venta');
+                const message = await readErrorMessage(response, 'Error al guardar la venta');
+                throw new Error(message);
               }
 
-              const result = await response.json();
+              await response.json();
               
               // Refetch para actualizar listado real desde BD
               // Simplemente recargamos la página o llamamos a fetchData de nuevo
