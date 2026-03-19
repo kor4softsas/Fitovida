@@ -34,8 +34,15 @@ export async function POST(request: NextRequest) {
           amount: transaction.amount_in_cents / 100,
         });
 
-        // En producción, aquí actualizarías la base de datos
-        // Por ahora, el cliente actualiza localStorage cuando regresa del banco
+        // Actualizar la orden en la base de datos
+        const { query } = await import('@/lib/db');
+        if (reference) {
+          const mappedStatus = status === 'APPROVED' ? 'confirmed' : status === 'DECLINED' || status === 'ERROR' ? 'failed' : 'pending';
+          await query(
+            'UPDATE orders SET status = ?, payment_id = ? WHERE order_number = ?',
+            [mappedStatus, transaction.id, reference]
+          );
+        }
         
         if (status === 'APPROVED') {
           console.log('✅ Pago PSE aprobado:', reference);

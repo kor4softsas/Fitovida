@@ -198,14 +198,13 @@ export const useCartStore = create<CartStore>()(
           isCheckoutOpen: false
         }));
         
-        return order;
-      },
-      
-      // Crear orden desde pendingOrder (después del pago)
-      createOrderFromPending: (paymentId, paymentProvider = 'none', userId) => {
-        const state = get();
-        const pending = state.pendingOrder;
-        
+        // Sincronizar en DB de fondo
+        fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(order)
+        }).catch(err => console.error('Error guardando la orden en DB:', err));
+
         if (!pending) return null;
         
         const order: Order = {
@@ -235,15 +234,13 @@ export const useCartStore = create<CartStore>()(
           isCheckoutOpen: false
         }));
         
-        return order;
-      },
-      
-      // Actualizar estado de una orden
-      updateOrderStatus: (orderNumber, status, paymentId) => {
-        set((state) => ({
-          orders: state.orders.map(order => 
-            order.orderNumber === orderNumber
-              ? { ...order, status, ...(paymentId && { paymentId }) }
+        // Sincronizar en DB de fondo
+        fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(order)
+        }).catch(err => console.error('Error guardando la orden pendiente en DB:', err));
+
               : order
           )
         }));

@@ -2,15 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
 interface OrderRow {
-  id: number;
+  id: string;
   order_number: string;
   user_id: string | null;
   customer_name: string;
   customer_email: string;
   customer_phone: string;
-  customer_address: string;
-  customer_city: string;
-  customer_zip: string;
+  shipping_address: string;
+  shipping_city: string;
+  shipping_department: string;
+  shipping_zip: string;
   payment_method: string;
   payment_id: string | null;
   payment_provider: string | null;
@@ -25,8 +26,8 @@ interface OrderRow {
 }
 
 interface OrderItemRow {
-  id: number;
-  order_id: number;
+  id: string;
+  order_id: string;
   product_id: number;
   product_name: string;
   product_image: string;
@@ -107,13 +108,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Crear la orden
-    const result = await query<{ insertId: number }>(
+    await query(
       `INSERT INTO orders (
-        order_number, user_id, customer_name, customer_email, customer_phone,
-        customer_address, customer_city, customer_zip, payment_method,
+        order_number, user_id, customer_name, customer_email, customer_phone,   
+        shipping_address, shipping_city, shipping_department, shipping_zip, payment_method,
         payment_id, payment_provider, status, notes,
         subtotal, shipping, discount, discount_code, total
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         orderNumber,
         userId || null,
@@ -121,8 +122,9 @@ export async function POST(request: NextRequest) {
         customer.email,
         customer.phone,
         customer.address,
-        customer.city,
-        customer.zip,
+        customer.city || 'Cali',
+        customer.department || 'Valle del Cauca',
+        customer.zip || '',
         paymentMethod,
         paymentId || null,
         paymentProvider || null,
@@ -136,15 +138,20 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    const orderId = (result as any).insertId;
+    // Obtener el ID generado por la base de datos
+    const [insertedOrder] = await query<OrderRow>(
+      'SELECT id FROM orders WHERE order_number = ?',
+      [orderNumber]
+    );
 
-    if (!orderId) {
+    if (!insertedOrder || !insertedOrder.id) {
       return NextResponse.json(
-        { error: 'Error creando orden' },
+        { error: 'Error creando orden, no se pudo recuperar el ID' },
         { status: 500 }
       );
     }
-
+    
+    const orderId = insertedOrder.id;
     // 2. Crear los items de la orden y registrar movimientos de inventario
     const orderItemsValues = items.map((item: { id: number; name: string; image: string; quantity: number; price: number }) => [
       orderId,

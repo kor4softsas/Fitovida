@@ -20,6 +20,7 @@ export interface User {
   last_name: string;
   phone?: string;
   is_verified: boolean;
+    is_admin: boolean;
   created_at: Date;
 }
 
@@ -86,17 +87,15 @@ export async function registerUser(data: {
     const passwordHash = await hashPassword(data.password);
 
     // Crear usuario
-    await query(
-      `INSERT INTO users (email, password_hash, first_name, last_name, phone, is_verified) 
-       VALUES (?, ?, ?, ?, ?, true)`,
-      [data.email.toLowerCase(), passwordHash, data.firstName, data.lastName, data.phone || null]
-    );
+      const userId = crypto.randomUUID();
+      await query(
+        `INSERT INTO users (id, email, password_hash, first_name, last_name, phone, is_verified)
+         VALUES (?, ?, ?, ?, ?, ?, true)`,
+        [userId, data.email.toLowerCase(), passwordHash, data.firstName, data.lastName, data.phone || null]
 
     // Obtener el usuario creado
     const user = await queryOne<User>(
-      'SELECT id, email, first_name, last_name, phone, is_verified, created_at FROM users WHERE email = ?',
-      [data.email.toLowerCase()]
-    );
+        'SELECT id, email, first_name, last_name, phone, is_verified, is_admin, created_at FROM users WHERE email = ?',
 
     if (!user) {
       return { success: false, error: 'Error al crear el usuario' };
@@ -152,7 +151,7 @@ export async function loginUser(email: string, password: string): Promise<{
     let user;
     try {
       user = await queryOne<User & { password_hash: string }>(
-        'SELECT id, email, password_hash, first_name, last_name, phone, is_verified, created_at FROM users WHERE email = ?',
+        'SELECT id, email, password_hash, first_name, last_name, phone, is_verified, is_admin, created_at FROM users WHERE email = ?',
         [email.toLowerCase()]
       );
       console.log('[AUTH] Query BD completada. Usuario encontrado:', user ? 'SÍ' : 'NO');
@@ -258,7 +257,7 @@ export async function getCurrentUser(): Promise<User | null> {
 
     // Obtener usuario
     const user = await queryOne<User>(
-      'SELECT id, email, first_name, last_name, phone, is_verified, created_at FROM users WHERE id = ?',
+      'SELECT id, email, first_name, last_name, phone, is_verified, is_admin, created_at FROM users WHERE id = ?',
       [session.user_id]
     );
 
