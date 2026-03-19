@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   Plus, 
   Search, 
@@ -25,6 +25,7 @@ export default function InventarioPage() {
   const [products, setProducts] = useState<InventoryProduct[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [movementsLoading, setMovementsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [view, setView] = useState<'products' | 'movements'>('products');
@@ -34,6 +35,39 @@ export default function InventarioPage() {
   const [selectedProduct, setSelectedProduct] = useState<InventoryProduct | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const fetchMovements = useCallback(async () => {
+    setMovementsLoading(true);
+    try {
+      const movementsRes = await fetch('/api/admin/inventory/movements?limit=50');
+      if (!movementsRes.ok) {
+        throw new Error('Error cargando movimientos');
+      }
+
+      const movementsData = await movementsRes.json();
+      const mappedMovements = (movementsData.movements || []).map((m: any) => ({
+        id: m.id,
+        productId: String(m.product_id),
+        productName: m.product_name,
+        type: m.type,
+        quantity: m.quantity,
+        previousStock: m.previous_stock,
+        newStock: m.new_stock,
+        unitCost: m.unit_cost,
+        totalCost: m.total_cost,
+        reason: m.reason,
+        reference: m.reference,
+        createdBy: m.created_by,
+        createdAt: new Date(m.created_at)
+      }));
+
+      setMovements(mappedMovements);
+    } catch (error) {
+      console.error('Error cargando movimientos:', error);
+    } finally {
+      setMovementsLoading(false);
+    }
+  }, []);
 
   const handleDelete = async (ids: string[]) => {
     if (!window.confirm(`¿Estás seguro de que quieres eliminar ${ids.length} producto(s)?`)) return;
@@ -91,37 +125,24 @@ export default function InventarioPage() {
         }));
         
         setProducts(mappedProducts);
-        
-        // Cargar movimientos recientes
-        const movementsRes = await fetch('/api/admin/inventory/movements?limit=50');
-        if (movementsRes.ok) {
-          const movementsData = await movementsRes.json();
-          const mappedMovements = movementsData.movements.map((m: any) => ({
-            id: m.id,
-            productId: String(m.product_id),
-            productName: m.product_name,
-            type: m.type,
-            quantity: m.quantity,
-            previousStock: m.previous_stock,
-            newStock: m.new_stock,
-            unitCost: m.unit_cost,
-            totalCost: m.total_cost,
-            reason: m.reason,
-            reference: m.reference,
-            createdBy: m.created_by,
-            createdAt: new Date(m.created_at)
-          }));
-          setMovements(mappedMovements);
-        }
       } catch (error) {
         console.error('Error cargando datos:', error);
       } finally {
         setLoading(false);
       }
+
+      // Movimientos se cargan en segundo plano para no bloquear la vista inicial.
+      void fetchMovements();
     };
 
-    fetchData();
-  }, []);
+    void fetchData();
+  }, [fetchMovements]);
+
+  useEffect(() => {
+    if (view === 'movements' && movements.length === 0 && !movementsLoading) {
+      void fetchMovements();
+    }
+  }, [view, movements.length, movementsLoading, fetchMovements]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-CO', {
@@ -496,6 +517,20 @@ export default function InventarioPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
+                {movementsLoading && movements.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-10 text-center text-sm text-gray-500">
+                      Cargando movimientos...
+                    </td>
+                  </tr>
+                )}
+                {!movementsLoading && movements.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-10 text-center text-sm text-gray-500">
+                      No hay movimientos para mostrar.
+                    </td>
+                  </tr>
+                )}
                 {movements.map((movement) => (
                   <tr key={movement.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">

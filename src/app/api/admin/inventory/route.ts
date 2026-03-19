@@ -3,6 +3,9 @@ import { query, queryOne } from '@/lib/db';
 
 type ColumnRow = { column_name: string };
 
+const SCHEMA_CACHE_TTL_MS = 5 * 60 * 1000;
+const columnCache = new Map<string, { expiresAt: number; columns: Set<string> }>();
+
 function isSchemaIssue(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
     return false;
@@ -33,6 +36,12 @@ function isDatabaseIssue(error: unknown): boolean {
 }
 
 async function getColumnSet(tableName: string): Promise<Set<string>> {
+  const now = Date.now();
+  const cached = columnCache.get(tableName);
+  if (cached && cached.expiresAt > now) {
+    return cached.columns;
+  }
+
   try {
     const rows = await query<ColumnRow>(
       `SELECT LOWER(COLUMN_NAME) as column_name
@@ -41,7 +50,10 @@ async function getColumnSet(tableName: string): Promise<Set<string>> {
       [tableName]
     );
 
-    return new Set(rows.map((row) => row.column_name));
+    const columns = new Set(rows.map((row) => row.column_name));
+    columnCache.set(tableName, { expiresAt: now + SCHEMA_CACHE_TTL_MS, columns });
+
+    return columns;
   } catch {
     return new Set<string>();
   }
