@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const period = searchParams.get('period') || 'month';
@@ -125,7 +128,8 @@ export async function GET(request: NextRequest) {
     if (categoriesData && Array.isArray(categoriesData)) {
       for (const cat of categoriesData) {
         if (cat && cat.category) {
-          categoryMap[cat.category] = (categoryMap[cat.category] || 0) + (cat.amount || 0);
+          const catAmount = Number(cat.amount) || 0;
+          categoryMap[cat.category] = (categoryMap[cat.category] || 0) + catAmount;
         }
       }
     }
@@ -145,8 +149,16 @@ export async function GET(request: NextRequest) {
       sales_amount: salesData && salesData[0]?.sales_amount ? Number(salesData[0].sales_amount) : 0,
       products_sold: productsData && productsData[0]?.products_sold ? Number(productsData[0].products_sold) : 0,
       average_ticket: salesData && salesData[0]?.average_ticket ? Number(salesData[0].average_ticket) : 0,
-      top_products: topProducts && Array.isArray(topProducts) ? topProducts.slice(0, 10) : [],
-      top_customers: topCustomers && Array.isArray(topCustomers) ? topCustomers : [],
+      top_products: topProducts && Array.isArray(topProducts) ? topProducts.map(p => ({
+        ...p,
+        quantity: Number(p.quantity) || 0,
+        revenue: Number(p.revenue) || 0
+      })).slice(0, 10) : [],
+      top_customers: topCustomers && Array.isArray(topCustomers) ? topCustomers.map(c => ({
+        ...c,
+        purchases: Number(c.purchases) || 0,
+        total: Number(c.total) || 0
+      })) : [],
       categories_breakdown: categories_breakdown || []
     };
 
