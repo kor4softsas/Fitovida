@@ -28,7 +28,7 @@ ALTER TABLE users
 -- =============================================
 CREATE TABLE IF NOT EXISTS sessions (
   id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-  user_id VARCHAR(255) NOT NULL,
+  user_id VARCHAR(100) NOT NULL,
   token TEXT NOT NULL,
   expires_at TIMESTAMP NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

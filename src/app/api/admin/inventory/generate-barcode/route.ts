@@ -12,6 +12,7 @@ function isDatabaseError(error: unknown): boolean {
     'ER_ACCESS_DENIED_NO_PASSWORD_ERROR',
     'ER_BAD_DB_ERROR',
     'ER_NO_SUCH_TABLE',
+    'ER_BAD_FIELD_ERROR',
     'ECONNREFUSED',
     'ETIMEDOUT',
     'PROTOCOL_CONNECTION_LOST'
@@ -57,15 +58,13 @@ function generateCode128(): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { format = 'EAN-13', productId } = body;
-
-    if (!productId) {
-      return NextResponse.json(
-        { error: 'ID de producto requerido' },
-        { status: 400 }
-      );
+    let body: any = {};
+    try {
+      body = await request.json();
+    } catch {
+      body = {};
     }
+    const { format = 'EAN-13' } = body;
 
     let barcode: string;
     let attempts = 0;
@@ -88,11 +87,9 @@ export async function POST(request: NextRequest) {
           [barcode]
         );
       } catch (dbError) {
-        if (isDatabaseError(dbError)) {
-          dbValidationSkipped = true;
-          break;
-        }
-        throw dbError;
+        // No bloquear la operación de generación por fallas de validación en BD.
+        dbValidationSkipped = true;
+        break;
       }
 
       if (!existing) {
@@ -136,16 +133,9 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const productId = searchParams.get('productId');
+    const productId = searchParams.get('productId') || 'new';
     const currentBarcode = searchParams.get('currentBarcode');
     const format = searchParams.get('format') || 'EAN-13';
-
-    if (!productId) {
-      return NextResponse.json(
-        { error: 'ID de producto requerido' },
-        { status: 400 }
-      );
-    }
 
     let barcode: string;
     let attempts = 0;
@@ -168,16 +158,21 @@ export async function GET(request: NextRequest) {
       // Verificar unicidad en BD
       let existing: unknown = null;
       try {
-        existing = await queryOne(
-          'SELECT id FROM inventory_products WHERE barcode = ? AND id != ?',
-          [barcode, productId]
-        );
-      } catch (dbError) {
-        if (isDatabaseError(dbError)) {
-          dbValidationSkipped = true;
-          break;
+        if (productId === 'new') {
+          existing = await queryOne(
+            'SELECT id FROM inventory_products WHERE barcode = ?',
+            [barcode]
+          );
+        } else {
+          existing = await queryOne(
+            'SELECT id FROM inventory_products WHERE barcode = ? AND id != ?',
+            [barcode, productId]
+          );
         }
-        throw dbError;
+      } catch (dbError) {
+        // No bloquear la operación de regeneración por fallas de validación en BD.
+        dbValidationSkipped = true;
+        break;
       }
 
       if (!existing) {
