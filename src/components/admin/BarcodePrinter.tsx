@@ -58,12 +58,10 @@ const FORMATS: Record<string, LabelFormat> = {
 
 function BarcodeLabel({
   product,
-  format,
-  index
+  format
 }: {
   product: InventoryProduct;
   format: LabelFormat;
-  index: number;
 }) {
   const barcodeRef = useRef<SVGSVGElement>(null);
 
@@ -88,16 +86,34 @@ function BarcodeLabel({
 
   return (
     <div
-      className="bg-white border border-gray-300 flex flex-col items-center justify-center p-2 overflow-hidden"
       style={{
         width: `${format.width}mm`,
         height: `${format.height}mm`,
-        pageBreakInside: 'avoid'
+        pageBreakInside: 'avoid',
+        backgroundColor: '#ffffff',
+        border: '1px solid #d1d5db',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '2mm',
+        overflow: 'hidden',
+        color: '#111827',
+        fontFamily: 'Arial, sans-serif'
       }}
     >
       {/* Nombre del producto */}
-      <div className="text-center mb-1" style={{ fontSize: '8px', fontWeight: 'bold', lineHeight: '1' }}>
-        <p className="truncate max-w-full">{product.name}</p>
+      <div style={{ textAlign: 'center', marginBottom: '2px', fontSize: '8px', fontWeight: 'bold', lineHeight: '1', width: '100%' }}>
+        <p
+          style={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: '100%'
+          }}
+        >
+          {product.name}
+        </p>
       </div>
 
       {/* SKU */}
@@ -417,8 +433,13 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
               <h3 className="font-semibold text-gray-900 mb-4">Vista Previa</h3>
               <div
                 ref={printRef}
-                className="overflow-auto bg-gray-50 p-4 rounded-lg"
                 style={{
+                  overflow: 'auto',
+                  backgroundColor: '#f9fafb',
+                  padding: '1rem',
+                  borderRadius: '0.5rem',
+                  color: '#111827',
+                  fontFamily: 'Arial, sans-serif',
                   display: 'grid',
                   gridTemplateColumns: `repeat(${format.columns}, ${format.width}mm)`,
                   gap: `${format.spacingX}mm ${format.spacingY}mm`
@@ -430,7 +451,6 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
                       key={`${idx}-${qty}`}
                       product={product}
                       format={format}
-                      index={idx}
                     />
                   ))
                 )}
