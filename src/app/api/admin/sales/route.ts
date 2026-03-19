@@ -140,13 +140,17 @@ export async function POST(request: NextRequest) {
       saleNumber = `V-2026-${String(lastNum).padStart(3, '0')}`;
     }
 
+    // Generar UUID para la venta
+    const saleId = crypto.randomUUID();
+
     // Insertar venta principal
-    const [saleResult] = await query(
+    await query(
       `INSERT INTO admin_sales 
-       (sale_number, customer_name, customer_email, customer_phone, customer_document,
+       (id, sale_number, customer_name, customer_email, customer_phone, customer_document,
         subtotal, tax, discount, total, payment_method, payment_status, notes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        saleId,
         saleNumber,
         customer_name,
         customer_email || null,
@@ -162,8 +166,6 @@ export async function POST(request: NextRequest) {
         created_by
       ]
     );
-
-    const saleId = (saleResult as any).insertId;
 
     // Insertar items de la venta
     for (const item of items) {
@@ -218,19 +220,52 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Registrar ingreso automáticamente
+    // Registrar ingreso automáticamente en la tabla incomes
     await query(
-      `INSERT INTO incomes (description, amount, source, reference, notes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO incomes (date, description, amount, category, reference, payment_method, status, notes, created_by)
+       VALUES (CURDATE(), ?, ?, 'sales', ?, ?, 'received', ?, ?)`,
       [
         `Venta: ${saleNumber}`,
         total,
-        'sales',
         saleNumber,
+        payment_method || 'cash',
         notes || null,
         created_by
       ]
     );
+
+    // --- GENERAR FACTURA DIAN AUTOMÁTICAMENTE ---
+    const [lastInvoice] = await query('SELECT number FROM invoices ORDER BY id DESC LIMIT 1') as any[];
+    let nextNum = 1001;
+    if (lastInvoice && lastInvoice.number) {
+       const parts = lastInvoice.number.split('-');
+       if (parts.length > 1) {
+          nextNum = parseInt(parts[1]) + 1;
+       } else {
+          nextNum++;
+       }
+    }
+    const invoiceNumber = `FAC-${nextNum}`;
+    const dianResolution = 'Resolución 000123-2025';
+
+    await query(
+      `INSERT INTO invoices 
+        (number, dian_resolution, sale_id, sale_type, customer_name, customer_email, 
+         customer_document, subtotal, tax, total, payment_method, status)
+       VALUES (?, ?, ?, 'admin', ?, ?, ?, ?, ?, ?, ?, 'issued')`,
+      [
+        invoiceNumber, dianResolution, saleId, 
+        customer_name, customer_email || null, customer_document || null,
+        subtotal || 0, tax || 0, total, payment_method || 'cash'
+      ]
+    );
+
+    // Actualizar la venta con el número de factura
+    await query(
+      'UPDATE admin_sales SET invoice_number = ?, invoice_status = ? WHERE id = ?', 
+      [invoiceNumber, 'authorized', saleId]
+    );
+    // --------------------------------------------
 
     return NextResponse.json({
       success: true,
@@ -238,10 +273,10 @@ export async function POST(request: NextRequest) {
       sale_number: saleNumber,
       sale_id: saleId
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error en POST /api/admin/sales:', error);
     return NextResponse.json(
-      { error: 'Error al registrar venta' },
+      { error: 'Error al registrar venta', detail: error?.message || String(error) },
       { status: 500 }
     );
   }

@@ -20,11 +20,7 @@ export default function VentasPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showNewSaleModal, setShowNewSaleModal] = useState(false);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
-  const [products] = useState([
-    { id: 'prod-1', name: 'Proteína Whey 2kg', price: 150000, stock: 25, tax: 19 },
-    { id: 'prod-2', name: 'Creatina Monohidrato 300g', price: 50000, stock: 15, tax: 19 },
-    { id: 'prod-3', name: 'BCAA 5000 120 caps', price: 80000, stock: 10, tax: 19 },
-  ]);
+  const [inventoryProducts, setInventoryProducts] = useState<any[]>([]);
   // Modal HTML para impresión nativa en la misma página
   const [showFactura, setShowFactura] = useState(false);
   const [facturaSale, setFacturaSale] = useState<Sale | null>(null);
@@ -37,44 +33,50 @@ export default function VentasPage() {
   };
 
   useEffect(() => {
-    const fetchSales = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/admin/sales');
-        if (!response.ok) throw new Error('Error cargando ventas');
+        const [salesRes, inventoryRes] = await Promise.all([
+          fetch('/api/admin/sales'),
+          fetch('/api/admin/inventory')
+        ]);
         
-        const data = await response.json();
-        
-        // Mapear datos a formato esperado
-        const mappedSales = data.sales.map((s: any) => ({
-          id: s.id,
-          saleNumber: s.sale_number,
-          date: new Date(s.created_at),
-          customerName: s.customer_name,
-          customerEmail: s.customer_email,
-          customerPhone: s.customer_phone || '',
-          customerDocument: s.customer_document || '',
-          items: [],
-          subtotal: s.subtotal || s.total,
-          tax: s.tax || 0,
-          discount: s.discount || 0,  
-          total: s.total,
-          paymentMethod: s.payment_method,
-          status: s.status || 'completed',
-          createdBy: 'admin',
-          createdAt: new Date(s.created_at),
-          updatedAt: new Date(s.created_at)
-        }));
-        
-        setSales(mappedSales);
+        if (salesRes.ok) {
+          const data = await salesRes.json();
+          const mappedSales = data.sales.map((s: any) => ({
+            id: s.id,
+            saleNumber: s.sale_number,
+            date: new Date(s.created_at),
+            customerName: s.customer_name,
+            customerEmail: s.customer_email,
+            customerPhone: s.customer_phone || '',
+            customerDocument: s.customer_document || '',
+            items: [],
+            subtotal: s.subtotal || s.total,
+            tax: s.tax || 0,
+            discount: s.discount || 0,  
+            total: s.total,
+            paymentMethod: s.payment_method,
+            status: s.status || 'completed',
+            createdBy: 'admin',
+            createdAt: new Date(s.created_at),
+            updatedAt: new Date(s.created_at)
+          }));
+          setSales(mappedSales);
+        }
+
+        if (inventoryRes.ok) {
+          const invData = await inventoryRes.json();
+          setInventoryProducts(invData.products || []);
+        }
       } catch (error) {
-        console.error('Error cargando ventas:', error);
+        console.error('Error cargando datos:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchSales();
+    fetchData();
   }, []);
 
   const formatCurrency = (value: number) => {
@@ -297,11 +299,55 @@ export default function VentasPage() {
       {/* New Sale Modal */}
       {showNewSaleModal && (
         <NewSaleModal 
-          products={products}
+          products={inventoryProducts}
           onClose={() => setShowNewSaleModal(false)}
-          onSave={(sale) => {
-            setSales([sale, ...sales]);
-            setShowNewSaleModal(false);
+          onSave={async (sale) => {
+            try {
+              // Preparar payload para el backend con snake_case
+              const payload = {
+                customer_name: sale.customerName,
+                customer_email: sale.customerEmail,
+                customer_phone: sale.customerPhone,
+                customer_document: sale.customerDocument,
+                payment_method: sale.paymentMethod,
+                subtotal: sale.subtotal,
+                tax: sale.tax,
+                discount: sale.discount,
+                total: sale.total,
+                notes: '',
+                created_by: 'admin',
+                items: sale.items.map(item => ({
+                  product_id: parseInt(item.productId),
+                  product_name: item.productName,
+                  quantity: item.quantity,
+                  unit_price: item.unitPrice,
+                  discount: item.discount,
+                  tax: item.tax,
+                  subtotal: item.subtotal,
+                  total: item.total
+                }))
+              };
+
+              const response = await fetch('/api/admin/sales', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+
+              if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Error al guardar la venta');
+              }
+
+              const result = await response.json();
+              
+              // Refetch para actualizar listado real desde BD
+              // Simplemente recargamos la página o llamamos a fetchData de nuevo
+              window.location.reload(); 
+            } catch (error) {
+              console.error('Error:', error);
+              alert(error instanceof Error ? error.message : 'Error al procesar la venta');
+            }
           }}
         />
       )}
@@ -433,7 +479,7 @@ function NewSaleModal({
   onClose,
   onSave 
 }: { 
-  products: Array<{ id: string; name: string; price: number; stock: number; tax: number }>;
+  products: Array<any>;
   onClose: () => void;
   onSave: (sale: Sale) => void;
 }) {
@@ -444,28 +490,70 @@ function NewSaleModal({
   const [paymentMethod, setPaymentMethod] = useState<Sale['paymentMethod']>('cash');
   const [selectedItems, setSelectedItems] = useState<SaleItem[]>([]);
 
-  const addItem = (productId: string) => {
-    const product = products.find(p => p.id === productId);
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Enfocar automáticamente el input del código de barras al abrir
+    setTimeout(() => {
+      barcodeInputRef.current?.focus();
+    }, 100);
+  }, []);
+
+  const handleBarcodeSubmit = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const code = barcodeInput.trim();
+      if (!code) return;
+
+      const product = products.find(p => p.barcode === code);
+      if (product) {
+        if (product.current_stock <= 0) {
+          alert('Este producto no tiene stock disponible.');
+        } else {
+          addItem(product.product_id);
+        }
+      } else {
+        alert('Producto no encontrado en el inventario.');
+      }
+      setBarcodeInput('');
+    }
+  };
+
+  const addItem = (productId: string | number) => {
+    const product = products.find(p => p.product_id === productId);
     if (!product) return;
 
-    const existingItem = selectedItems.find(item => item.productId === productId);
+    const existingItem = selectedItems.find(item => item.productId === String(productId));
     if (existingItem) {
+      if (existingItem.quantity >= product.current_stock) {
+        alert('Stock máximo alcanzado para este producto.');
+        return;
+      }
       setSelectedItems(selectedItems.map(item => 
-        item.productId === productId
-          ? { ...item, quantity: item.quantity + 1 }
+        item.productId === String(productId)
+          ? { ...item, quantity: item.quantity + 1, subtotal: item.unitPrice * (item.quantity + 1), total: (item.unitPrice * (item.quantity + 1)) + ((item.unitPrice * (item.quantity + 1) * Number(product.tax_rate)) / 100), tax: ((item.unitPrice * (item.quantity + 1) * Number(product.tax_rate)) / 100) }
           : item
       ));
     } else {
+      if (product.current_stock <= 0) {
+        alert('Producto sin stock.');
+        return;
+      }
+      const taxRate = Number(product.tax_rate) || 0;
+      const price = Number(product.price);
+      const taxAmount = (price * taxRate) / 100;
+
       const newItem: SaleItem = {
         id: `item-${Date.now()}`,
-        productId: product.id,
+        productId: String(product.product_id),
         productName: product.name,
         quantity: 1,
-        unitPrice: product.price,
+        unitPrice: price,
         discount: 0,
-        tax: (product.price * product.tax) / 100,
-        subtotal: product.price,
-        total: product.price + (product.price * product.tax) / 100
+        tax: taxAmount,
+        subtotal: price,
+        total: price + taxAmount
       };
       setSelectedItems([...selectedItems, newItem]);
     }
@@ -589,18 +677,45 @@ function NewSaleModal({
             </div>
           </div>
 
-          {/* Productos */}
+          {/* Productos y Lector de Código de Barras */}
           <div className="space-y-4">
             <h3 className="font-semibold text-gray-900">Productos</h3>
-            <div className="flex gap-2 flex-wrap">
+            
+            {/* Buscador / Lector */}
+            <div className="flex gap-4 mb-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Escáner de Código de Barras (Presiona Enter)</label>
+                <input
+                  ref={barcodeInputRef}
+                  type="text"
+                  value={barcodeInput}
+                  onChange={(e) => setBarcodeInput(e.target.value)}
+                  onKeyDown={handleBarcodeSubmit}
+                  placeholder="Escanea el código del producto aquí..."
+                  className="w-full px-4 py-3 border-2 border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white text-lg shadow-inner"
+                />
+              </div>
+            </div>
+
+            <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50 flex gap-2 flex-wrap">
               {products.map(product => (
                 <button
                   key={product.id}
                   type="button"
-                  onClick={() => addItem(product.id)}
-                  className="px-3 py-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 text-sm"
+                  onClick={() => addItem(product.product_id)}
+                  disabled={product.current_stock <= 0}
+                  className={`px-3 py-2 border rounded-lg text-sm text-left flex flex-col min-w-[150px] transition-colors
+                    ${product.current_stock > 0 
+                      ? 'bg-white hover:bg-emerald-50 hover:border-emerald-300 border-gray-200' 
+                      : 'bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed'}`}
                 >
-                  + {product.name}
+                  <span className="font-medium text-gray-900 truncate w-full">{product.name}</span>
+                  <div className="flex justify-between items-center w-full mt-1">
+                     <span className="text-emerald-600 font-bold">{formatCurrency(product.price)}</span>
+                     <span className={`text-xs px-1.5 py-0.5 rounded ${product.current_stock > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                       Stock: {product.current_stock}
+                     </span>
+                  </div>
                 </button>
               ))}
             </div>

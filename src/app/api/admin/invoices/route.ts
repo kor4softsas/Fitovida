@@ -1,61 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
-interface Invoice {
-  id: string;
-  number: string;
-  customer_name: string;
-  customer_email: string;
-  total: number;
-  subtotal: number;
-  tax: number;
-  status: 'draft' | 'issued' | 'paid' | 'cancelled';
-  issued_date: string;
-  due_date: string;
-  payment_method: string;
-}
+// Deshabilitar caché para que siempre se obtenga data fresca
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
-    const limit = searchParams.get('limit') || '100';
-
+    const searchTerm = searchParams.get('search');
+    
     let sql = `
-      SELECT 
-        a.id,
-        CONCAT(a.sale_number, '') as number,
-        CONCAT(a.customer_first_name, ' ', a.customer_last_name) as customer_name,
-        a.customer_email,
-        a.total,
-        a.subtotal,
-        COALESCE(a.tax, 0) as tax,
-        COALESCE(a.status, 'issued') as status,
-        a.created_at as issued_date,
-        DATE_ADD(a.created_at, INTERVAL 30 DAY) as due_date,
-        COALESCE(a.payment_method, 'pending') as payment_method
-      FROM admin_sales a
+      SELECT id, number, dian_resolution, sale_id, sale_type, 
+             customer_name, customer_email, customer_document,
+             subtotal, tax, total, payment_method, status, 
+             issued_date, due_date, created_at
+      FROM invoices
       WHERE 1=1
     `;
-
-    if (status && status !== 'all') {
-      sql += ` AND a.status = ?`;
-    }
-
-    sql += ` ORDER BY a.created_at DESC LIMIT ${parseInt(limit)}`;
-
     const params: any[] = [];
+
     if (status && status !== 'all') {
+      sql += ' AND status = ?';
       params.push(status);
     }
 
-    const invoices = await query(sql, params) as Invoice[];
+    if (searchTerm) {
+      sql += ' AND (number LIKE ? OR customer_name LIKE ? OR customer_document LIKE ?)';
+      params.push(`%${searchTerm}%`, `%${searchTerm}%`, `%${searchTerm}%`);
+    }
 
-    return NextResponse.json({ invoices: invoices || [] }, { status: 200 });
+    sql += ' ORDER BY issued_date DESC';
+
+    const invoices = await query(sql, params);
+
+    return NextResponse.json({
+      invoices,
+      total: invoices.length
+    });
   } catch (error) {
-    console.error('GET /api/admin/invoices error:', error);
-    // Retornar lista vacía en caso de error
-    return NextResponse.json({ invoices: [] }, { status: 200 });
+    console.error('Error en GET /api/admin/invoices:', error);
+    return NextResponse.json(
+      { error: 'Error al obtener facturas' },
+      { status: 500 }
+    );
   }
 }
 
@@ -63,54 +52,46 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
-      customer_first_name,
-      customer_last_name,
-      customer_email,
-      items,
-      subtotal,
-      tax,
-      total,
-      payment_method = 'pending',
-      status = 'draft'
+      sale_id, sale_type, customer_name, customer_email, customer_document,
+      subtotal, tax, total, payment_method
     } = body;
 
-    // Generar número de factura
-    const lastInvoice = await query(
-      'SELECT MAX(CAST(sale_number as UNSIGNED)) as last_number FROM admin_sales',
-      []
-    ) as any[];
-    
-    const nextNumber = (lastInvoice[0]?.last_number || 0) + 1;
-    const invoiceNumber = `FAC-${new Date().getFullYear()}-${String(nextNumber).padStart(6, '0')}`;
-
-    // Insertar factura
-    const result = await query(
-      `INSERT INTO admin_sales (
-        sale_number, customer_first_name, customer_last_name, customer_email,
-        subtotal, tax, total, payment_method, status, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-      [invoiceNumber, customer_first_name, customer_last_name, customer_email, subtotal, tax, total, payment_method, status]
-    ) as any;
-
-    // Insertar items
-    if (items && Array.isArray(items)) {
-      for (const item of items) {
-        await query(
-          `INSERT INTO admin_sale_items (sale_id, product_id, quantity, unit_price, subtotal)
-           VALUES (?, ?, ?, ?, ?)`,
-          [result.insertId, item.product_id, item.quantity, item.unit_price, item.subtotal]
-        );
-      }
+    if (!sale_id || !customer_name || total === undefined) {
+      return NextResponse.json({ error: 'Faltan datos requeridos (sale_id, customer_name, total)' }, { status: 400 });
     }
 
-    return NextResponse.json(
-      { id: result.insertId, number: invoiceNumber, status: 'created' },
-      { status: 201 }
+    // Obtener configuración DIAN (resolución y siguiente número)
+    // Para simplificar asumo que se lee el último número de factura y suma 1
+    const [lastInvoice] = await query('SELECT number FROM invoices ORDER BY id DESC LIMIT 1');
+    let nextNum = 1001;
+    if (lastInvoice && lastInvoice.number) {
+       const parts = lastInvoice.number.split('-');
+       if (parts.length > 1) {
+          nextNum = parseInt(parts[1]) + 1;
+       } else {
+          nextNum++;
+       }
+    }
+    const invoiceNumber = `FAC-${nextNum}`;
+    const dianResolution = 'Resolución 000123-2025';
+
+    await query(
+      `INSERT INTO invoices 
+        (number, dian_resolution, sale_id, sale_type, customer_name, customer_email, 
+         customer_document, subtotal, tax, total, payment_method, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'issued')`,
+      [
+        invoiceNumber, dianResolution, sale_id, sale_type || 'admin', 
+        customer_name, customer_email || null, customer_document || null,
+        subtotal || 0, tax || 0, total, payment_method || 'cash'
+      ]
     );
+
+    return NextResponse.json({ success: true, invoice_number: invoiceNumber });
   } catch (error) {
-    console.error('POST /api/admin/invoices error:', error);
+    console.error('Error en POST /api/admin/invoices:', error);
     return NextResponse.json(
-      { error: 'Error creating invoice' },
+      { error: 'Error al generar factura' },
       { status: 500 }
     );
   }

@@ -43,6 +43,7 @@ export default function BarcodeInput({
   const [scanButtonState, setScanButtonState] = useState<ScanButtonState>('idle');
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastInputTimeRef = useRef<number>(0);
+  const isCurrentlyScanningRef = useRef(false);
 
   // Constantes para detección de lector
   const SCAN_SPEED_THRESHOLD = 50; // ms entre caracteres para detectar lector
@@ -121,6 +122,7 @@ export default function BarcodeInput({
     // Cambiar a estado de escaneo
     setScanButtonState('scanning');
     setIsScanning(true);
+    isCurrentlyScanningRef.current = true;
     
     // Focus en el input para recibir la lectura del dispositivo
     if (inputRef.current) {
@@ -135,6 +137,7 @@ export default function BarcodeInput({
         setScanButtonState('success');
         setIsScanning(false);
         setScanSuccess(true);
+        isCurrentlyScanningRef.current = false;
         
         if (onScan) {
           onScan(value.trim());
@@ -148,10 +151,11 @@ export default function BarcodeInput({
       } else {
         // Si no hay valor después de 5 segundos, marcar como error
         setTimeout(() => {
-          if (!value.trim()) {
+          if (!value.trim() && isCurrentlyScanningRef.current) {
             setScanButtonState('error');
             setIsScanning(false);
             setScanSuccess(false);
+            isCurrentlyScanningRef.current = false;
           }
         }, 2000);
       }
@@ -165,19 +169,22 @@ export default function BarcodeInput({
   useEffect(() => {
     if (scanButtonState === 'scanning' && value.trim().length >= 8) {
       // Auto-completar cuando se detecta un código válido
-      Promise.resolve().then(() => {
-        setScanButtonState('success');
-        setIsScanning(false);
-        setScanSuccess(true);
-        if (onScan) {
-          onScan(value.trim());
-        }
-        // Resetear después de 2 segundos
-        setTimeout(() => {
-          setScanButtonState('idle');
-          setScanSuccess(null);
-        }, 2000);
-      });
+      setScanButtonState('success');
+      setIsScanning(false);
+      setScanSuccess(true);
+      isCurrentlyScanningRef.current = false;
+      
+      if (onScan) {
+        onScan(value.trim());
+      }
+
+      // Resetear después de 2 segundos
+      const resetTimeout = setTimeout(() => {
+        setScanButtonState('idle');
+        setScanSuccess(null);
+      }, 2000);
+
+      return () => clearTimeout(resetTimeout);
     }
   }, [value, scanButtonState, onScan]);
 

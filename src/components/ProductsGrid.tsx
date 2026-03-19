@@ -4,7 +4,6 @@ import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { LayoutGrid, Pill, Leaf, Droplet, Dumbbell, Sparkles, ChevronDown, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
 import gsap from 'gsap';
-import { searchProducts, getProductsByCategory } from '@/lib/products';
 import ProductCard from './ProductCard';
 import { Product, Category } from '@/types';
 import { cn } from '@/lib/utils';
@@ -32,11 +31,33 @@ export default function ProductsGrid() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const sortRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<(HTMLButtonElement | null)[]>([]);
   const productsGridRef = useRef<HTMLDivElement>(null);
   const [isPageTransitioning, setIsPageTransitioning] = useState(false);
+
+  // Fetch products from API on mount
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        // Agregar un parámetro de tiempo para evitar el caché del navegador
+        const res = await fetch(`/api/products?t=${Date.now()}`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          setAllProducts(data.products || []);
+        }
+      } catch (error) {
+        console.error('Error fetching products:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchProducts();
+  }, []);
+
 
   // Close dropdown with animation (inverse of opening)
   const closeDropdown = useCallback(() => {
@@ -120,30 +141,40 @@ export default function ProductsGrid() {
   const currentSortLabel = sortOptions.find(opt => opt.value === sortBy)?.label || 'Ordenar';
 
   const filteredProducts = useMemo(() => {
-    let result: Product[] = [];
+    let result = [...allProducts];
 
-    if (searchQuery) {
-      result = searchProducts(searchQuery);
-    } else {
-      result = getProductsByCategory(currentCategory);
+    // Filter by Category
+    if (currentCategory !== 'todos') {
+      result = result.filter(p => p.category === currentCategory);
     }
 
+    // Filter by Search Query
+    if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase();
+      result = result.filter(product => 
+        product.name.toLowerCase().includes(lowerQuery) ||
+        (product.description && product.description.toLowerCase().includes(lowerQuery)) ||
+        product.category.toLowerCase().includes(lowerQuery)
+      );
+    }
+
+    // Sort
     switch (sortBy) {
       case 'price-low':
-        result = [...result].sort((a, b) => a.price - b.price);
+        result.sort((a, b) => a.price - b.price);
         break;
       case 'price-high':
-        result = [...result].sort((a, b) => b.price - a.price);
+        result.sort((a, b) => b.price - a.price);
         break;
       case 'name':
-        result = [...result].sort((a, b) => a.name.localeCompare(b.name));
+        result.sort((a, b) => a.name.localeCompare(b.name));
         break;
       default:
         break;
     }
 
     return result;
-  }, [currentCategory, searchQuery, sortBy]);
+  }, [allProducts, currentCategory, searchQuery, sortBy]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
@@ -329,7 +360,11 @@ export default function ProductsGrid() {
         </div>
 
         {/* Products Grid - 2 cols mobile, scales up */}
-        {filteredProducts.length === 0 ? (
+        {isLoading ? (
+          <div className="flex justify-center items-center py-16 md:py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary)]"></div>
+          </div>
+        ) : filteredProducts.length === 0 ? (
           <div className="text-center py-16 md:py-20">
             <p className="text-[var(--muted)] text-base md:text-lg">No se encontraron productos.</p>
           </div>

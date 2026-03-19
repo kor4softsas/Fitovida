@@ -33,9 +33,9 @@ export async function GET(request: NextRequest) {
        WHERE DATE(created_at) = CURDATE()`
     );
 
-    // Total de productos
+    // Total de productos en inventario activo
     const [totalProducts] = await query(
-      `SELECT COUNT(*) as count FROM products`
+      `SELECT COUNT(*) as count FROM inventory_products WHERE status = 'active'`
     );
 
     // Productos con bajo stock
@@ -91,15 +91,15 @@ export async function GET(request: NextRequest) {
         year: parseFloat(yearSales?.amount || 0)
       },
       orders: {
-        today_count: todayOrders[0]?.count || 0,
-        today_amount: parseFloat(todayOrders[0]?.amount || 0),
-        pending: pendingOrders[0]?.count || 0
+        today_count: todayOrders?.count || 0,
+        today_amount: parseFloat(todayOrders?.amount || 0),
+        pending: pendingOrders?.count || 0
       },
       inventory: {
-        total_products: totalProducts[0]?.count || 0,
-        low_stock: lowStockProducts[0]?.count || 0,
-        out_of_stock: outOfStockProducts[0]?.count || 0,
-        total_value: parseFloat(inventoryValue[0]?.value || 0)
+        total_products: totalProducts?.count || 0,
+        low_stock: lowStockProducts?.count || 0,
+        out_of_stock: outOfStockProducts?.count || 0,
+        total_value: parseFloat(inventoryValue?.value || 0)
       },
       finances: {
         total_income: parseFloat(totalIncomes?.amount || 0),
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
           : '0'
       },
       admin_sales: {
-        today_count: adminSalesToday[0]?.count || 0
+        today_count: adminSalesToday?.count || 0
       }
     });
   } catch (error) {
