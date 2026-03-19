@@ -178,7 +178,12 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
     }
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    if (!printRef.current) {
+      setShowPreview(true);
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
     if (!printRef.current) return;
 
     const printWindow = window.open('', '', 'width=800,height=600');
@@ -273,6 +278,11 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
   };
 
   const handleDownloadPDF = async () => {
+    if (!printRef.current) {
+      setShowPreview(true);
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
     if (!printRef.current) return;
 
     try {
