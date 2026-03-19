@@ -8,7 +8,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, marginBottom: 8, fontWeight: 'bold' },
   label: { fontSize: 12, fontWeight: 'bold' },
   value: { fontSize: 12, marginBottom: 4 },
-  table: { display: 'table', width: 'auto', marginTop: 12 },
+  table: { width: 'auto', marginTop: 12 },
   tableRow: { flexDirection: 'row' },
   tableCell: { flex: 1, fontSize: 10, padding: 4, borderBottom: '1 solid #eee' },
 });

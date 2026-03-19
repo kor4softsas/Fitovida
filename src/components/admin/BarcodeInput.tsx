@@ -1,9 +1,13 @@
 'use client';
 
+type ScanButtonState = 'idle' | 'scanning' | 'success' | 'error';
+
+
+
 import { useState, useEffect, useRef } from 'react';
 import { Scan, X, Check, AlertCircle, Camera } from 'lucide-react';
 
-type ScanButtonState = 'idle' | 'scanning' | 'success' | 'error';
+
 
 interface BarcodeInputProps {
   value: string;
@@ -37,12 +41,12 @@ export default function BarcodeInput({
   const [isScanning, setIsScanning] = useState(false);
   const [scanSuccess, setScanSuccess] = useState<boolean | null>(null);
   const [scanButtonState, setScanButtonState] = useState<ScanButtonState>('idle');
-  const scanTimeoutRef = useRef<NodeJS.Timeout>();
+  const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastInputTimeRef = useRef<number>(0);
 
   // Constantes para detección de lector
   const SCAN_SPEED_THRESHOLD = 50; // ms entre caracteres para detectar lector
-  const DEBOUNCE_TIME = 300; // ms para evitar lecturas duplicadas
+
 
   useEffect(() => {
     // Mantener focus para lectores plug-and-play
@@ -144,7 +148,7 @@ export default function BarcodeInput({
       } else {
         // Si no hay valor después de 5 segundos, marcar como error
         setTimeout(() => {
-          if (!value.trim() && scanButtonState === 'scanning') {
+          if (!value.trim()) {
             setScanButtonState('error');
             setIsScanning(false);
             setScanSuccess(false);
@@ -161,21 +165,19 @@ export default function BarcodeInput({
   useEffect(() => {
     if (scanButtonState === 'scanning' && value.trim().length >= 8) {
       // Auto-completar cuando se detecta un código válido
-      setScanButtonState('success');
-      setIsScanning(false);
-      setScanSuccess(true);
-      
-      if (onScan) {
-        onScan(value.trim());
-      }
-
-      // Resetear después de 2 segundos
-      const resetTimeout = setTimeout(() => {
-        setScanButtonState('idle');
-        setScanSuccess(null);
-      }, 2000);
-
-      return () => clearTimeout(resetTimeout);
+      Promise.resolve().then(() => {
+        setScanButtonState('success');
+        setIsScanning(false);
+        setScanSuccess(true);
+        if (onScan) {
+          onScan(value.trim());
+        }
+        // Resetear después de 2 segundos
+        setTimeout(() => {
+          setScanButtonState('idle');
+          setScanSuccess(null);
+        }, 2000);
+      });
     }
   }, [value, scanButtonState, onScan]);
 
@@ -291,7 +293,7 @@ export default function BarcodeInput({
         </div>
 
         {/* Indicadores de estado */}
-        <div className="mt-1 min-h-[20px]">
+        <div className="mt-1 min-h-5">
           {isScanning && scanButtonState === 'scanning' && (
             <p className="text-xs text-blue-600 flex items-center gap-1">
               <span className="inline-block w-1 h-1 bg-blue-600 rounded-full animate-pulse"></span>
