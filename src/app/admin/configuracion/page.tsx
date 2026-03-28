@@ -23,6 +23,48 @@ interface CompanySettings {
   dian_range_to: number;
 }
 
+const DEFAULT_SETTINGS: CompanySettings = {
+  company_name: '',
+  nit: '',
+  email: '',
+  phone: '',
+  address: '',
+  city: '',
+  department: '',
+  website: '',
+  invoice_prefix: 'FAC',
+  invoice_next_number: 1001,
+  tax_rate: 19,
+  currency: 'COP',
+  terms_and_conditions: '',
+  invoice_footer: '',
+  dian_resolution: '',
+  dian_range_from: 1,
+  dian_range_to: 999999,
+};
+
+function normalizeSettings(data: any): CompanySettings {
+  return {
+    company_name: data?.company_name ?? '',
+    nit: data?.nit ?? '',
+    email: data?.email ?? '',
+    phone: data?.phone ?? '',
+    address: data?.address ?? '',
+    city: data?.city ?? '',
+    department: data?.department ?? '',
+    website: data?.website ?? '',
+    invoice_prefix: data?.invoice_prefix ?? 'FAC',
+    invoice_next_number: Number(data?.invoice_next_number ?? 1001),
+    tax_rate: Number(data?.tax_rate ?? 19),
+    currency: data?.currency ?? 'COP',
+    terms_and_conditions: data?.terms_and_conditions ?? '',
+    invoice_footer: data?.invoice_footer ?? '',
+    dian_resolution: data?.dian_resolution ?? '',
+    dian_range_from: Number(data?.dian_range_from ?? 1),
+    dian_range_to: Number(data?.dian_range_to ?? 999999),
+  };
+}
+
 export default function ConfiguracionPage() {
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,9 +76,10 @@ export default function ConfiguracionPage() {
       try {
         const response = await fetch('/api/admin/settings');
         const data = await response.json();
-        setSettings(data);
+        setSettings(normalizeSettings(data));
       } catch (error) {
         console.error('Error fetching settings:', error);
+        setSettings(DEFAULT_SETTINGS);
         setMessage({ type: 'error', text: 'Error al cargar configuración' });
       } finally {
         setLoading(false);
