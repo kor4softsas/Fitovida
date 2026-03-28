@@ -51,8 +51,8 @@ interface CartStore {
   setSortBy: (sort: 'default' | 'price-low' | 'price-high' | 'name') => void;
   
   // Order actions
-  createOrder: (customer: CustomerInfo, paymentMethod: PaymentMethod, notes: string, userId?: string) => Order;
-  createOrderFromPending: (paymentId?: string, paymentProvider?: 'stripe' | 'wompi' | 'none', userId?: string) => Order | null;
+  createOrder: (customer: CustomerInfo, paymentMethod: PaymentMethod, notes: string, userId?: string) => Promise<Order>;
+  createOrderFromPending: (paymentId?: string, paymentProvider?: 'stripe' | 'wompi' | 'none', userId?: string) => Promise<Order | null>;
   updateOrderStatus: (orderNumber: string, status: OrderStatus, paymentId?: string) => void;
   getOrderByNumber: (orderNumber: string) => Order | undefined;
   getOrdersByUserId: (userId: string) => Order[];
@@ -166,7 +166,7 @@ export const useCartStore = create<CartStore>()(
       setSortBy: (sort) => set({ sortBy: sort }),
       
       // Order actions
-      createOrder: (customer, paymentMethod, notes, userId) => {
+      createOrder: async (customer, paymentMethod, notes, userId) => {
         const state = get();
         const subtotal = state.getSubtotal();
         const discount = state.discountAmount > 100 
@@ -190,26 +190,35 @@ export const useCartStore = create<CartStore>()(
           userId,
         };
         
-        set((state) => ({
-          orders: [...state.orders, order],
-          cart: [],
-          discountCode: '',
-          discountAmount: 0,
-          isCheckoutOpen: false
-        }));
-        
-        // Sincronizar en DB de fondo
-        fetch('/api/orders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(order)
-        }).catch(err => console.error('Error guardando la orden en DB:', err));
+        try {
+          const res = await fetch('/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(order)
+          });
 
-        return order;
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Error al crear el pedido en el servidor');
+          }
+
+          set((state) => ({
+            orders: [...state.orders, order],
+            cart: [],
+            discountCode: '',
+            discountAmount: 0,
+            isCheckoutOpen: false
+          }));
+
+          return order;
+        } catch (err: any) {
+          console.error('Error guardando la orden en DB:', err);
+          throw new Error(err.message || 'Error de conexión');
+        }
       },
 
       // Crear orden desde pendingOrder (después del pago)
-      createOrderFromPending: (paymentId, paymentProvider = 'none', userId) => {
+      createOrderFromPending: async (paymentId, paymentProvider = 'none', userId) => {
         const state = get();
         const pending = state.pendingOrder;
 
@@ -233,23 +242,32 @@ export const useCartStore = create<CartStore>()(
           userId,
         };
         
-        set((state) => ({
-          orders: [...state.orders, order],
-          cart: [],
-          pendingOrder: null,
-          discountCode: '',
-          discountAmount: 0,
-          isCheckoutOpen: false
-        }));
-        
-        // Sincronizar en DB de fondo
-        fetch('/api/orders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(order)
-        }).catch(err => console.error('Error guardando la orden pendiente en DB:', err));
+        try {
+          const res = await fetch('/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(order)
+          });
 
-        return order;
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Error al guardar la orden pagada en el servidor');
+          }
+
+          set((state) => ({
+            orders: [...state.orders, order],
+            cart: [],
+            pendingOrder: null,
+            discountCode: '',
+            discountAmount: 0,
+            isCheckoutOpen: false
+          }));
+
+          return order;
+        } catch (err: any) {
+          console.error('Error guardando la orden pendiente en DB:', err);
+          throw new Error(err.message || 'Error de conexión');
+        }
       },
 
       // Actualizar estado de una orden

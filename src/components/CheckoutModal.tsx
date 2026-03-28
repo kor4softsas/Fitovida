@@ -488,6 +488,8 @@ export default function CheckoutModal() {
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [editingAddress, setEditingAddress] = useState<UserAddress | undefined>(undefined);
   const [addressModalTriggerRect, setAddressModalTriggerRect] = useState<DOMRect | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   
   const modalRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -706,7 +708,7 @@ export default function CheckoutModal() {
     setEditingAddress(undefined);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!validateForm()) return;
@@ -738,17 +740,26 @@ export default function CheckoutModal() {
       return;
     }
     
-    // Para transferencia bancaria o pago contra entrega, crear orden directamente
-    const order = createOrder(formData, paymentMethod, notes, user?.id);
-    setOrderNumber(order.orderNumber);
-    setShowSuccess(true);
+    setIsProcessing(true);
+    setSubmitError(null);
     
-    // Reset form
-    setFormData({ name: '', email: '', phone: '', address: '', city: '', zip: '' });
-    setErrors({});
-    setNotes('');
-    setPromoInput('');
-    resetDiscount();
+    try {
+      // Para transferencia bancaria o pago contra entrega, crear orden directamente
+      const order = await createOrder(formData, paymentMethod, notes, user?.id);
+      setOrderNumber(order.orderNumber);
+      setShowSuccess(true);
+      
+      // Reset form
+      setFormData({ name: '', email: '', phone: '', address: '', city: '', zip: '' });
+      setErrors({});
+      setNotes('');
+      setPromoInput('');
+      resetDiscount();
+    } catch (error: any) {
+      setSubmitError(error.message || 'Hubo un error al procesar el pedido. Por favor intenta de nuevo.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleCloseSuccess = () => {
@@ -1235,12 +1246,25 @@ export default function CheckoutModal() {
                 </button>
               </div>
 
+              {/* Error Message */}
+              {submitError && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm text-center">
+                  {submitError}
+                </div>
+              )}
+
               {/* Submit Button */}
               <button
                 onClick={handleSubmit}
-                className="w-full mt-6 py-3 bg-[var(--primary)] hover:bg-[var(--primary-dark)] text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+                disabled={isProcessing}
+                className="w-full mt-6 py-3 bg-[var(--primary)] hover:bg-[var(--primary-dark)] disabled:opacity-70 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
               >
-                {paymentMethod === 'cash_on_delivery' ? (
+                {isProcessing ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Procesando...
+                  </>
+                ) : paymentMethod === 'cash_on_delivery' ? (
                   <>
                     <Truck className="h-5 w-5" />
                     Pedir y Pagar al Recibir

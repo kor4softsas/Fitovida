@@ -114,7 +114,7 @@ function PSEForm() {
 
       if (data.paymentUrl) {
         // Crear orden en estado pendiente antes de redirigir (con userId si está autenticado)
-        createOrderFromPending(data.transactionId, 'wompi', localUser?.id);
+        await createOrderFromPending(data.transactionId, 'wompi', localUser?.id);
         
         // Redirigir al banco (simulación en sandbox)
         window.location.href = data.paymentUrl;

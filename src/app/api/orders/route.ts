@@ -100,11 +100,29 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Validaciones básicas
-    if (!orderNumber || !customer || !items || items.length === 0) {
+    if (!orderNumber || !customer || !items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
-        { error: 'Datos de orden incompletos' },
+        { error: 'Datos de orden incompletos o carrito vacío' },
         { status: 400 }
       );
+    }
+
+    // Validar datos de envío esenciales
+    if (!customer.name || !customer.email || !customer.phone || !customer.address) {
+      return NextResponse.json(
+        { error: 'Datos de cliente o envío incompletos' },
+        { status: 400 }
+      );
+    }
+
+    // Validar integridad de los items
+    for (const item of items) {
+      if (!item.id || !item.name || typeof item.price !== 'number' || typeof item.quantity !== 'number' || item.quantity <= 0) {
+        return NextResponse.json(
+          { error: `Producto inválido detectado: ${item.name || 'Desconocido'}. Verifica tu carrito.` },
+          { status: 400 }
+        );
+      }
     }
 
     // 1. Crear la orden
@@ -209,13 +227,13 @@ export async function POST(request: NextRequest) {
             'UPDATE inventory_products SET current_stock = ? WHERE product_id = ?',
             [newStock, item.id]
           );
-
-          // Actualizar stock en tabla products
-          await query(
-            'UPDATE products SET stock = stock - ? WHERE id = ?',
-            [item.quantity, item.id]
-          );
         }
+
+        // Actualizar stock en tabla products de la vitrina sin importar inventory_products
+        await query(
+          'UPDATE products SET stock = stock - ? WHERE id = ?',
+          [item.quantity, item.id]
+        );
       }
     } catch (itemsError) {
       console.error('Error creando items:', itemsError);

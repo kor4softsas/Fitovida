@@ -174,7 +174,7 @@ function CheckoutForm({ onPaymentSuccess }: { onPaymentSuccess: (order: Order) =
 
       if (paymentIntent?.status === 'succeeded') {
         // 3. Crear la orden en el store (con userId si está autenticado)
-        const order = createOrderFromPending(paymentIntent.id, 'stripe', localUser?.id);
+        const order = await createOrderFromPending(paymentIntent.id, 'stripe', localUser?.id);
         
         if (order) {
           // Mostrar modal de confirmación
