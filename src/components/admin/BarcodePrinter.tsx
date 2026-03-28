@@ -303,36 +303,36 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-[2.5rem] bg-white">
         {/* Header */}
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
-          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#e6e9e8] bg-white p-8">
+          <h2 className="flex items-center gap-2 text-2xl font-extrabold text-[#012d1d]">
             <Printer size={24} />
             Imprimir Etiquetas de Código de Barras
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="text-[#414844] transition-colors hover:text-[#012d1d]">
             <X size={24} />
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="space-y-6 p-8">
           {/* Opciones de impresión */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             {/* Selección de productos */}
-            <div className="space-y-3">
+            <div className="space-y-3 rounded-[1.5rem] bg-[#f2f4f3] p-5">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-gray-900">Productos</h3>
+                <h3 className="font-bold text-[#012d1d]">Productos</h3>
                 <button
                   onClick={handleSelectAll}
-                  className="text-sm text-blue-600 hover:text-blue-700"
+                  className="text-sm font-bold text-[#005236] transition-colors hover:text-[#003d2d]"
                 >
                   {selectedProducts.length === products.length ? 'Deseleccionar todo' : 'Seleccionar todo'}
                 </button>
               </div>
-              <div className="space-y-2 max-h-40 overflow-y-auto">
+              <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
                 {products.map(product => (
-                  <label key={product.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                  <label key={product.id} className="flex cursor-pointer items-center gap-2 rounded-xl bg-white p-2 transition-colors hover:bg-[#e6e9e8]">
                     <input
                       type="checkbox"
                       checked={selectedProducts.includes(product.id)}
@@ -343,12 +343,12 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
                           setSelectedProducts(selectedProducts.filter(id => id !== product.id));
                         }
                       }}
-                      className="rounded"
+                      className="h-4 w-4 rounded border-[#c7cdc9] text-[#005236] focus:ring-[#005236]"
                     />
-                    <span className="text-sm">
+                    <span className="text-sm text-[#012d1d]">
                       {product.name}
                       {!product.barcode && (
-                        <span className="text-red-600"> (sin código)</span>
+                        <span className="text-[#ba1a1a]"> (sin código)</span>
                       )}
                     </span>
                   </label>
@@ -357,22 +357,22 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
             </div>
 
             {/* Formato de etiqueta */}
-            <div className="space-y-3">
-              <h3 className="font-semibold text-gray-900">Formato</h3>
+            <div className="space-y-3 rounded-[1.5rem] bg-[#f2f4f3] p-5">
+              <h3 className="font-bold text-[#012d1d]">Formato</h3>
               <div className="space-y-2">
                 {Object.entries(FORMATS).map(([key, fmt]) => (
-                  <label key={key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                  <label key={key} className="flex cursor-pointer items-center gap-2 rounded-xl bg-white p-2 transition-colors hover:bg-[#e6e9e8]">
                     <input
                       type="radio"
                       name="format"
                       value={key}
                       checked={selectedFormat === key}
                       onChange={(e) => setSelectedFormat(e.target.value as keyof typeof FORMATS)}
-                      className="rounded"
+                      className="h-4 w-4 border-[#c7cdc9] text-[#012d1d] focus:ring-[#005236]"
                     />
-                    <span className="text-sm">
+                    <span className="text-sm text-[#012d1d]">
                       {key}
-                      <span className="text-gray-500 text-xs block">
+                      <span className="block text-xs text-[#414844]">
                         {fmt.width}mm × {fmt.height}mm ({fmt.columns}×{fmt.rows})
                       </span>
                     </span>
@@ -382,15 +382,15 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
             </div>
 
             {/* Cantidad */}
-            <div className="space-y-3">
-              <h3 className="font-semibold text-gray-900">Cantidad por Producto</h3>
-              <div className="space-y-2 max-h-40 overflow-y-auto">
+            <div className="space-y-3 rounded-[1.5rem] bg-[#f2f4f3] p-5">
+              <h3 className="font-bold text-[#012d1d]">Cantidad por Producto</h3>
+              <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
                 {selectedProducts.map(productId => {
                   const product = products.find(p => p.id === productId);
                   if (!product || !product.barcode) return null;
                   return (
-                    <div key={productId} className="flex items-center gap-2">
-                      <span className="text-sm flex-1 truncate">{product.name}</span>
+                    <div key={productId} className="flex items-center gap-2 rounded-xl bg-white p-2">
+                      <span className="flex-1 truncate text-sm text-[#012d1d]">{product.name}</span>
                       <input
                         type="number"
                         min="1"
@@ -400,7 +400,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
                           ...printQty,
                           [productId]: parseInt(e.target.value) || 1
                         })}
-                        className="w-12 px-2 py-1 border border-gray-300 rounded text-sm"
+                        className="w-14 rounded-lg border border-[#e6e9e8] px-2 py-1 text-sm text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
                       />
                     </div>
                   );
@@ -410,10 +410,10 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
           </div>
 
           {/* Botones de acción */}
-          <div className="flex gap-3 border-t pt-4">
+          <div className="flex flex-wrap gap-3 border-t border-[#e6e9e8] pt-4">
             <button
               onClick={() => setShowPreview(!showPreview)}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-2 rounded-full border border-[#e6e9e8] bg-[#f2f4f3] px-4 py-2 font-bold text-[#414844] transition-colors hover:bg-[#e6e9e8]"
             >
               <Eye size={20} />
               {showPreview ? 'Ocultar' : 'Vista previa'}
@@ -422,7 +422,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
             <button
               onClick={handleDownloadPDF}
               disabled={productsToprint.length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400"
+              className="flex items-center gap-2 rounded-full bg-[#3f51d7] px-5 py-2 font-bold text-white transition-colors hover:bg-[#3140b1] disabled:cursor-not-allowed disabled:bg-[#9da6e4]"
             >
               <Download size={20} />
               Descargar PNG
@@ -430,7 +430,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
             <button
               onClick={handlePrint}
               disabled={productsToprint.length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:bg-gray-400"
+              className="flex items-center gap-2 rounded-full bg-[#009a63] px-5 py-2 font-bold text-white transition-colors hover:bg-[#007f52] disabled:cursor-not-allowed disabled:bg-[#9fd3bf]"
             >
               <Printer size={20} />
               Imprimir
@@ -439,15 +439,15 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
 
           {/* Vista previa */}
           {showPreview && (
-            <div className="border-t pt-4">
-              <h3 className="font-semibold text-gray-900 mb-4">Vista Previa</h3>
+            <div className="space-y-4 border-t border-[#e6e9e8] pt-4">
+              <h3 className="mb-1 font-bold text-[#012d1d]">Vista Previa</h3>
               <div
                 ref={printRef}
                 style={{
                   overflow: 'auto',
-                  backgroundColor: '#f9fafb',
+                  backgroundColor: '#f2f4f3',
                   padding: '1rem',
-                  borderRadius: '0.5rem',
+                  borderRadius: '1.25rem',
                   color: '#111827',
                   fontFamily: 'Arial, sans-serif',
                   display: 'grid',
@@ -470,8 +470,8 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
 
           {/* Información */}
           {!showPreview && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
-              <p className="font-semibold mb-2">💡 Información:</p>
+            <div className="rounded-[1rem] border border-[#b9c9e8] bg-[#e9effb] p-4 text-sm text-[#2d3da5]">
+              <p className="mb-2 font-bold">Informacion:</p>
               <ul className="list-disc list-inside space-y-1">
                 <li>Selecciona los productos que deseas imprimir</li>
                 <li>Elige el formato de etiqueta (4x6 para impresoras térmicas)</li>

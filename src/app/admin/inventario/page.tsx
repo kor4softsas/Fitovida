@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Plus, 
   Search, 
-  Filter,
   TrendingUp,
   TrendingDown,
   Package,
@@ -12,12 +11,11 @@ import {
   Edit,
   Trash2,
   X,
-  Scan,
   Barcode,
   Printer
 } from 'lucide-react';
 import type { InventoryProduct, InventoryMovement } from '@/types/admin';
-import BarcodeInput, { validateBarcodeFormat } from '@/components/admin/BarcodeInput';
+import { useBarcodeScanner, validateBarcodeFormat } from '@/components/admin/BarcodeInput';
 import ProductModalForm from '@/components/admin/ProductModalForm';
 import BarcodePrinter from '@/components/admin/BarcodePrinter';
 
@@ -35,6 +33,49 @@ export default function InventarioPage() {
   const [selectedProduct, setSelectedProduct] = useState<InventoryProduct | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [scanFeedback, setScanFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const scanFeedbackTimeoutRef = useRef<number | null>(null);
+
+  const handleBarcodeScanned = useCallback((barcode: string) => {
+    const cleanedBarcode = barcode.trim();
+    if (!cleanedBarcode) return;
+
+    const validation = validateBarcodeFormat(cleanedBarcode);
+    if (!validation.isValid) {
+      setScanFeedback({
+        type: 'error',
+        message: 'El código escaneado no es válido.'
+      });
+      return;
+    }
+
+    setSearchTerm(cleanedBarcode);
+    setFilterCategory('all');
+
+    const normalized = cleanedBarcode.toLowerCase();
+    const foundProduct = products.find((product) =>
+      product.barcode?.toLowerCase() === normalized ||
+      product.sku?.toLowerCase() === normalized ||
+      product.name.toLowerCase().includes(normalized)
+    );
+
+    setScanFeedback(
+      foundProduct
+        ? { type: 'success', message: `Escaneo detectado: ${foundProduct.name}` }
+        : { type: 'error', message: `No se encontró un producto con el código: ${cleanedBarcode}` }
+    );
+
+    if (scanFeedbackTimeoutRef.current) {
+      window.clearTimeout(scanFeedbackTimeoutRef.current);
+    }
+
+    scanFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setScanFeedback(null);
+      scanFeedbackTimeoutRef.current = null;
+    }, 3000);
+  }, [products]);
+
+  const { setIsListening } = useBarcodeScanner(handleBarcodeScanned);
 
   const readErrorMessage = useCallback(async (response: Response, fallback: string) => {
     try {
@@ -168,6 +209,22 @@ export default function InventarioPage() {
       void fetchMovements();
     }
   }, [view, movements.length, movementsLoading, fetchMovements]);
+
+  useEffect(() => {
+    setIsListening(view === 'products');
+
+    return () => {
+      setIsListening(false);
+    };
+  }, [view, setIsListening]);
+
+  useEffect(() => {
+    return () => {
+      if (scanFeedbackTimeoutRef.current) {
+        window.clearTimeout(scanFeedbackTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-CO', {
@@ -344,9 +401,14 @@ export default function InventarioPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#414844]" size={20} />
                 <input
                   type="text"
-                  placeholder="Buscar por nombre, SKU o código de barras..."
+                  placeholder="Buscar por nombre, SKU o código de barras (lector activo)..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    if (scanFeedback) {
+                      setScanFeedback(null);
+                    }
+                  }}
                   className="w-full rounded-full border border-[#e6e9e8] bg-white py-2 pl-10 pr-4 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
                 />
               </div>
@@ -362,6 +424,22 @@ export default function InventarioPage() {
                 ))}
               </select>
             </div>
+
+            <p className="text-xs text-[#414844]">
+              Puedes buscar por nombre, SKU o escanear directamente con el lector de código de barras.
+            </p>
+
+            {scanFeedback && (
+              <div
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                  scanFeedback.type === 'success'
+                    ? 'bg-[#a0f4c8] text-[#005236]'
+                    : 'bg-[#ffdad6] text-[#93000a]'
+                }`}
+              >
+                {scanFeedback.message}
+              </div>
+            )}
           </div>
 
           {/* Products Table */}
