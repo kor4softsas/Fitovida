@@ -282,11 +282,7 @@ export async function POST(request: NextRequest) {
           ]
         );
 
-        // Actualizar stock
-        await query(
-          'UPDATE inventory_products SET current_stock = current_stock - ? WHERE product_id = ?',
-          [item.quantity, item.product_id]
-        );
+        // Stock is auto-updated by DB trigger after_inventory_movement_insert
       }
 
       // Insertar item de venta

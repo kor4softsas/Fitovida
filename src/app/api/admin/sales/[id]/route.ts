@@ -140,11 +140,7 @@ export async function DELETE(
           ]
         );
 
-        // Actualizar stock
-        await query(
-          'UPDATE inventory_products SET current_stock = ? WHERE product_id = ?',
-          [newStock, item.product_id]
-        );
+        // Stock is auto-updated by DB trigger after_inventory_movement_insert
       }
     }
 

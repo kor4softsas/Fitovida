@@ -8,7 +8,9 @@ import {
   Download,
   Eye,
   Printer,
-  X
+  X,
+  User,
+  Package
 } from 'lucide-react';
 import { PDFDownloadLink, pdf } from '@react-pdf/renderer';
 import FacturaHTML from '@/components/admin/FacturaHTML';
@@ -407,7 +409,7 @@ function SaleDetailModal({ sale, onClose, onPrint }: { sale: Sale; onClose: () =
           {/* Customer Info */}
           <div className="bg-white p-6 rounded-[1.5rem] shadow-sm">
             <h3 className="font-bold text-[#012d1d] mb-4 flex items-center gap-2">
-               <span className="material-symbols-outlined text-[#3f6653]">person</span>
+               <User size={18} className="text-[#3f6653]" />
                Información del Cliente
             </h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
@@ -433,7 +435,7 @@ function SaleDetailModal({ sale, onClose, onPrint }: { sale: Sale; onClose: () =
           {/* Items */}
           <div className="bg-white p-6 rounded-[1.5rem] shadow-sm">
             <h3 className="font-bold text-[#012d1d] mb-4 flex items-center gap-2">
-               <span className="material-symbols-outlined text-[#3f6653]">inventory_2</span>
+               <Package size={18} className="text-[#3f6653]" />
                Productos
             </h3>
             <div className="rounded-xl overflow-hidden border border-[#e1e3e2]">
