@@ -143,45 +143,45 @@ export default function ClientesPage() {
   return (
     <div className="flex-1 overflow-auto">
       {/* Header */}
-      <div className="sticky top-0 bg-white border-b border-gray-200 p-6 z-10">
-        <div className="flex justify-between items-center mb-6">
+      <div className="sticky top-0 z-10 border-b border-[#e6e9e8] bg-white p-6">
+        <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <Users className="text-purple-600" size={32} />
+            <h1 className="flex items-center gap-3 text-4xl font-extrabold tracking-tight text-[#012d1d]">
+              <Users className="text-[#005236]" size={32} />
               Clientes
             </h1>
-            <p className="text-gray-600 mt-1">Gestión y seguimiento de clientes</p>
+            <p className="mt-1 font-medium text-[#414844]">Gestión y seguimiento de clientes</p>
           </div>
           <button 
             onClick={openNewModal}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+            className="flex items-center gap-2 rounded-full bg-[#012d1d] px-4 py-2 font-bold text-white transition-colors hover:bg-[#005236]">
             <Plus size={20} />
             Nuevo Cliente
           </button>
         </div>
 
         {/* Filtros */}
-        <div className="flex gap-4 flex-wrap">
-          <div className="flex-1 min-w-64 relative">
-            <Search className="absolute left-3 top-3 text-gray-400" size={20} />
+        <div className="flex flex-wrap gap-4 rounded-[2rem] bg-[#f2f4f3] p-4">
+          <div className="relative min-w-64 flex-1">
+            <Search className="absolute left-3 top-3 text-[#414844]" size={20} />
             <input
               type="text"
               placeholder="Buscar por nombre, email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full rounded-full border border-[#e6e9e8] bg-white py-2 pl-10 pr-4 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
             />
           </div>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="rounded-full border border-[#e6e9e8] bg-white px-4 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
           >
             <option value="total_spent">Mayor gasto</option>
             <option value="orders">Más pedidos</option>
             <option value="recent">Más reciente</option>
           </select>
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+          <button className="flex items-center gap-2 rounded-full border border-[#e6e9e8] bg-white px-4 py-2 font-bold text-[#414844] transition-colors hover:bg-[#e6e9e8]">
             <Filter size={20} />
             Filtrar
           </button>
@@ -191,49 +191,49 @@ export default function ClientesPage() {
       {/* Content */}
       <div className="p-6">
         {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="text-gray-500">Cargando clientes...</div>
+          <div className="flex h-64 items-center justify-center">
+            <div className="text-[#414844]">Cargando clientes...</div>
           </div>
         ) : filteredCustomers.length === 0 ? (
           <div className="text-center py-12">
-            <Users className="mx-auto text-gray-300 mb-4" size={48} />
-            <p className="text-gray-500">No hay clientes para mostrar</p>
+            <Users className="mx-auto mb-4 text-[#9aa39f]" size={48} />
+            <p className="font-medium text-[#414844]">No hay clientes para mostrar</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredCustomers.map((customer) => (
-              <div key={customer.id} className="bg-white rounded-lg border border-gray-200 hover:shadow-lg transition p-6">
+              <div key={customer.id} className="rounded-[2rem] border border-[#e6e9e8] bg-[#f2f4f3] p-6 transition hover:shadow-lg">
                 {/* Header */}
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">
+                    <h3 className="text-lg font-bold text-[#012d1d]">
                       {customer.first_name} {customer.last_name}
                     </h3>
-                    <span className={`inline-block mt-1 px-3 py-1 rounded-full text-xs font-medium ${
+                    <span className={`mt-1 inline-block rounded-full px-3 py-1 text-xs font-bold ${
                       customer.status === 'active' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-gray-100 text-gray-800'
+                        ? 'bg-[#a0f4c8] text-[#005236]' 
+                        : 'bg-[#e6e9e8] text-[#414844]'
                     }`}>
                       {customer.status === 'active' ? 'Activo' : 'Inactivo'}
                     </span>
                   </div>
-                  <button className="text-gray-400 hover:text-gray-600">
+                  <button className="text-[#414844] hover:text-[#012d1d]">
                     ⋮
                   </button>
                 </div>
 
                 {/* Información de contacto */}
-                <div className="space-y-2 mb-4 text-sm text-gray-600">
+                <div className="mb-4 space-y-2 text-sm text-[#414844]">
                   <div className="flex items-center gap-2">
                     <Mail size={16} />
-                    <a href={`mailto:${customer.email}`} className="text-blue-600 hover:underline">
+                    <a href={`mailto:${customer.email}`} className="text-[#005236] hover:underline">
                       {customer.email}
                     </a>
                   </div>
                   {customer.phone && (
                     <div className="flex items-center gap-2">
                       <Phone size={16} />
-                      <a href={`tel:${customer.phone}`} className="text-blue-600 hover:underline">
+                      <a href={`tel:${customer.phone}`} className="text-[#005236] hover:underline">
                         {customer.phone}
                       </a>
                     </div>
@@ -245,20 +245,20 @@ export default function ClientesPage() {
                 </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-3 gap-2 mb-4 pt-4 border-t border-gray-200">
+                <div className="mb-4 grid grid-cols-3 gap-2 border-t border-[#e6e9e8] pt-4">
                   <div>
-                    <p className="text-xs text-gray-500">Compras</p>
-                    <p className="text-lg font-bold text-gray-900">{customer.total_orders}</p>
+                    <p className="text-xs text-[#414844]">Compras</p>
+                    <p className="text-lg font-bold text-[#012d1d]">{customer.total_orders}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Gasto Total</p>
-                    <p className="text-lg font-bold text-purple-600">
+                    <p className="text-xs text-[#414844]">Gasto Total</p>
+                    <p className="text-lg font-bold text-[#005236]">
                       ${(customer.total_spent / 1000).toFixed(0)}K
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Última Compra</p>
-                    <p className="text-xs font-medium text-gray-900">
+                    <p className="text-xs text-[#414844]">Última Compra</p>
+                    <p className="text-xs font-bold text-[#012d1d]">
                       {new Date(customer.last_purchase).toLocaleDateString('es-CO', {
                         month: 'short',
                         day: 'numeric'
@@ -268,15 +268,15 @@ export default function ClientesPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-2 pt-4 border-t border-gray-200">
+                <div className="flex gap-2 border-t border-[#e6e9e8] pt-4">
                   <button 
                     onClick={() => openViewModal(customer)}
-                    className="flex-1 px-3 py-2 text-sm text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition">
+                    className="flex-1 rounded-full border border-[#cce6d0] px-3 py-2 text-sm font-bold text-[#005236] transition hover:bg-[#dceee1]">
                     Ver Historial
                   </button>
                   <button 
                     onClick={() => openEditModal(customer)}
-                    className="flex-1 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded hover:bg-gray-50 transition">
+                    className="flex-1 rounded-full border border-[#e6e9e8] px-3 py-2 text-sm font-bold text-[#414844] transition hover:bg-[#e6e9e8]">
                     Editar
                   </button>
                 </div>
@@ -288,27 +288,27 @@ export default function ClientesPage() {
         {/* Resumen */}
         {filteredCustomers.length > 0 && (
           <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-600">Total Clientes</p>
-              <p className="text-2xl font-bold text-blue-600">{customers.length}</p>
+            <div className="rounded-[1.5rem] bg-[#f2f4f3] p-4">
+              <p className="text-sm text-[#414844]">Total Clientes</p>
+              <p className="text-2xl font-extrabold text-[#012d1d]">{customers.length}</p>
             </div>
-            <div className="bg-green-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-600">Clientes Activos</p>
-              <p className="text-2xl font-bold text-green-600">
+            <div className="rounded-[1.5rem] bg-[#f2f4f3] p-4">
+              <p className="text-sm text-[#414844]">Clientes Activos</p>
+              <p className="text-2xl font-extrabold text-[#005236]">
                 {customers.filter(c => c.status === 'active').length}
               </p>
             </div>
-            <div className="bg-purple-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-600">Gasto Promedio</p>
-              <p className="text-2xl font-bold text-purple-600">
+            <div className="rounded-[1.5rem] bg-[#f2f4f3] p-4">
+              <p className="text-sm text-[#414844]">Gasto Promedio</p>
+              <p className="text-2xl font-extrabold text-[#005236]">
                 ${(customers.reduce((sum, c) => sum + c.total_spent, 0) / customers.length).toLocaleString('es-CO', {
                   maximumFractionDigits: 0
                 })}
               </p>
             </div>
-            <div className="bg-orange-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-600">Compras Totales</p>
-              <p className="text-2xl font-bold text-orange-600">
+            <div className="rounded-[1.5rem] bg-[#f2f4f3] p-4">
+              <p className="text-sm text-[#414844]">Compras Totales</p>
+              <p className="text-2xl font-extrabold text-[#012d1d]">
                 {customers.reduce((sum, c) => sum + c.total_orders, 0)}
               </p>
             </div>
@@ -318,59 +318,59 @@ export default function ClientesPage() {
 
       {/* View Modal */}
       {modalType === 'view' && selectedCustomer && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full mx-4 p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#012d1d]/20 p-4 backdrop-blur-[2px]">
+          <div className="mx-4 w-full max-w-md rounded-[2.5rem] bg-white p-8">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Historial del Cliente</h2>
-              <button onClick={closeModal} className="text-gray-500 hover:text-gray-700">
+              <h2 className="text-xl font-bold text-[#012d1d]">Historial del Cliente</h2>
+              <button onClick={closeModal} className="text-[#414844] hover:text-[#012d1d]">
                 <X size={24} />
               </button>
             </div>
 
             <div className="space-y-4">
               <div>
-                <p className="text-sm text-gray-600">Nombre</p>
-                <p className="text-lg font-semibold text-gray-900">{selectedCustomer.first_name} {selectedCustomer.last_name}</p>
+                <p className="text-sm text-[#414844]">Nombre</p>
+                <p className="text-lg font-bold text-[#012d1d]">{selectedCustomer.first_name} {selectedCustomer.last_name}</p>
               </div>
 
               <div>
-                <p className="text-sm text-gray-600">Email</p>
-                <p className="text-gray-900">{selectedCustomer.email}</p>
+                <p className="text-sm text-[#414844]">Email</p>
+                <p className="text-[#012d1d]">{selectedCustomer.email}</p>
               </div>
 
               <div>
-                <p className="text-sm text-gray-600">Teléfono</p>
-                <p className="text-gray-900">{selectedCustomer.phone || 'N/A'}</p>
+                <p className="text-sm text-[#414844]">Teléfono</p>
+                <p className="text-[#012d1d]">{selectedCustomer.phone || 'N/A'}</p>
               </div>
 
-              <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+              <div className="grid grid-cols-3 gap-4 border-t border-[#e6e9e8] pt-4">
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Compras</p>
-                  <p className="text-2xl font-bold text-gray-900">{selectedCustomer.total_orders}</p>
+                  <p className="text-sm text-[#414844]">Compras</p>
+                  <p className="text-2xl font-bold text-[#012d1d]">{selectedCustomer.total_orders}</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Gasto Total</p>
-                  <p className="text-2xl font-bold text-purple-600">
+                  <p className="text-sm text-[#414844]">Gasto Total</p>
+                  <p className="text-2xl font-bold text-[#005236]">
                     ${selectedCustomer.total_spent.toLocaleString('es-CO', { maximumFractionDigits: 0 })}
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Última Compra</p>
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-sm text-[#414844]">Última Compra</p>
+                  <p className="text-sm font-bold text-[#012d1d]">
                     {new Date(selectedCustomer.last_purchase).toLocaleDateString('es-CO')}
                   </p>
                 </div>
               </div>
 
-              <div className="pt-4 border-t">
-                <p className="text-sm text-gray-600">Ciudad</p>
-                <p className="text-gray-900">{selectedCustomer.city}, {selectedCustomer.department}</p>
+              <div className="border-t border-[#e6e9e8] pt-4">
+                <p className="text-sm text-[#414844]">Ciudad</p>
+                <p className="text-[#012d1d]">{selectedCustomer.city}, {selectedCustomer.department}</p>
               </div>
             </div>
 
             <button
               onClick={closeModal}
-              className="w-full mt-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              className="mt-6 w-full rounded-full bg-[#005236] px-4 py-2 font-bold text-white transition-colors hover:bg-[#003d2d]"
             >
               Cerrar
             </button>
@@ -380,13 +380,13 @@ export default function ClientesPage() {
 
       {/* Edit/New Modal */}
       {(modalType === 'edit' || modalType === 'new') && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full mx-4 p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#012d1d]/20 p-4 backdrop-blur-[2px]">
+          <div className="mx-4 w-full max-w-md rounded-[2.5rem] bg-white p-8">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900">
+              <h2 className="text-xl font-bold text-[#012d1d]">
                 {modalType === 'edit' ? 'Editar Cliente' : 'Nuevo Cliente'}
               </h2>
-              <button onClick={closeModal} className="text-gray-500 hover:text-gray-700">
+              <button onClick={closeModal} className="text-[#414844] hover:text-[#012d1d]">
                 <X size={24} />
               </button>
             </div>
@@ -394,7 +394,7 @@ export default function ClientesPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="mb-1 block text-sm font-bold text-[#414844]">
                     Nombre *
                   </label>
                   <input
@@ -403,13 +403,13 @@ export default function ClientesPage() {
                     value={formData.first_name}
                     onChange={handleInputChange}
                     placeholder="Nombre"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full rounded-full border border-[#e6e9e8] px-3 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="mb-1 block text-sm font-bold text-[#414844]">
                     Apellido
                   </label>
                   <input
@@ -418,13 +418,13 @@ export default function ClientesPage() {
                     value={formData.last_name}
                     onChange={handleInputChange}
                     placeholder="Apellido"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full rounded-full border border-[#e6e9e8] px-3 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="mb-1 block text-sm font-bold text-[#414844]">
                   Email *
                 </label>
                 <input
@@ -433,13 +433,13 @@ export default function ClientesPage() {
                   value={formData.email}
                   onChange={handleInputChange}
                   placeholder="cliente@example.com"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full rounded-full border border-[#e6e9e8] px-3 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="mb-1 block text-sm font-bold text-[#414844]">
                   Teléfono
                 </label>
                 <input
@@ -448,13 +448,13 @@ export default function ClientesPage() {
                   value={formData.phone}
                   onChange={handleInputChange}
                   placeholder="+57 (2) XXXX-XXXX"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full rounded-full border border-[#e6e9e8] px-3 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="mb-1 block text-sm font-bold text-[#414844]">
                     Ciudad
                   </label>
                   <input
@@ -463,12 +463,12 @@ export default function ClientesPage() {
                     value={formData.city}
                     onChange={handleInputChange}
                     placeholder="Cali"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full rounded-full border border-[#e6e9e8] px-3 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="mb-1 block text-sm font-bold text-[#414844]">
                     Departamento
                   </label>
                   <input
@@ -477,23 +477,23 @@ export default function ClientesPage() {
                     value={formData.department}
                     onChange={handleInputChange}
                     placeholder="Valle del Cauca"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full rounded-full border border-[#e6e9e8] px-3 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
                   />
                 </div>
               </div>
 
-              <div className="flex gap-3 pt-4 border-t">
+              <div className="flex gap-3 border-t border-[#e6e9e8] pt-4">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+                  className="flex-1 rounded-full border border-[#e6e9e8] px-4 py-2 font-bold text-[#414844] transition hover:bg-[#f2f4f3]"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[#005236] px-4 py-2 font-bold text-white transition hover:bg-[#003d2d] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Save size={16} />
                   {submitting ? 'Guardando...' : 'Guardar'}
