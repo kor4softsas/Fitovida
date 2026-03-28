@@ -15,7 +15,8 @@ import {
   Settings,
   LogOut,
   Menu,
-  X
+  X,
+  ShoppingBag
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '@/lib/auth';
@@ -30,6 +31,7 @@ interface NavItem {
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { name: 'Ventas', href: '/admin/ventas', icon: ShoppingCart },
+  { name: 'Pedidos', href: '/admin/pedidos', icon: ShoppingBag },
   { name: 'Inventario', href: '/admin/inventario', icon: Package },
   { name: 'Ingresos y Gastos', href: '/admin/finanzas', icon: DollarSign },
   { name: 'Facturación', href: '/admin/facturas', icon: FileText },

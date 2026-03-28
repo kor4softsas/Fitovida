@@ -35,7 +35,15 @@ export default function ReportesPage() {
     const fetchReports = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`/api/admin/reports?period=${period}`);
+        // Añadir un timestamp para romper por completo cualquier caché del navegador o Next.js
+        const response = await fetch(`/api/admin/reports?period=${period}&_t=${Date.now()}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+          }
+        });
         const data = await response.json();
         setReports(data || {
           period,
