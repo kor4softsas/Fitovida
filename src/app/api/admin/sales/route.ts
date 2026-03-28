@@ -235,10 +235,10 @@ export async function POST(request: NextRequest) {
     );
 
     // --- GENERAR FACTURA DIAN AUTOMÁTICAMENTE ---
-    const [lastInvoice] = await query('SELECT number FROM invoices ORDER BY id DESC LIMIT 1') as any[];
+    const [lastInvoice] = await query('SELECT invoice_number FROM admin_sales WHERE invoice_number IS NOT NULL ORDER BY created_at DESC LIMIT 1') as any[];
     let nextNum = 1001;
-    if (lastInvoice && lastInvoice.number) {
-       const parts = lastInvoice.number.split('-');
+    if (lastInvoice && lastInvoice.invoice_number) {
+       const parts = lastInvoice.invoice_number.split('-');
        if (parts.length > 1) {
           nextNum = parseInt(parts[1]) + 1;
        } else {
@@ -246,19 +246,6 @@ export async function POST(request: NextRequest) {
        }
     }
     const invoiceNumber = `FAC-${nextNum}`;
-    const dianResolution = 'Resolución 000123-2025';
-
-    await query(
-      `INSERT INTO invoices 
-        (number, dian_resolution, sale_id, sale_type, customer_name, customer_email, 
-         customer_document, subtotal, tax, total, payment_method, status)
-       VALUES (?, ?, ?, 'admin', ?, ?, ?, ?, ?, ?, ?, 'issued')`,
-      [
-        invoiceNumber, dianResolution, saleId, 
-        customer_name, customer_email || null, customer_document || null,
-        subtotal || 0, tax || 0, total, payment_method || 'cash'
-      ]
-    );
 
     // Actualizar la venta con el número de factura
     await query(

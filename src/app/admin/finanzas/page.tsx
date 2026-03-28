@@ -451,6 +451,59 @@ function TransactionModal({
     notes: ''
   });
 
+  const [salesList, setSalesList] = useState<any[]>([]);
+  const [loadingSales, setLoadingSales] = useState(false);
+  const [selectedSales, setSelectedSales] = useState<string[]>([]);
+  
+  useEffect(() => {
+    if (isIncome && formData.category === 'sales') {
+      const fetchSales = async () => {
+        setLoadingSales(true);
+        try {
+          const res = await fetch('/api/admin/sales');
+          if (res.ok) {
+            const data = await res.json();
+            setSalesList(data.sales || []);
+          }
+        } catch (error) {
+          console.error("Error loading sales:", error);
+        } finally {
+          setLoadingSales(false);
+        }
+      };
+      if (salesList.length === 0) {
+        fetchSales();
+      }
+    }
+  }, [isIncome, formData.category, salesList.length]);
+
+  const toggleSale = (sale: any) => {
+    setSelectedSales((prev) => {
+      const isSelected = prev.includes(sale.id);
+      const newSelected = isSelected 
+        ? prev.filter((id) => id !== sale.id)
+        : [...prev, sale.id];
+      
+      const newAmount = salesList
+        .filter((s) => newSelected.includes(s.id))
+        .reduce((sum, s) => sum + Number(s.total), 0);
+        
+      const references = salesList
+        .filter((s) => newSelected.includes(s.id))
+        .map((s) => s.sale_number)
+        .join(', ');
+        
+      setFormData((f) => ({
+        ...f,
+        amount: newAmount,
+        description: newSelected.length > 0 ? `Ingreso por ventas: ${references}` : '',
+        reference: references,
+      }));
+      
+      return newSelected;
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -573,6 +626,64 @@ function TransactionModal({
               ))}
             </select>
           </div>
+
+          {isIncome && formData.category === 'sales' && (
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Seleccionar Ventas ({selectedSales.length} seleccionadas)
+              </label>
+              {loadingSales ? (
+                <div className="flex items-center justify-center p-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600"></div>
+                </div>
+              ) : (
+                <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
+                  {salesList.length === 0 ? (
+                    <p className="text-sm text-gray-500 text-center py-2">No se encontraron ventas</p>
+                  ) : (
+                    salesList.map((sale) => {
+                      const isSelected = selectedSales.includes(sale.id);
+                      return (
+                        <div 
+                          key={sale.id}
+                          onClick={() => toggleSale(sale)}
+                          className={`flex items-center justify-between p-3 rounded-lg cursor-pointer border transition-colors ${
+                            isSelected 
+                              ? 'bg-emerald-50 border-emerald-500' 
+                              : 'bg-white border-gray-200 hover:border-emerald-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <input 
+                              type="checkbox" 
+                              checked={isSelected}
+                              readOnly
+                              className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 mt-1"
+                            />
+                            <div>
+                              <p className="text-sm font-medium text-gray-900 border-b border-transparent">
+                                {sale.sale_number} - {sale.customer_name || 'Cliente sin nombre'}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {new Date(sale.created_at).toLocaleDateString('es-CO')}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-sm font-bold text-gray-900">
+                            {new Intl.NumberFormat('es-CO', {
+                              style: 'currency',
+                              currency: 'COP',
+                              minimumFractionDigits: 0
+                            }).format(Number(sale.total))}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
