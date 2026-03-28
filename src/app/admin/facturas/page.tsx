@@ -90,11 +90,11 @@ export default function FacturasPage() {
 
   const getStatusColor = (s: string) => {
     switch (s) {
-      case 'issued': return 'bg-blue-100 text-blue-800';
-      case 'paid': return 'bg-green-100 text-green-800';
-      case 'draft': return 'bg-gray-100 text-gray-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'issued': return 'bg-[#cce6d0] text-[#506856]';
+      case 'paid': return 'bg-[#a0f4c8] text-[#005236]';
+      case 'draft': return 'bg-[#e6e9e8] text-[#414844]';
+      case 'cancelled': return 'bg-[#ffdad6] text-[#93000a]';
+      default: return 'bg-[#e6e9e8] text-[#414844]';
     }
   };
 
@@ -131,33 +131,33 @@ export default function FacturasPage() {
   return (
     <div className="flex-1 overflow-auto">
       {/* Header */}
-      <div className="sticky top-0 bg-white border-b border-gray-200 p-6 z-10">
-        <div className="flex justify-between items-center mb-6">
+      <div className="sticky top-0 z-10 border-b border-[#e6e9e8] bg-white p-6">
+        <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <FileText className="text-blue-600" size={32} />
+            <h1 className="flex items-center gap-3 text-4xl font-extrabold tracking-tight text-[#012d1d]">
+              <FileText className="text-[#005236]" size={32} />
               Facturación
             </h1>
-            <p className="text-gray-600 mt-1">Gestión de facturas electrónicas</p>
+            <p className="mt-1 font-medium text-[#414844]">Gestión de facturas electrónicas</p>
           </div>
         </div>
 
         {/* Filtros */}
-        <div className="flex gap-4 flex-wrap">
+        <div className="flex flex-wrap gap-4 rounded-[2rem] bg-[#f2f4f3] p-4">
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#414844]" size={18} />
             <input
               type="text"
               placeholder="Buscar por número o cliente..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-full border border-[#e6e9e8] bg-white py-2 pl-10 pr-4 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="rounded-full border border-[#e6e9e8] bg-white px-4 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
           >
             <option value="all">Todos los estados</option>
             <option value="issued">Emitidas</option>
@@ -170,51 +170,51 @@ export default function FacturasPage() {
 
       <div className="p-6">
         {loading ? (
-          <div className="flex justify-center items-center h-64 text-gray-500">Cargando facturas...</div>
+          <div className="flex h-64 items-center justify-center text-[#414844]">Cargando facturas...</div>
         ) : filteredInvoices.length === 0 ? (
-          <div className="text-center py-20 text-gray-400">
+          <div className="py-20 text-center text-[#414844]">
             <FileText size={48} className="mx-auto mb-4 opacity-50" />
-            <p className="text-xl font-medium">No hay facturas registradas</p>
+            <p className="text-xl font-bold text-[#012d1d]">No hay facturas registradas</p>
             <p className="text-sm mt-1">Las facturas se generan automáticamente al registrar una venta</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="overflow-hidden rounded-[2.5rem] bg-[#f2f4f3]">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="border-b border-[#d9ddd9] bg-[#e6e9e8]">
                 <tr>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">N° Factura</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Cliente</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Fecha</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Total</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Estado</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Acciones</th>
+                  <th className="px-6 py-3 text-left text-sm font-bold uppercase tracking-wider text-[#414844]">N° Factura</th>
+                  <th className="px-6 py-3 text-left text-sm font-bold uppercase tracking-wider text-[#414844]">Cliente</th>
+                  <th className="px-6 py-3 text-left text-sm font-bold uppercase tracking-wider text-[#414844]">Fecha</th>
+                  <th className="px-6 py-3 text-left text-sm font-bold uppercase tracking-wider text-[#414844]">Total</th>
+                  <th className="px-6 py-3 text-left text-sm font-bold uppercase tracking-wider text-[#414844]">Estado</th>
+                  <th className="px-6 py-3 text-left text-sm font-bold uppercase tracking-wider text-[#414844]">Acciones</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-[#e6e9e8] bg-white">
                 {filteredInvoices.map((invoice) => (
-                  <tr key={invoice.id} className="border-b border-gray-200 hover:bg-gray-50 transition">
-                    <td className="px-6 py-4 text-sm font-medium text-blue-600">{invoice.number}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{invoice.customer_name}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                  <tr key={invoice.id} className="transition hover:bg-[#f8faf9]">
+                    <td className="px-6 py-4 text-sm font-bold text-[#005236]">{invoice.number}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-[#012d1d]">{invoice.customer_name}</td>
+                    <td className="px-6 py-4 text-sm text-[#414844]">
                       {new Date(invoice.issued_date).toLocaleDateString('es-CO')}
                     </td>
-                    <td className="px-6 py-4 text-sm font-semibold text-gray-900">{fmt(Number(invoice.total))}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-[#012d1d]">{fmt(Number(invoice.total))}</td>
                     <td className="px-6 py-4 text-sm">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}>
+                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${getStatusColor(invoice.status)}`}>
                         {getStatusLabel(invoice.status)}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm flex gap-2">
                       <button
                         onClick={() => setSelectedInvoice(invoice)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                        className="rounded-full p-2 text-[#005236] transition hover:bg-[#cce6d0]"
                         title="Ver factura"
                       >
                         <Eye size={18} />
                       </button>
                       <button
                         onClick={() => { setSelectedInvoice(invoice); setTimeout(handlePrint, 300); }}
-                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
+                        className="rounded-full p-2 text-[#005236] transition hover:bg-[#a0f4c8]"
                         title="Imprimir / Descargar PDF"
                       >
                         <Download size={18} />
@@ -229,22 +229,22 @@ export default function FacturasPage() {
 
         {/* Resumen */}
         {filteredInvoices.length > 0 && (
-          <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-600">Total Facturas</p>
-              <p className="text-2xl font-bold text-blue-600">{filteredInvoices.length}</p>
+          <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className="rounded-[1.5rem] bg-[#f2f4f3] p-5">
+              <p className="text-sm font-semibold uppercase tracking-wider text-[#414844]">Total Facturas</p>
+              <p className="text-2xl font-extrabold text-[#012d1d]">{filteredInvoices.length}</p>
             </div>
-            <div className="bg-green-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-600">Pagadas</p>
-              <p className="text-2xl font-bold text-green-600">{filteredInvoices.filter((f) => f.status === 'paid').length}</p>
+            <div className="rounded-[1.5rem] bg-[#f2f4f3] p-5">
+              <p className="text-sm font-semibold uppercase tracking-wider text-[#414844]">Pagadas</p>
+              <p className="text-2xl font-extrabold text-[#005236]">{filteredInvoices.filter((f) => f.status === 'paid').length}</p>
             </div>
-            <div className="bg-orange-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-600">Emitidas</p>
-              <p className="text-2xl font-bold text-orange-600">{filteredInvoices.filter((f) => f.status === 'issued').length}</p>
+            <div className="rounded-[1.5rem] bg-[#f2f4f3] p-5">
+              <p className="text-sm font-semibold uppercase tracking-wider text-[#414844]">Emitidas</p>
+              <p className="text-2xl font-extrabold text-[#506856]">{filteredInvoices.filter((f) => f.status === 'issued').length}</p>
             </div>
-            <div className="bg-purple-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-600">Ingresos Total</p>
-              <p className="text-2xl font-bold text-purple-600">{fmt(filteredInvoices.reduce((s, f) => s + Number(f.total), 0))}</p>
+            <div className="rounded-[1.5rem] bg-[#f2f4f3] p-5">
+              <p className="text-sm font-semibold uppercase tracking-wider text-[#414844]">Ingresos Total</p>
+              <p className="text-2xl font-extrabold text-[#012d1d]">{fmt(filteredInvoices.reduce((s, f) => s + Number(f.total), 0))}</p>
             </div>
           </div>
         )}
@@ -252,23 +252,23 @@ export default function FacturasPage() {
 
       {/* ===== MODAL VISTA PREVIA ===== */}
       {selectedInvoice && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center p-4 overflow-auto">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-8">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-black/60 p-4">
+          <div className="my-8 w-full max-w-2xl rounded-[2.5rem] bg-white shadow-2xl">
             {/* Modal header */}
-            <div className="flex justify-between items-center p-4 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">
+            <div className="flex items-center justify-between border-b border-[#e6e9e8] p-6">
+              <h2 className="text-lg font-bold text-[#012d1d]">
                 Factura {selectedInvoice.number}
               </h2>
               <div className="flex gap-2">
                 <button
                   onClick={handlePrint}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm"
+                  className="flex items-center gap-2 rounded-full bg-[#005236] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#003d2d]"
                 >
                   <Printer size={16} /> Imprimir / PDF
                 </button>
                 <button
                   onClick={() => setSelectedInvoice(null)}
-                  className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition"
+                  className="rounded-full p-2 text-[#414844] transition hover:bg-[#f2f4f3]"
                 >
                   <X size={20} />
                 </button>
@@ -276,7 +276,7 @@ export default function FacturasPage() {
             </div>
 
             {/* Vista previa de la factura */}
-            <div className="p-4 overflow-auto max-h-[80vh]">
+            <div className="max-h-[80vh] overflow-auto p-4">
               <div ref={printRef}>
                 <InvoicePreview invoice={selectedInvoice} settings={settings} />
               </div>
