@@ -17,11 +17,20 @@ export interface Sale {
   paymentMethod: 'cash' | 'card' | 'transfer' | 'pse' | 'wompi';
   status: 'completed' | 'pending' | 'cancelled';
   notes?: string;
-  // Campos para futura integración con DIAN
+  // ===== CAMPOS DIAN-READY =====
   invoiceNumber?: string;
   invoiceCUFE?: string; // Código Único de Facturación Electrónica
   invoiceDate?: Date;
   invoiceStatus?: 'pending' | 'authorized' | 'rejected';
+  // QR y Código de Barras
+  qrPayload?: string; // Payload formato DIAN para generar QR
+  barcodeValue?: string; // Código 1D
+  // Integración DIAN/Proveedor
+  dianUUID?: string; // UUID retornado por DIAN
+  dianTrackId?: string; // TrackID de respuesta
+  invoiceXmlPath?: string; // Ruta al XML firmado
+  invoiceXmlContent?: string; // XML para descargar
+  invoicePdfPath?: string; // Ruta al PDF
   createdBy: string; // ID del usuario que registró la venta
   createdAt: Date;
   updatedAt: Date;

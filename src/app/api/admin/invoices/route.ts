@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { generateTemporaryCUFE, generateQRPayload, generateBarcodeValue } from '@/lib/invoice-utils';
 
 // Deshabilitar caché para que siempre se obtenga data fresca
 export const dynamic = 'force-dynamic';
@@ -24,7 +25,8 @@ export async function GET(request: NextRequest) {
           SELECT id, number, dian_resolution, sale_id, sale_type, 
                  customer_name, customer_email, customer_document,
                  subtotal, tax, total, payment_method, status, 
-                 issued_date, due_date, created_at
+                 issued_date, due_date, created_at, NULL as invoice_cufe,
+                 NULL as qr_payload, NULL as barcode_value, NULL as invoice_status
           FROM invoices
           
           UNION ALL
@@ -50,7 +52,11 @@ export async function GET(request: NextRequest) {
             END as status, 
             COALESCE(invoice_date, created_at) as issued_date, 
             created_at as due_date, 
-            created_at
+            created_at,
+            invoice_cufe,
+            qr_payload,
+            barcode_value,
+            invoice_status
           FROM admin_sales
 
           UNION ALL
@@ -75,7 +81,11 @@ export async function GET(request: NextRequest) {
             END as status, 
             created_at as issued_date, 
             created_at as due_date, 
-            created_at
+            created_at,
+            NULL as invoice_cufe,
+            NULL as qr_payload,
+            NULL as barcode_value,
+            NULL as invoice_status
           FROM orders
         ) AS all_invoices
         WHERE 1=1
@@ -104,7 +114,11 @@ export async function GET(request: NextRequest) {
             END as status, 
             COALESCE(invoice_date, created_at) as issued_date, 
             created_at as due_date, 
-            created_at
+            created_at,
+            invoice_cufe,
+            qr_payload,
+            barcode_value,
+            invoice_status
           FROM admin_sales
 
           UNION ALL
@@ -129,7 +143,11 @@ export async function GET(request: NextRequest) {
             END as status, 
             created_at as issued_date, 
             created_at as due_date, 
-            created_at
+            created_at,
+            NULL as invoice_cufe,
+            NULL as qr_payload,
+            NULL as barcode_value,
+            NULL as invoice_status
           FROM orders
         ) AS all_invoices
         WHERE 1=1
@@ -161,9 +179,37 @@ export async function GET(request: NextRequest) {
       return true;
     });
 
+    // Generar QR y barcode para facturas sin CUFE aún (preparación DIAN-ready)
+    const invoicesWithQR = finalInvoices.map(inv => {
+      // Si no tiene CUFE, generar uno temporal
+      if (!inv.invoice_cufe && inv.sale_type === 'admin') {
+        const nit = inv.customer_document?.replace(/\D/g, '') || '9000000';
+        inv.invoice_cufe = generateTemporaryCUFE(inv.number, nit);
+      }
+
+      // Si tiene CUFE pero no qr_payload, generarlo
+      if (inv.invoice_cufe && !inv.qr_payload) {
+        inv.qr_payload = generateQRPayload({
+          nit: '76900123', // FIXME: Traer del settings
+          invoiceNumber: inv.number.replace(/\D/g, '').padStart(10, '0'),
+          issueDate: new Date(inv.issued_date).toISOString().split('T')[0].replace(/-/g, ''),
+          total: Number(inv.subtotal) || 0,
+          grandTotal: Number(inv.total) || 0,
+          cufe: inv.invoice_cufe,
+        });
+      }
+
+      // Si tiene CUFE pero no barcode, generarlo
+      if (inv.invoice_cufe && !inv.barcode_value) {
+        inv.barcode_value = generateBarcodeValue(inv.invoice_cufe);
+      }
+
+      return inv;
+    });
+
     return NextResponse.json({
-      invoices: finalInvoices,
-      total: finalInvoices.length
+      invoices: invoicesWithQR,
+      total: invoicesWithQR.length
     });
   } catch (error: any) {
     console.error('Error en GET /api/admin/invoices:', error);

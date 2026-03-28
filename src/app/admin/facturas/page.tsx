@@ -18,6 +18,12 @@ interface Invoice {
   issued_date: string;
   due_date: string;
   payment_method: string;
+  // DIAN-Ready fields
+  invoice_cufe?: string;
+  invoice_status?: 'pending' | 'authorized' | 'rejected';
+  qr_payload?: string;
+  barcode_value?: string;
+  dian_uuid?: string;
 }
 
 interface CompanySettings {
@@ -398,10 +404,51 @@ function InvoicePreview({ invoice, settings }: { invoice: Invoice; settings: Com
         </div>
       </div>
 
-      {/* CUFE */}
-      <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px dashed #ccc', fontSize: 8, color: '#aaa', textAlign: 'center' }}>
-        <div>Factura Electrónica de Venta — {settings?.company_name || 'Fitovida SAS'} — NIT: {settings?.nit}</div>
-        <div>CUFE: {invoice.id}</div>
+      {/* CUFE, QR y Código de Barras */}
+      <div style={{ marginTop: 12, paddingTop: 8, borderTop: '1px dashed #ccc' }}>
+        {/* Estado DIAN */}
+        {invoice.invoice_status && (
+          <div style={{ marginBottom: 8, padding: '6px 8px', borderRadius: 3, background: invoice.invoice_status === 'authorized' ? '#d4edda' : invoice.invoice_status === 'pending' ? '#fff3cd' : '#f8d7da', fontSize: 9, textAlign: 'center', fontWeight: 'bold', color: invoice.invoice_status === 'authorized' ? '#155724' : invoice.invoice_status === 'pending' ? '#856404' : '#721c24' }}>
+            {invoice.invoice_status === 'authorized' && '✓ Autorizada por DIAN'}
+            {invoice.invoice_status === 'pending' && '⏱ Pendiente validación DIAN'}
+            {invoice.invoice_status === 'rejected' && '✗ Rechazada por DIAN'}
+          </div>
+        )}
+
+        {/* QR Code (si status es authorized o si hay payload) */}
+        {invoice.qr_payload && (
+          <div style={{ marginBottom: 10, display: 'flex', justifyContent: 'center' }}>
+            <div style={{ background: '#f5f5f5', padding: '8px', borderRadius: 4, textAlign: 'center' }}>
+              <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(invoice.qr_payload)}`}
+                alt="QR CUFE"
+                width={120}
+                height={120}
+                style={{ border: '1px solid #ddd', borderRadius: 2 }}
+              />
+              <div style={{ fontSize: 8, color: '#666', marginTop: 4 }}>Código QR — CUFE</div>
+            </div>
+          </div>
+        )}
+
+        {/* Barcode 1D (si aplica) */}
+        {invoice.barcode_value && (
+          <div style={{ marginBottom: 10, display: 'flex', justifyContent: 'center' }}>
+            <div style={{ fontSize: 8, color: '#666' }}>
+              {/* Aquí iría el barcode renderizado con jsbarcode, por ahora solo mostramos el valor */}
+              Código: {invoice.barcode_value}
+            </div>
+          </div>
+        )}
+
+        {/* Info CUFE */}
+        <div style={{ fontSize: 8, color: '#999', textAlign: 'center', wordBreak: 'break-all' }}>
+          <div style={{ marginBottom: 4 }}>CUFE: {invoice.invoice_cufe || 'Generando...'}</div>
+          {invoice.dian_uuid && <div style={{ marginBottom: 2 }}>UUID: {invoice.dian_uuid}</div>}
+          <div style={{ marginTop: 6, fontSize: 7, color: '#aaa' }}>
+            Factura Electrónica de Venta — {settings?.company_name || 'Fitovida SAS'} — NIT: {settings?.nit}
+          </div>
+        </div>
       </div>
     </div>
   );
