@@ -34,7 +34,10 @@ export default function InventarioPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [scanFeedback, setScanFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null);
   const scanFeedbackTimeoutRef = useRef<number | null>(null);
+  const highlightTimeoutRef = useRef<number | null>(null);
+  const productRowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
 
   const handleBarcodeScanned = useCallback((barcode: string) => {
     const cleanedBarcode = barcode.trim();
@@ -53,11 +56,22 @@ export default function InventarioPage() {
     setFilterCategory('all');
 
     const normalized = cleanedBarcode.toLowerCase();
+    const exactMatches = products.filter((product) =>
+      product.barcode?.toLowerCase() === normalized ||
+      product.sku?.toLowerCase() === normalized
+    );
+
     const foundProduct = products.find((product) =>
       product.barcode?.toLowerCase() === normalized ||
       product.sku?.toLowerCase() === normalized ||
       product.name.toLowerCase().includes(normalized)
     );
+
+    if (exactMatches.length === 1) {
+      setHighlightedProductId(exactMatches[0].id);
+    } else {
+      setHighlightedProductId(null);
+    }
 
     setScanFeedback(
       foundProduct
@@ -219,9 +233,33 @@ export default function InventarioPage() {
   }, [view, setIsListening]);
 
   useEffect(() => {
+    if (!highlightedProductId) return;
+
+    const targetRow = productRowRefs.current[highlightedProductId];
+    if (!targetRow) return;
+
+    targetRow.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center'
+    });
+
+    if (highlightTimeoutRef.current) {
+      window.clearTimeout(highlightTimeoutRef.current);
+    }
+
+    highlightTimeoutRef.current = window.setTimeout(() => {
+      setHighlightedProductId(null);
+      highlightTimeoutRef.current = null;
+    }, 2600);
+  }, [highlightedProductId, products, searchTerm, filterCategory]);
+
+  useEffect(() => {
     return () => {
       if (scanFeedbackTimeoutRef.current) {
         window.clearTimeout(scanFeedbackTimeoutRef.current);
+      }
+      if (highlightTimeoutRef.current) {
+        window.clearTimeout(highlightTimeoutRef.current);
       }
     };
   }, []);
@@ -495,7 +533,17 @@ export default function InventarioPage() {
                   {filteredProducts.map((product) => {
                     const status = getStockStatus(product);
                     return (
-                      <tr key={product.id} className="hover:bg-[#f8faf9]">
+                      <tr
+                        key={product.id}
+                        ref={(el) => {
+                          productRowRefs.current[product.id] = el;
+                        }}
+                        className={`transition-colors duration-500 ${
+                          highlightedProductId === product.id
+                            ? 'bg-[#e7f9ee] ring-1 ring-inset ring-[#6fc29a]'
+                            : 'hover:bg-[#f8faf9]'
+                        }`}
+                      >
                         <td className="px-6 py-4">
                           <input 
                             type="checkbox" 

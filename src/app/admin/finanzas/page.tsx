@@ -137,26 +137,26 @@ export default function FinanzasPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-[#005236]"></div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Ingresos y Gastos</h1>
-          <p className="text-gray-600 mt-1">Control financiero básico</p>
+          <h2 className="text-4xl font-extrabold tracking-tight text-[#012d1d]">Ingresos y Gastos</h2>
+          <p className="mt-1 font-medium text-[#414844]">Control financiero básico</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => {
               setTransactionType('income');
               setShowTransactionModal(true);
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+            className="flex items-center gap-2 rounded-full bg-[#005236] px-4 py-2 font-bold text-white transition-colors hover:bg-[#003d2d]"
           >
             <Plus size={20} />
             Ingreso
@@ -166,7 +166,7 @@ export default function FinanzasPage() {
               setTransactionType('expense');
               setShowTransactionModal(true);
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            className="flex items-center gap-2 rounded-full bg-[#ba1a1a] px-4 py-2 font-bold text-white transition-colors hover:bg-[#93000a]"
           >
             <Plus size={20} />
             Gasto
@@ -175,84 +175,82 @@ export default function FinanzasPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-emerald-500">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="rounded-[2.5rem] bg-[#f2f4f3] p-8 transition-transform duration-300 hover:scale-[1.01]">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Ingresos</p>
-              <p className="text-2xl font-bold text-emerald-600 mt-2">
+              <p className="text-sm font-semibold uppercase tracking-wider text-[#414844]">Total Ingresos</p>
+              <p className="mt-2 text-3xl font-extrabold text-[#005236]">
                 {formatCurrency(totalIncome)}
               </p>
-              <p className="text-xs text-gray-500 mt-1">{incomes.length} transacciones</p>
+              <p className="mt-1 text-xs text-[#414844]">{incomes.length} transacciones</p>
             </div>
-            <div className="p-3 bg-emerald-100 rounded-lg">
-              <TrendingUp className="text-emerald-600" size={32} />
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#a0f4c8] text-[#005236]">
+              <TrendingUp size={28} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-red-500">
+        <div className="rounded-[2.5rem] bg-[#f2f4f3] p-8 transition-transform duration-300 hover:scale-[1.01]">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Gastos</p>
-              <p className="text-2xl font-bold text-red-600 mt-2">
+              <p className="text-sm font-semibold uppercase tracking-wider text-[#414844]">Total Gastos</p>
+              <p className="mt-2 text-3xl font-extrabold text-[#93000a]">
                 {formatCurrency(totalExpense)}
               </p>
-              <p className="text-xs text-gray-500 mt-1">{expenses.length} transacciones</p>
+              <p className="mt-1 text-xs text-[#414844]">{expenses.length} transacciones</p>
             </div>
-            <div className="p-3 bg-red-100 rounded-lg">
-              <TrendingDown className="text-red-600" size={32} />
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#ffdad6] text-[#93000a]">
+              <TrendingDown size={28} />
             </div>
           </div>
         </div>
 
-        <div className={`bg-white rounded-xl shadow-md p-6 border-l-4 ${
-          balance >= 0 ? 'border-blue-500' : 'border-orange-500'
-        }`}>
+        <div className="rounded-[2.5rem] bg-[#f2f4f3] p-8 transition-transform duration-300 hover:scale-[1.01]">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Balance</p>
-              <p className={`text-2xl font-bold mt-2 ${
-                balance >= 0 ? 'text-blue-600' : 'text-orange-600'
+              <p className="text-sm font-semibold uppercase tracking-wider text-[#414844]">Balance</p>
+              <p className={`mt-2 text-3xl font-extrabold ${
+                balance >= 0 ? 'text-[#005236]' : 'text-[#93000a]'
               }`}>
                 {formatCurrency(balance)}
               </p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="mt-1 text-xs text-[#414844]">
                 {balance >= 0 ? 'Positivo' : 'Negativo'}
               </p>
             </div>
-            <div className={`p-3 rounded-lg ${
-              balance >= 0 ? 'bg-blue-100' : 'bg-orange-100'
+            <div className={`flex h-12 w-12 items-center justify-center rounded-full ${
+              balance >= 0 ? 'bg-[#cce6d0] text-[#506856]' : 'bg-amber-100 text-amber-900'
             }`}>
-              <DollarSign className={balance >= 0 ? 'text-blue-600' : 'text-orange-600'} size={32} />
+              <DollarSign size={28} />
             </div>
           </div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-md p-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+      <div className="rounded-[2rem] bg-[#f2f4f3] p-6">
+        <div className="flex flex-col gap-4 md:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#414844]" size={20} />
             <input
               type="text"
               placeholder="Buscar transacciones..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="w-full rounded-full border border-[#e6e9e8] bg-white py-2 pl-10 pr-4 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
             />
           </div>
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value as typeof filterType)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="rounded-full border border-[#e6e9e8] bg-white px-4 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
           >
             <option value="all">Todas las transacciones</option>
             <option value="income">Solo Ingresos</option>
             <option value="expense">Solo Gastos</option>
           </select>
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          <button className="flex items-center gap-2 rounded-full border border-[#e6e9e8] bg-white px-4 py-2 font-bold text-[#414844] transition-colors hover:bg-[#e6e9e8]">
             <Download size={20} />
             Exportar
           </button>
@@ -260,95 +258,95 @@ export default function FinanzasPage() {
       </div>
 
       {/* Transactions Table */}
-      <div className="bg-white rounded-xl shadow-md overflow-hidden">
+      <div className="overflow-hidden rounded-[2.5rem] bg-[#f2f4f3]">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="border-b border-[#d9ddd9] bg-[#e6e9e8]">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-[#414844]">
                   Fecha
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-[#414844]">
                   Tipo
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-[#414844]">
                   Descripción
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-[#414844]">
                   Categoría
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-[#414844]">
                   Método de Pago
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-[#414844]">
                   Referencia
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-[#414844]">
                   Monto
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-center text-xs font-bold uppercase tracking-wider text-[#414844]">
                   Estado
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-[#e6e9e8] bg-white">
               {filteredTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-[#414844]">
                     No se encontraron transacciones
                   </td>
                 </tr>
               ) : (
                 filteredTransactions.map((transaction) => (
-                  <tr key={`${transaction.type}-${transaction.id}`} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                  <tr key={`${transaction.type}-${transaction.id}`} className="hover:bg-[#f8faf9]">
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-[#414844]">
                       {new Date(transaction.date).toLocaleDateString('es-CO')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {transaction.type === 'income' ? (
-                        <span className="flex items-center gap-2 text-emerald-600">
+                        <span className="flex items-center gap-2 text-[#005236]">
                           <TrendingUp size={16} />
-                          <span className="text-sm font-medium">Ingreso</span>
+                          <span className="text-sm font-bold">Ingreso</span>
                         </span>
                       ) : (
-                        <span className="flex items-center gap-2 text-red-600">
+                        <span className="flex items-center gap-2 text-[#93000a]">
                           <TrendingDown size={16} />
-                          <span className="text-sm font-medium">Gasto</span>
+                          <span className="text-sm font-bold">Gasto</span>
                         </span>
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900">
+                      <div className="text-sm font-bold text-[#012d1d]">
                         {transaction.description}
                       </div>
                       {'supplier' in transaction && transaction.supplier && (
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-[#414844]">
                           Proveedor: {transaction.supplier}
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-[#414844]">
                       {getCategoryLabel(transaction.category)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-[#414844]">
                       {getPaymentMethodLabel(transaction.paymentMethod)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-[#414844]">
                       {transaction.reference || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <span className={`text-sm font-bold ${
-                        transaction.type === 'income' ? 'text-emerald-600' : 'text-red-600'
+                        transaction.type === 'income' ? 'text-[#005236]' : 'text-[#93000a]'
                       }`}>
                         {transaction.type === 'income' ? '+' : '-'}
                         {formatCurrency(transaction.amount)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${
                         transaction.status === 'received' || transaction.status === 'paid'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-yellow-100 text-yellow-800'
+                          ? 'bg-[#a0f4c8] text-[#005236]'
+                          : 'bg-amber-50 text-amber-900'
                       }`}>
                         {transaction.status === 'received' || transaction.status === 'paid' 
                           ? 'Completado' 
@@ -546,34 +544,34 @@ function TransactionModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-2xl w-full">
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+      <div className="w-full max-w-2xl rounded-[2.5rem] bg-white">
+        <div className="flex items-center justify-between border-b border-[#e6e9e8] p-8">
           <div className="flex items-center gap-3">
             {isIncome ? (
               <>
-                <div className="p-2 bg-emerald-100 rounded-lg">
-                  <TrendingUp className="text-emerald-600" size={24} />
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#a0f4c8] text-[#005236]">
+                  <TrendingUp size={22} />
                 </div>
-                <h2 className="text-xl font-bold text-gray-900">Nuevo Ingreso</h2>
+                <h2 className="text-xl font-bold text-[#012d1d]">Nuevo Ingreso</h2>
               </>
             ) : (
               <>
-                <div className="p-2 bg-red-100 rounded-lg">
-                  <TrendingDown className="text-red-600" size={24} />
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ffdad6] text-[#93000a]">
+                  <TrendingDown size={22} />
                 </div>
-                <h2 className="text-xl font-bold text-gray-900">Nuevo Gasto</h2>
+                <h2 className="text-xl font-bold text-[#012d1d]">Nuevo Gasto</h2>
               </>
             )}
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="text-[#414844] transition-colors hover:text-[#012d1d]">
             <X size={24} />
           </button>
         </div>
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 p-8">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="mb-2 block text-sm font-bold text-[#414844]">
                 Fecha *
               </label>
               <input
@@ -581,11 +579,11 @@ function TransactionModal({
                 required
                 value={formData.date}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full rounded-full border border-[#e6e9e8] px-4 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="mb-2 block text-sm font-bold text-[#414844]">
                 Monto *
               </label>
               <input
@@ -595,21 +593,21 @@ function TransactionModal({
                 step="0.01"
                 value={formData.amount || ''}
                 onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full rounded-full border border-[#e6e9e8] px-4 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
                 placeholder="$0"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="mb-2 block text-sm font-bold text-[#414844]">
               Categoría *
             </label>
             <select 
               required
               value={formData.category}
               onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="w-full rounded-full border border-[#e6e9e8] px-4 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
             >
               <option value="">Seleccionar categoría...</option>
               {(isIncome ? incomeCategories : expenseCategories).map(cat => (
@@ -628,18 +626,18 @@ function TransactionModal({
           </div>
 
           {isIncome && formData.category === 'sales' && (
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="rounded-[1.5rem] border border-[#e6e9e8] bg-[#f2f4f3] p-4">
+              <label className="mb-2 block text-sm font-bold text-[#414844]">
                 Seleccionar Ventas ({selectedSales.length} seleccionadas)
               </label>
               {loadingSales ? (
                 <div className="flex items-center justify-center p-4">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600"></div>
+                  <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-[#005236]"></div>
                 </div>
               ) : (
                 <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
                   {salesList.length === 0 ? (
-                    <p className="text-sm text-gray-500 text-center py-2">No se encontraron ventas</p>
+                    <p className="py-2 text-center text-sm text-[#414844]">No se encontraron ventas</p>
                   ) : (
                     salesList.map((sale) => {
                       const isSelected = selectedSales.includes(sale.id);
@@ -647,10 +645,10 @@ function TransactionModal({
                         <div 
                           key={sale.id}
                           onClick={() => toggleSale(sale)}
-                          className={`flex items-center justify-between p-3 rounded-lg cursor-pointer border transition-colors ${
+                          className={`flex cursor-pointer items-center justify-between rounded-[1rem] border p-3 transition-colors ${
                             isSelected 
-                              ? 'bg-emerald-50 border-emerald-500' 
-                              : 'bg-white border-gray-200 hover:border-emerald-300'
+                              ? 'border-[#6fc29a] bg-[#d9f7e8]' 
+                              : 'border-[#e6e9e8] bg-white hover:border-[#9fc9b2]'
                           }`}
                         >
                           <div className="flex items-center gap-3">
@@ -658,18 +656,18 @@ function TransactionModal({
                               type="checkbox" 
                               checked={isSelected}
                               readOnly
-                              className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 mt-1"
+                              className="mt-1 h-4 w-4 rounded border-[#c7cdc9] text-[#005236] focus:ring-[#005236]"
                             />
                             <div>
-                              <p className="text-sm font-medium text-gray-900 border-b border-transparent">
+                              <p className="border-b border-transparent text-sm font-bold text-[#012d1d]">
                                 {sale.sale_number} - {sale.customer_name || 'Cliente sin nombre'}
                               </p>
-                              <p className="text-xs text-gray-500 mt-0.5">
+                              <p className="mt-0.5 text-xs text-[#414844]">
                                 {new Date(sale.created_at).toLocaleDateString('es-CO')}
                               </p>
                             </div>
                           </div>
-                          <span className="text-sm font-bold text-gray-900">
+                          <span className="text-sm font-bold text-[#012d1d]">
                             {new Intl.NumberFormat('es-CO', {
                               style: 'currency',
                               currency: 'COP',
@@ -686,7 +684,7 @@ function TransactionModal({
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="mb-2 block text-sm font-bold text-[#414844]">
               Descripción *
             </label>
             <input
@@ -694,21 +692,21 @@ function TransactionModal({
               required
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="w-full rounded-full border border-[#e6e9e8] px-4 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
               placeholder="Descripción de la transacción"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="mb-2 block text-sm font-bold text-[#414844]">
                 Método de Pago *
               </label>
               <select 
                 required
                 value={formData.paymentMethod}
                 onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value as any })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full rounded-full border border-[#e6e9e8] px-4 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
               >
                 <option value="cash">Efectivo</option>
                 <option value="card">Tarjeta</option>
@@ -722,14 +720,14 @@ function TransactionModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="mb-2 block text-sm font-bold text-[#414844]">
                 Referencia (opcional)
               </label>
               <input
                 type="text"
                 value={formData.reference}
                 onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full rounded-full border border-[#e6e9e8] px-4 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
                 placeholder="Ej: V-001, C-001"
               />
             </div>
@@ -737,46 +735,46 @@ function TransactionModal({
 
           {!isIncome && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="mb-2 block text-sm font-bold text-[#414844]">
                 Proveedor (opcional)
               </label>
               <input
                 type="text"
                 value={formData.supplier}
                 onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full rounded-full border border-[#e6e9e8] px-4 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
                 placeholder="Nombre del proveedor"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="mb-2 block text-sm font-bold text-[#414844]">
               Notas (opcional)
             </label>
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="w-full rounded-[1.25rem] border border-[#e6e9e8] px-4 py-2 text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
               rows={3}
               placeholder="Notas adicionales..."
             />
           </div>
 
-          <div className="flex gap-3 justify-end pt-4 border-t">
+          <div className="flex justify-end gap-3 border-t border-[#e6e9e8] pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="rounded-full border border-[#e6e9e8] px-4 py-2 font-bold text-[#414844] transition-colors hover:bg-[#f2f4f3]"
             >
               Cancelar
             </button>
             <button 
               type="submit"
-              className={`px-4 py-2 text-white rounded-lg transition-colors ${
+              className={`rounded-full px-4 py-2 font-bold text-white transition-colors ${
                 isIncome 
-                  ? 'bg-emerald-600 hover:bg-emerald-700' 
-                  : 'bg-red-600 hover:bg-red-700'
+                  ? 'bg-[#005236] hover:bg-[#003d2d]' 
+                  : 'bg-[#ba1a1a] hover:bg-[#93000a]'
               }`}
             >
               Guardar {isIncome ? 'Ingreso' : 'Gasto'}
