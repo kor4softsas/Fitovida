@@ -179,12 +179,12 @@ export default function InventarioPage() {
 
   const getStockStatus = (product: InventoryProduct) => {
     if (product.currentStock === 0) {
-      return { label: 'Sin stock', color: 'text-[#93000a] bg-[#ffdad6]' };
+      return { label: 'Sin stock', color: 'text-red-600 bg-red-50' };
     }
     if (product.currentStock <= product.minStock) {
-      return { label: 'Stock bajo', color: 'text-amber-900 bg-amber-100' };
+      return { label: 'Stock bajo', color: 'text-orange-600 bg-orange-50' };
     }
-    return { label: 'Stock OK', color: 'text-[#005236] bg-[#a0f4c8]' };
+    return { label: 'Stock OK', color: 'text-emerald-600 bg-emerald-50' };
   };
 
   const categories = ['all', ...Array.from(new Set(products.map(p => p.category)))];
@@ -206,136 +206,120 @@ export default function InventarioPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-1">
-        <h2 className="text-4xl font-extrabold tracking-tight text-[#012d1d]">Inventario</h2>
-        <p className="text-[#414844] font-medium">
-          Control de productos y movimientos
-        </p>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="flex items-center justify-end gap-2">
-        {selectedIds.length > 0 && (
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Inventario</h1>
+          <p className="text-gray-600 mt-1">Control de productos y movimientos</p>
+        </div>
+        <div className="flex gap-2">
+          {selectedIds.length > 0 && (
+            <button
+              onClick={() => handleDelete(selectedIds)}
+              disabled={isDeleting}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-red-400"
+            >
+              <Trash2 size={20} />
+              Eliminar ({selectedIds.length})
+            </button>
+          )}
           <button
-            onClick={() => handleDelete(selectedIds)}
-            disabled={isDeleting}
-            className="flex items-center gap-2 px-4 py-2 bg-[#ba1a1a] text-white rounded-full text-sm font-bold hover:bg-[#a01818] transition-colors disabled:bg-[#d9595d]"
+            onClick={() => {
+              setSelectedProduct(null);
+              setShowProductModal(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            <Trash2 size={20} />
-            Eliminar ({selectedIds.length})
+            <Plus size={20} />
+            Nuevo Producto
           </button>
-        )}
-        <button
-          onClick={() => {
-            setSelectedProduct(null);
-            setShowProductModal(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2 bg-[#c1ecd4] text-[#012d1d] rounded-full text-sm font-bold hover:bg-[#a5d0b9] transition-colors"
-        >
-          <Plus size={20} />
-          Nuevo Producto
-        </button>
-        <button
-          onClick={() => setShowMovementModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[#a0f4c8] text-[#002113] rounded-full text-sm font-bold hover:bg-[#85e0b1] transition-colors"
-        >
-          <Plus size={20} />
-          Movimiento
-        </button>
-        <button
-          onClick={() => setShowBarcodePrinter(true)}
-          disabled={products.filter(p => p.barcode).length === 0}
-          className="flex items-center gap-2 px-4 py-2 bg-[#cce6d0] text-[#506856] rounded-full text-sm font-bold hover:bg-[#b3d4ba] transition-colors disabled:bg-[#a0a8a2]"
-        >
-          <Printer size={20} />
-          Imprimir Etiquetas
-        </button>
+          <button
+            onClick={() => setShowMovementModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+          >
+            <Plus size={20} />
+            Movimiento
+          </button>
+          <button
+            onClick={() => setShowBarcodePrinter(true)}
+            disabled={products.filter(p => p.barcode).length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400"
+          >
+            <Printer size={20} />
+            Imprimir Etiquetas
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-[#f2f4f3] p-8 rounded-[3rem] hover:scale-[1.02] transition-transform duration-300 group">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 rounded-full bg-[#c1ecd4] flex items-center justify-center text-[#002114]">
-              <Package size={24} />
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Productos</p>
+              <p className="text-2xl font-bold text-gray-900">{products.length}</p>
             </div>
-            <div className="w-8 h-8 rounded-full border-2 border-[#f2f4f3] bg-[#a0f4c8] text-[#005236] text-[10px] flex items-center justify-center font-bold">
-              {products.length}
-            </div>
+            <Package className="text-blue-500" size={32} />
           </div>
-          <p className="text-[#414844] text-sm font-semibold tracking-wider uppercase">Total Productos</p>
-          <h3 className="text-3xl font-extrabold text-[#012d1d] mt-1">
-            {products.length}
-          </h3>
         </div>
         
-        <div className="bg-[#f2f4f3] p-8 rounded-[3rem] hover:scale-[1.02] transition-transform duration-300 group">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 rounded-full bg-[#cee9d3] flex items-center justify-center text-[#092012]">
-              <TrendingUp size={24} />
+        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-emerald-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Valor Total</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {formatCurrency(products.reduce((sum, p) => sum + (p.currentStock * p.unitCost), 0))}
+              </p>
             </div>
-            <span className="text-[#005236] font-bold text-sm bg-[#a0f4c8] px-3 py-1 rounded-full">Disponible</span>
+            <TrendingUp className="text-emerald-500" size={32} />
           </div>
-          <p className="text-[#414844] text-sm font-semibold tracking-wider uppercase">Valor Total</p>
-          <h3 className="text-3xl font-extrabold text-[#012d1d] mt-1">
-            {formatCurrency(products.reduce((sum, p) => sum + (p.currentStock * p.unitCost), 0))}
-          </h3>
         </div>
 
-        <div className="bg-[#f2f4f3] p-8 rounded-[3rem] hover:scale-[1.02] transition-transform duration-300 group">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 rounded-full bg-amber-200 flex items-center justify-center text-amber-900">
-              <AlertTriangle size={24} />
+        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-orange-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Stock Bajo</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {products.filter(p => p.currentStock > 0 && p.currentStock <= p.minStock).length}
+              </p>
             </div>
-            <span className="text-amber-900 font-bold text-sm bg-amber-100 px-3 py-1 rounded-full flex items-center gap-1">
-              <TrendingDown size={14} /> {products.filter(p => p.currentStock > 0 && p.currentStock <= p.minStock).length}
-            </span>
+            <AlertTriangle className="text-orange-500" size={32} />
           </div>
-          <p className="text-[#414844] text-sm font-semibold tracking-wider uppercase">Stock Bajo</p>
-          <h3 className="text-3xl font-extrabold text-[#012d1d] mt-1">
-            {products.filter(p => p.currentStock > 0 && p.currentStock <= p.minStock).length}
-          </h3>
         </div>
 
-        <div className="bg-[#f2f4f3] p-8 rounded-[3rem] hover:scale-[1.02] transition-transform duration-300 group">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 rounded-full bg-[#ffdad6] flex items-center justify-center text-[#93000a]">
-              <TrendingDown size={24} />
-            </div>
-            <div className="flex -space-x-2">
-              <div className="w-8 h-8 rounded-full border-2 border-[#f2f4f3] bg-[#ba1a1a] text-[10px] text-white flex items-center justify-center font-bold">
+        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-red-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Sin Stock</p>
+              <p className="text-2xl font-bold text-gray-900">
                 {products.filter(p => p.currentStock === 0).length}
-              </div>
+              </p>
             </div>
+            <TrendingDown className="text-red-500" size={32} />
           </div>
-          <p className="text-[#414844] text-sm font-semibold tracking-wider uppercase">Sin Stock</p>
-          <h3 className="text-3xl font-extrabold text-[#012d1d] mt-1">
-            {products.filter(p => p.currentStock === 0).length}
-          </h3>
         </div>
       </div>
 
       {/* View Tabs */}
-      <div className="border-b border-[#e6e9e8]">
+      <div className="border-b border-gray-200">
         <div className="flex gap-4">
           <button
             onClick={() => setView('products')}
-            className={`pb-3 px-1 border-b-2 font-bold transition-colors ${
+            className={`pb-3 px-1 border-b-2 font-medium transition-colors ${
               view === 'products'
-                ? 'border-[#005236] text-[#005236]'
-                : 'border-transparent text-[#414844] hover:text-[#012d1d]'
+                ? 'border-emerald-600 text-emerald-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
             Productos
           </button>
           <button
             onClick={() => setView('movements')}
-            className={`pb-3 px-1 border-b-2 font-bold transition-colors ${
+            className={`pb-3 px-1 border-b-2 font-medium transition-colors ${
               view === 'movements'
-                ? 'border-[#005236] text-[#005236]'
-                : 'border-transparent text-[#414844] hover:text-[#012d1d]'
+                ? 'border-emerald-600 text-emerald-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
             Movimientos
@@ -346,22 +330,22 @@ export default function InventarioPage() {
       {view === 'products' ? (
         <>
           {/* Filters */}
-          <div className="bg-[#f2f4f3] rounded-[3rem] p-6">
+          <div className="bg-white rounded-xl shadow-md p-4">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1 relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#414844]" size={20} />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   type="text"
                   placeholder="Buscar por nombre, SKU o código de barras..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-white border border-[#e6e9e8] rounded-full text-[#012d1d] placeholder-[#414844] focus:outline-none focus:ring-2 focus:ring-[#005236] focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 />
               </div>
               <select
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
-                className="px-4 py-3 bg-white border border-[#e6e9e8] rounded-full text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236] focus:border-transparent"
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
               >
                 {categories.map(cat => (
                   <option key={cat} value={cat}>
@@ -373,10 +357,10 @@ export default function InventarioPage() {
           </div>
 
           {/* Products Table */}
-          <div className="bg-[#f2f4f3] rounded-[3rem] overflow-hidden">
+          <div className="bg-white rounded-xl shadow-md overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-[#e6e9e8] border-b border-[#d9ddd9]">
+                <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left w-10">
                       <input 
@@ -389,43 +373,43 @@ export default function InventarioPage() {
                             setSelectedIds([]);
                           }
                         }}
-                        className="rounded border-[#414844] text-[#005236] focus:ring-[#005236] cursor-pointer"
+                        className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                       />
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-[#414844] uppercase">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Imagen
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-[#414844] uppercase">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Producto
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-[#414844] uppercase">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       SKU / Código Barras
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-[#414844] uppercase">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Categoría
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-bold text-[#414844] uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                       Stock
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-bold text-[#414844] uppercase">
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                       Costo Unit.
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-bold text-[#414844] uppercase">
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                       Precio Venta
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-bold text-[#414844] uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                       Estado
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-bold text-[#414844] uppercase">
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                       Acciones
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-[#e6e9e8]">
+                <tbody className="bg-white divide-y divide-gray-200">
                   {filteredProducts.map((product) => {
                     const status = getStockStatus(product);
                     return (
-                      <tr key={product.id} className="hover:bg-[#e6e9e8] border-[#e6e9e8]">
+                      <tr key={product.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4">
                           <input 
                             type="checkbox" 
@@ -437,7 +421,7 @@ export default function InventarioPage() {
                                 setSelectedIds(selectedIds.filter(id => id !== product.id));
                               }
                             }}
-                            className="rounded border-[#414844] text-[#005236] focus:ring-[#005236] cursor-pointer"
+                            className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                           />
                         </td>
                         <td className="px-6 py-4">
@@ -448,43 +432,43 @@ export default function InventarioPage() {
                               className="h-10 w-10 object-cover rounded"
                             />
                           ) : (
-                            <div className="h-10 w-10 bg-[#d9ddd9] rounded flex items-center justify-center">
-                              <Package size={20} className="text-[#414844]" />
+                            <div className="h-10 w-10 bg-gray-200 rounded flex items-center justify-center">
+                              <Package size={20} className="text-gray-400" />
                             </div>
                           )}
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-sm font-bold text-[#012d1d]">{product.name}</div>
+                          <div className="text-sm font-medium text-gray-900">{product.name}</div>
                           {product.description && (
-                            <div className="text-xs text-[#414844]">{product.description}</div>
+                            <div className="text-xs text-gray-500">{product.description}</div>
                           )}
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-sm">
-                            <div className="font-medium text-[#012d1d]">{product.sku || '-'}</div>
+                            <div className="font-medium text-gray-900">{product.sku || '-'}</div>
                             {product.barcode && (
-                              <div className="flex items-center gap-1 text-[#414844] mt-1">
+                              <div className="flex items-center gap-1 text-gray-500 mt-1">
                                 <Barcode size={14} />
                                 <span className="text-xs">{product.barcode}</span>
                               </div>
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-[#414844]">
+                        <td className="px-6 py-4 text-sm text-gray-600">
                           {product.category}
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <div className="text-sm font-bold text-[#012d1d]">
+                          <div className="text-sm font-medium text-gray-900">
                             {product.currentStock}
                           </div>
-                          <div className="text-xs text-[#414844]">
+                          <div className="text-xs text-gray-500">
                             Min: {product.minStock}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-right text-sm text-[#012d1d]">
+                        <td className="px-6 py-4 text-right text-sm text-gray-900">
                           {formatCurrency(product.unitCost)}
                         </td>
-                        <td className="px-6 py-4 text-right text-sm font-bold text-[#012d1d]">
+                        <td className="px-6 py-4 text-right text-sm font-medium text-gray-900">
                           {formatCurrency(product.salePrice)}
                         </td>
                         <td className="px-6 py-4">
@@ -501,7 +485,7 @@ export default function InventarioPage() {
                                 setSelectedProduct(product);
                                 setShowProductModal(true);
                               }}
-                              className="text-[#005236] hover:text-[#003d2d]"
+                              className="text-blue-600 hover:text-blue-900"
                               title="Editar"
                             >
                               <Edit size={18} />
@@ -509,7 +493,7 @@ export default function InventarioPage() {
                             <button
                               onClick={() => handleDelete([product.id])}
                               disabled={isDeleting}
-                              className="text-[#ba1a1a] hover:text-[#8b1515] disabled:opacity-50"
+                              className="text-red-600 hover:text-red-900 disabled:opacity-50"
                               title="Eliminar"
                             >
                               <Trash2 size={18} />
@@ -526,88 +510,88 @@ export default function InventarioPage() {
         </>
       ) : (
         /* Movements View */
-        <div className="bg-[#f2f4f3] rounded-[3rem] overflow-hidden">
+        <div className="bg-white rounded-xl shadow-md overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-[#e6e9e8] border-b border-[#d9ddd9]">
+              <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-[#414844] uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Fecha
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-[#414844] uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Producto
                   </th>
-                  <th className="px-6 py-3 text-center text-xs font-bold text-[#414844] uppercase">
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                     Tipo
                   </th>
-                  <th className="px-6 py-3 text-center text-xs font-bold text-[#414844] uppercase">
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                     Cantidad
                   </th>
-                  <th className="px-6 py-3 text-center text-xs font-bold text-[#414844] uppercase">
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                     Stock Anterior
                   </th>
-                  <th className="px-6 py-3 text-center text-xs font-bold text-[#414844] uppercase">
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                     Stock Nuevo
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-[#414844] uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Motivo
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-bold text-[#414844] uppercase">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                     Costo Total
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-[#e6e9e8]">
+              <tbody className="bg-white divide-y divide-gray-200">
                 {movementsLoading && movements.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-6 py-10 text-center text-sm text-[#414844]">
+                    <td colSpan={8} className="px-6 py-10 text-center text-sm text-gray-500">
                       Cargando movimientos...
                     </td>
                   </tr>
                 )}
                 {!movementsLoading && movements.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-6 py-10 text-center text-sm text-[#414844]">
+                    <td colSpan={8} className="px-6 py-10 text-center text-sm text-gray-500">
                       No hay movimientos para mostrar.
                     </td>
                   </tr>
                 )}
                 {movements.map((movement) => (
-                  <tr key={movement.id} className="hover:bg-[#e6e9e8]">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[#414844]">
+                  <tr key={movement.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       {new Date(movement.createdAt).toLocaleDateString('es-CO')}
                     </td>
-                    <td className="px-6 py-4 text-sm font-bold text-[#012d1d]">
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
                       {movement.productName}
                     </td>
                     <td className="px-6 py-4 text-center">
                       {movement.type === 'entry' ? (
-                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-[#a0f4c8] text-[#005236]">
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-emerald-100 text-emerald-800">
                           Entrada
                         </span>
                       ) : movement.type === 'exit' ? (
-                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-[#ffdad6] text-[#93000a]">
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
                           Salida
                         </span>
                       ) : (
-                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-[#cce6d0] text-[#506856]">
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
                           Ajuste
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-center text-sm font-bold text-[#012d1d]">
+                    <td className="px-6 py-4 text-center text-sm font-medium text-gray-900">
                       {movement.type === 'entry' ? '+' : '-'}{movement.quantity}
                     </td>
-                    <td className="px-6 py-4 text-center text-sm text-[#414844]">
+                    <td className="px-6 py-4 text-center text-sm text-gray-600">
                       {movement.previousStock}
                     </td>
-                    <td className="px-6 py-4 text-center text-sm font-bold text-[#012d1d]">
+                    <td className="px-6 py-4 text-center text-sm font-medium text-gray-900">
                       {movement.newStock}
                     </td>
-                    <td className="px-6 py-4 text-sm text-[#414844]">
+                    <td className="px-6 py-4 text-sm text-gray-600">
                       {movement.reason}
                     </td>
-                    <td className="px-6 py-4 text-right text-sm text-[#012d1d]">
+                    <td className="px-6 py-4 text-right text-sm text-gray-900">
                       {movement.totalCost ? formatCurrency(movement.totalCost) : '-'}
                     </td>
                   </tr>
@@ -701,55 +685,55 @@ function MovementModal({ onClose, products }: { onClose: () => void; products: I
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-[2.5rem] max-w-2xl w-full">
-        <div className="p-8 border-b border-[#e6e9e8] flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-[#012d1d]">Nuevo Movimiento de Inventario</h2>
-          <button onClick={onClose} className="text-[#414844] hover:text-[#012d1d]">
+      <div className="bg-white rounded-xl max-w-2xl w-full">
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-gray-900">Nuevo Movimiento de Inventario</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={24} />
           </button>
         </div>
         
-        <div className="p-8 space-y-6">
+        <div className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-bold text-[#012d1d] mb-3">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Tipo de Movimiento
             </label>
             <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={() => setType('entry')}
-                className={`p-4 border-2 rounded-[1.5rem] ${
-                  type === 'entry' ? 'border-[#a0f4c8] bg-[#f0fdf9]' : 'border-[#e6e9e8]'
+                className={`p-3 border-2 rounded-lg ${
+                  type === 'entry' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'
                 }`}
               >
-                <TrendingUp className={type === 'entry' ? 'text-[#005236]' : 'text-[#414844]'} size={24} />
-                <div className="text-sm font-bold mt-1 text-[#012d1d]">Entrada</div>
+                <TrendingUp className={type === 'entry' ? 'text-emerald-600' : 'text-gray-400'} size={24} />
+                <div className="text-sm font-medium mt-1">Entrada</div>
               </button>
               <button
                 onClick={() => setType('exit')}
-                className={`p-4 border-2 rounded-[1.5rem] ${
-                  type === 'exit' ? 'border-[#ffdad6] bg-[#fffbfa]' : 'border-[#e6e9e8]'
+                className={`p-3 border-2 rounded-lg ${
+                  type === 'exit' ? 'border-red-500 bg-red-50' : 'border-gray-200'
                 }`}
               >
-                <TrendingDown className={type === 'exit' ? 'text-[#93000a]' : 'text-[#414844]'} size={24} />
-                <div className="text-sm font-bold mt-1 text-[#012d1d]">Salida</div>
+                <TrendingDown className={type === 'exit' ? 'text-red-600' : 'text-gray-400'} size={24} />
+                <div className="text-sm font-medium mt-1">Salida</div>
               </button>
               <button
                 onClick={() => setType('adjustment')}
-                className={`p-4 border-2 rounded-[1.5rem] ${
-                  type === 'adjustment' ? 'border-[#cce6d0] bg-[#f8faf9]' : 'border-[#e6e9e8]'
+                className={`p-3 border-2 rounded-lg ${
+                  type === 'adjustment' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
                 }`}
               >
-                <Edit className={type === 'adjustment' ? 'text-[#506856]' : 'text-[#414844]'} size={24} />
-                <div className="text-sm font-bold mt-1 text-[#012d1d]">Ajuste</div>
+                <Edit className={type === 'adjustment' ? 'text-blue-600' : 'text-gray-400'} size={24} />
+                <div className="text-sm font-medium mt-1">Ajuste</div>
               </button>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-[#012d1d] mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Producto
             </label>
-            <select className="w-full px-4 py-3 border border-[#e6e9e8] rounded-full focus:outline-none focus:ring-2 focus:ring-[#005236] focus:border-transparent text-[#012d1d]">
+            <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
               <option value="">Seleccionar producto...</option>
               {products.map(p => (
                 <option key={p.id} value={p.id}>{p.name} (Stock: {p.currentStock})</option>
@@ -759,58 +743,58 @@ function MovementModal({ onClose, products }: { onClose: () => void; products: I
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-bold text-[#012d1d] mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Cantidad
               </label>
               <input
                 type="number"
-                className="w-full px-4 py-3 border border-[#e6e9e8] rounded-full focus:outline-none focus:ring-2 focus:ring-[#005236] focus:border-transparent text-[#012d1d]"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 placeholder="0"
               />
             </div>
             <div>
-              <label className="block text-sm font-bold text-[#012d1d] mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Costo Unitario
               </label>
               <input
                 type="number"
-                className="w-full px-4 py-3 border border-[#e6e9e8] rounded-full focus:outline-none focus:ring-2 focus:ring-[#005236] focus:border-transparent text-[#012d1d]"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 placeholder="$0"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-[#012d1d] mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Motivo / Referencia
             </label>
             <input
               type="text"
-              className="w-full px-4 py-3 border border-[#e6e9e8] rounded-full focus:outline-none focus:ring-2 focus:ring-[#005236] focus:border-transparent text-[#012d1d]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
               placeholder="Ej: Compra #001, Venta #123, etc."
             />
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-[#012d1d] mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Notas (opcional)
             </label>
             <textarea
-              className="w-full px-4 py-3 border border-[#e6e9e8] rounded-[1.5rem] focus:outline-none focus:ring-2 focus:ring-[#005236] focus:border-transparent text-[#012d1d]"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
               rows={3}
               placeholder="Notas adicionales..."
             />
           </div>
         </div>
 
-        <div className="p-8 border-t border-[#e6e9e8] flex gap-3 justify-end">
+        <div className="p-6 border-t border-gray-200 flex gap-3 justify-end">
           <button
             onClick={onClose}
-            className="px-6 py-2 border border-[#e6e9e8] rounded-full hover:bg-[#f2f4f3] transition-colors text-[#414844] font-bold"
+            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
             Cancelar
           </button>
-          <button className="px-6 py-2 bg-[#a0f4c8] text-[#005236] rounded-full hover:bg-[#85e0b1] transition-colors font-bold">
+          <button className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors">
             Guardar Movimiento
           </button>
         </div>
