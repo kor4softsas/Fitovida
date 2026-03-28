@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 
+function isSchemaOrDbIssue(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const code = String((error as { code?: string }).code || '');
+  return [
+    'ER_NO_SUCH_TABLE',
+    'ER_BAD_FIELD_ERROR',
+    'ER_BAD_DB_ERROR',
+    'ECONNREFUSED',
+    'ETIMEDOUT',
+    'PROTOCOL_CONNECTION_LOST',
+    'PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR',
+    'ER_ACCESS_DENIED_ERROR',
+    'ER_ACCESS_DENIED_NO_PASSWORD_ERROR'
+  ].includes(code);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -11,79 +30,96 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
 
     let sales: any[] = [];
+    const degradedSources: string[] = [];
 
     // Obtener ventas de clientes (órdenes)
     if (type === 'all' || type === 'client') {
-      let clientSql = `
-        SELECT 
-          o.id, o.order_number as sale_number, o.customer_name, o.customer_email,
-          o.total, o.status, o.payment_method, o.created_at,
-          'client' as sale_type,
-          COUNT(oi.id) as item_count
-        FROM orders o
-        LEFT JOIN order_items oi ON o.id = oi.order_id
-        WHERE 1=1
-      `;
-      
-      const clientParams: any[] = [];
+      try {
+        let clientSql = `
+          SELECT 
+            o.id, o.order_number as sale_number, o.customer_name, o.customer_email,
+            o.total, o.status, o.payment_method, o.created_at,
+            'client' as sale_type,
+            COUNT(oi.id) as item_count
+          FROM orders o
+          LEFT JOIN order_items oi ON o.id = oi.order_id
+          WHERE 1=1
+        `;
+        
+        const clientParams: any[] = [];
 
-      if (status) {
-        clientSql += ' AND o.status = ?';
-        clientParams.push(status);
+        if (status) {
+          clientSql += ' AND o.status = ?';
+          clientParams.push(status);
+        }
+
+        if (fromDate) {
+          clientSql += ' AND DATE(o.created_at) >= ?';
+          clientParams.push(fromDate);
+        }
+
+        if (toDate) {
+          clientSql += ' AND DATE(o.created_at) <= ?';
+          clientParams.push(toDate);
+        }
+
+        clientSql += ' GROUP BY o.id ORDER BY o.created_at DESC LIMIT ?';
+        clientParams.push(limit);
+
+        const clientSales = await query(clientSql, clientParams);
+        sales = sales.concat(clientSales);
+      } catch (error) {
+        if (isSchemaOrDbIssue(error)) {
+          degradedSources.push('client');
+        } else {
+          throw error;
+        }
       }
-
-      if (fromDate) {
-        clientSql += ' AND DATE(o.created_at) >= ?';
-        clientParams.push(fromDate);
-      }
-
-      if (toDate) {
-        clientSql += ' AND DATE(o.created_at) <= ?';
-        clientParams.push(toDate);
-      }
-
-      clientSql += ' GROUP BY o.id ORDER BY o.created_at DESC LIMIT ?';
-      clientParams.push(limit);
-
-      const clientSales = await query(clientSql, clientParams);
-      sales = sales.concat(clientSales);
     }
 
     // Obtener ventas admin (manuales)
     if (type === 'all' || type === 'admin') {
-      let adminSql = `
-        SELECT 
-          a.id, a.sale_number, a.customer_name, a.customer_email,
-          a.total, a.payment_status as status, a.payment_method, a.created_at,
-          'admin' as sale_type,
-          COUNT(asi.id) as item_count
-        FROM admin_sales a
-        LEFT JOIN admin_sale_items asi ON a.id = asi.sale_id
-        WHERE 1=1
-      `;
-      
-      const adminParams: any[] = [];
+      try {
+        let adminSql = `
+          SELECT 
+            a.id, a.sale_number, a.customer_name, a.customer_email,
+            a.total, a.payment_status as status, a.payment_method, a.created_at,
+            'admin' as sale_type,
+            COUNT(asi.id) as item_count
+          FROM admin_sales a
+          LEFT JOIN admin_sale_items asi ON a.id = asi.sale_id
+          WHERE 1=1
+        `;
+        
+        const adminParams: any[] = [];
 
-      if (status) {
-        adminSql += ' AND a.payment_status = ?';
-        adminParams.push(status);
+        if (status) {
+          adminSql += ' AND a.payment_status = ?';
+          adminParams.push(status);
+        }
+
+        if (fromDate) {
+          adminSql += ' AND DATE(a.created_at) >= ?';
+          adminParams.push(fromDate);
+        }
+
+        if (toDate) {
+          adminSql += ' AND DATE(a.created_at) <= ?';
+          adminParams.push(toDate);
+        }
+
+        adminSql += ' GROUP BY a.id ORDER BY a.created_at DESC LIMIT ?';
+        adminParams.push(limit);
+
+        const adminSales = await query(adminSql, adminParams);
+        sales = sales.concat(adminSales);
+      } catch (error) {
+        if (isSchemaOrDbIssue(error)) {
+          degradedSources.push('admin');
+        } else {
+          throw error;
+        }
       }
-
-      if (fromDate) {
-        adminSql += ' AND DATE(a.created_at) >= ?';
-        adminParams.push(fromDate);
-      }
-
-      if (toDate) {
-        adminSql += ' AND DATE(a.created_at) <= ?';
-        adminParams.push(toDate);
-      }
-
-      adminSql += ' GROUP BY a.id ORDER BY a.created_at DESC LIMIT ?';
-      adminParams.push(limit);
-
-      const adminSales = await query(adminSql, adminParams);
-      sales = sales.concat(adminSales);
     }
 
     // Ordenar todas las ventas por fecha descendente
@@ -91,7 +127,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       sales: sales.slice(0, limit),
-      total: sales.length
+      total: sales.length,
+      degraded: degradedSources.length > 0,
+      degradedSources
     });
   } catch (error) {
     console.error('Error en GET /api/admin/sales:', error);

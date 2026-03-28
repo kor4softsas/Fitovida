@@ -53,6 +53,26 @@ export default function ProductModalForm({
   const [generatingBarcode, setGeneratingBarcode] = useState(false);
   const [barcodeMessage, setBarcodeMessage] = useState('');
 
+  const [isSkuManuallyEdited, setIsSkuManuallyEdited] = useState(!!product?.sku);
+
+  // Generar SKU automático
+  const generateSKUFromName = (name: string) => {
+    if (!name) return '';
+    const normalized = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const words = normalized.trim().split(/\s+/);
+    const significantWords = words.filter(word => word.length > 2 || /^\d+/.test(word));
+    const targetWords = significantWords.length > 0 ? significantWords : words;
+    
+    return targetWords.map(word => {
+      const cleanWord = word.replace(/[^A-Za-z0-9]/g, '');
+      if (!cleanWord) return '';
+      if (/^\d/.test(cleanWord)) {
+        return cleanWord.toUpperCase().substring(0, 4);
+      }
+      return cleanWord.substring(0, 3).toUpperCase();
+    }).filter(part => part.length > 0).join('-').substring(0, 20);
+  };
+
   // Manejo de carga de imagen
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -316,7 +336,17 @@ export default function ProductModalForm({
                       type="text"
                       required
                       value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      onChange={(e) => {
+                        const newName = e.target.value;
+                        const updates: Partial<InventoryProduct> = { name: newName };
+                        
+                        // Generar SKU automáticamente si es un producto nuevo y no se ha editado a mano
+                        if (!isSkuManuallyEdited && !product) {
+                          updates.sku = generateSKUFromName(newName);
+                        }
+                        
+                        setFormData({ ...formData, ...updates });
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
                       placeholder="Ej: Proteína Whey 2kg"
                     />
@@ -330,7 +360,10 @@ export default function ProductModalForm({
                       <input
                         type="text"
                         value={formData.sku}
-                        onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                        onChange={(e) => {
+                          setFormData({ ...formData, sku: e.target.value });
+                          setIsSkuManuallyEdited(e.target.value.trim() !== '');
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
                         placeholder="PROT-WHE-2K"
                       />

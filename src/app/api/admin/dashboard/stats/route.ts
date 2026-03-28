@@ -1,112 +1,184 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
+function isSchemaIssue(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const code = String((error as { code?: string }).code || '');
+  return [
+    'ER_NO_SUCH_TABLE',
+    'ER_BAD_FIELD_ERROR',
+    'ER_BAD_DB_ERROR'
+  ].includes(code);
+}
+
+function isDatabaseIssue(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const code = String((error as { code?: string }).code || '');
+  return [
+    'ECONNREFUSED',
+    'ETIMEDOUT',
+    'PROTOCOL_CONNECTION_LOST',
+    'PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR',
+    'ER_ACCESS_DENIED_ERROR',
+    'ER_ACCESS_DENIED_NO_PASSWORD_ERROR'
+  ].includes(code);
+}
+
+async function safeFirstRow<T extends Record<string, any>>(
+  sql: string,
+  fallback: T
+): Promise<T> {
+  try {
+    const [row] = await query<T>(sql);
+    return (row || fallback) as T;
+  } catch (error) {
+    if (isSchemaIssue(error) || isDatabaseIssue(error)) {
+      return fallback;
+    }
+    throw error;
+  }
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+}
+
 export async function GET(request: NextRequest) {
   try {
     // Ventas de hoy
-    const [todaySales] = await query(
+    const todaySales = await safeFirstRow(
       `SELECT COALESCE(SUM(total), 0) as amount FROM admin_sales 
-       WHERE DATE(created_at) = CURDATE() AND payment_status = 'completed'`
+       WHERE DATE(created_at) = CURDATE() AND payment_status = 'completed'`,
+      { amount: 0 }
     );
 
     // Ventas de esta semana
-    const [weekSales] = await query(
+    const weekSales = await safeFirstRow(
       `SELECT COALESCE(SUM(total), 0) as amount FROM admin_sales 
-       WHERE YEARWEEK(created_at) = YEARWEEK(NOW()) AND payment_status = 'completed'`
+       WHERE YEARWEEK(created_at) = YEARWEEK(NOW()) AND payment_status = 'completed'`,
+      { amount: 0 }
     );
 
     // Ventas de este mes
-    const [monthSales] = await query(
+    const monthSales = await safeFirstRow(
       `SELECT COALESCE(SUM(total), 0) as amount FROM admin_sales 
-       WHERE MONTH(created_at) = MONTH(NOW()) AND YEAR(created_at) = YEAR(NOW()) AND payment_status = 'completed'`
+       WHERE MONTH(created_at) = MONTH(NOW()) AND YEAR(created_at) = YEAR(NOW()) AND payment_status = 'completed'`,
+      { amount: 0 }
     );
 
     // Ventas de este año
-    const [yearSales] = await query(
+    const yearSales = await safeFirstRow(
       `SELECT COALESCE(SUM(total), 0) as amount FROM admin_sales 
-       WHERE YEAR(created_at) = YEAR(NOW()) AND payment_status = 'completed'`
+       WHERE YEAR(created_at) = YEAR(NOW()) AND payment_status = 'completed'`,
+      { amount: 0 }
     );
 
     // Ordenes de clientes de hoy
-    const [todayOrders] = await query(
+    const todayOrders = await safeFirstRow(
       `SELECT COUNT(*) as count, COALESCE(SUM(total), 0) as amount FROM orders 
-       WHERE DATE(created_at) = CURDATE()`
+       WHERE DATE(created_at) = CURDATE()`,
+      { count: 0, amount: 0 }
     );
 
     // Total de productos en inventario activo
-    const [totalProducts] = await query(
-      `SELECT COUNT(*) as count FROM inventory_products WHERE status = 'active'`
+    const totalProducts = await safeFirstRow(
+      `SELECT COUNT(*) as count FROM inventory_products WHERE status = 'active'`,
+      { count: 0 }
     );
 
     // Productos con bajo stock
-    const [lowStockProducts] = await query(
+    const lowStockProducts = await safeFirstRow(
       `SELECT COUNT(*) as count FROM inventory_products 
-       WHERE current_stock <= min_stock AND status = 'active'`
+       WHERE current_stock <= min_stock AND status = 'active'`,
+      { count: 0 }
     );
 
     // Productos sin stock
-    const [outOfStockProducts] = await query(
+    const outOfStockProducts = await safeFirstRow(
       `SELECT COUNT(*) as count FROM inventory_products 
-       WHERE current_stock = 0 AND status = 'active'`
+       WHERE current_stock = 0 AND status = 'active'`,
+      { count: 0 }
     );
 
     // Valor total de inventario
-    const [inventoryValue] = await query(
+    const inventoryValue = await safeFirstRow(
       `SELECT COALESCE(SUM(current_stock * unit_cost), 0) as value FROM inventory_products 
-       WHERE status = 'active'`
+       WHERE status = 'active'`,
+      { value: 0 }
     );
 
     // Ingresos totales
-    const [totalIncomes] = await query(
+    const totalIncomes = await safeFirstRow(
       `SELECT COALESCE(SUM(amount), 0) as amount FROM incomes 
-       WHERE MONTH(created_at) = MONTH(NOW()) AND YEAR(created_at) = YEAR(NOW())`
+       WHERE MONTH(created_at) = MONTH(NOW()) AND YEAR(created_at) = YEAR(NOW())`,
+      { amount: 0 }
     );
 
     // Gastos totales
-    const [totalExpenses] = await query(
+    const totalExpenses = await safeFirstRow(
       `SELECT COALESCE(SUM(amount), 0) as amount FROM expenses 
-       WHERE MONTH(created_at) = MONTH(NOW()) AND YEAR(created_at) = YEAR(NOW())`
+       WHERE MONTH(created_at) = MONTH(NOW()) AND YEAR(created_at) = YEAR(NOW())`,
+      { amount: 0 }
     );
 
     // Balance del mes
-    const monthBalance = parseFloat(totalIncomes?.amount || 0) - parseFloat(totalExpenses?.amount || 0);
+    const totalIncomeAmount = toNumber(totalIncomes?.amount);
+    const totalExpenseAmount = toNumber(totalExpenses?.amount);
+    const monthBalance = totalIncomeAmount - totalExpenseAmount;
 
     // Órdenes pendientes
-    const [pendingOrders] = await query(
+    const pendingOrders = await safeFirstRow(
       `SELECT COUNT(*) as count FROM orders 
-       WHERE status IN ('pending', 'processing')`
+       WHERE status IN ('pending', 'processing')`,
+      { count: 0 }
     );
 
     // Ventas admin de hoy
-    const [adminSalesToday] = await query(
+    const adminSalesToday = await safeFirstRow(
       `SELECT COUNT(*) as count FROM admin_sales 
-       WHERE DATE(created_at) = CURDATE() AND payment_status = 'completed'`
+       WHERE DATE(created_at) = CURDATE() AND payment_status = 'completed'`,
+      { count: 0 }
     );
 
     return NextResponse.json({
       sales: {
-        today: parseFloat(todaySales?.amount || 0),
-        week: parseFloat(weekSales?.amount || 0),
-        month: parseFloat(monthSales?.amount || 0),
-        year: parseFloat(yearSales?.amount || 0)
+        today: toNumber(todaySales?.amount),
+        week: toNumber(weekSales?.amount),
+        month: toNumber(monthSales?.amount),
+        year: toNumber(yearSales?.amount)
       },
       orders: {
         today_count: todayOrders?.count || 0,
-        today_amount: parseFloat(todayOrders?.amount || 0),
+        today_amount: toNumber(todayOrders?.amount),
         pending: pendingOrders?.count || 0
       },
       inventory: {
         total_products: totalProducts?.count || 0,
         low_stock: lowStockProducts?.count || 0,
         out_of_stock: outOfStockProducts?.count || 0,
-        total_value: parseFloat(inventoryValue?.value || 0)
+        total_value: toNumber(inventoryValue?.value)
       },
       finances: {
-        total_income: parseFloat(totalIncomes?.amount || 0),
-        total_expenses: parseFloat(totalExpenses?.amount || 0),
+        total_income: totalIncomeAmount,
+        total_expenses: totalExpenseAmount,
         balance: monthBalance,
-        profit_margin: parseFloat(totalIncomes?.amount || 0) > 0 
-          ? ((monthBalance / parseFloat(totalIncomes?.amount || 0)) * 100).toFixed(2)
+        profit_margin: totalIncomeAmount > 0
+          ? ((monthBalance / totalIncomeAmount) * 100).toFixed(2)
           : '0'
       },
       admin_sales: {

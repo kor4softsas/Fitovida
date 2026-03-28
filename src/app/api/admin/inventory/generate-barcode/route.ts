@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 
+function isDatabaseError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const code = (error as { code?: string }).code;
+  return [
+    'ER_ACCESS_DENIED_ERROR',
+    'ER_ACCESS_DENIED_NO_PASSWORD_ERROR',
+    'ER_BAD_DB_ERROR',
+    'ER_NO_SUCH_TABLE',
+    'ER_BAD_FIELD_ERROR',
+    'ECONNREFUSED',
+    'ETIMEDOUT',
+    'PROTOCOL_CONNECTION_LOST'
+  ].includes(String(code));
+}
+
 /**
  * Genera un código EAN-13 válido con dígito de verificación
  * Formato: 759 (prefijo Fitovida personalizado) + 9 dígitos + 1 dígito de verificación
@@ -40,19 +58,18 @@ function generateCode128(): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { format = 'EAN-13', productId } = body;
-
-    if (!productId) {
-      return NextResponse.json(
-        { error: 'ID de producto requerido' },
-        { status: 400 }
-      );
+    let body: any = {};
+    try {
+      body = await request.json();
+    } catch {
+      body = {};
     }
+    const { format = 'EAN-13' } = body;
 
     let barcode: string;
     let attempts = 0;
     const maxAttempts = 10;
+    let dbValidationSkipped = false;
 
     // Generar código único (reintentar si ya existe)
     do {
@@ -63,10 +80,17 @@ export async function POST(request: NextRequest) {
       }
 
       // Verificar si el código ya existe en la BD
-      const existing = await queryOne(
-        'SELECT id FROM inventory_products WHERE barcode = ?',
-        [barcode]
-      );
+      let existing: unknown = null;
+      try {
+        existing = await queryOne(
+          'SELECT id FROM inventory_products WHERE barcode = ?',
+          [barcode]
+        );
+      } catch (dbError) {
+        // No bloquear la operación de generación por fallas de validación en BD.
+        dbValidationSkipped = true;
+        break;
+      }
 
       if (!existing) {
         break; // Código único encontrado
@@ -85,7 +109,10 @@ export async function POST(request: NextRequest) {
       success: true,
       barcode,
       format: format === 'CODE128' ? 'Code128' : 'EAN-13',
-      message: `Código de barras ${format} generado exitosamente`
+      message: dbValidationSkipped
+        ? `Código de barras ${format} generado (sin validación en BD por conexión)`
+        : `Código de barras ${format} generado exitosamente`,
+      dbValidationSkipped
     });
   } catch (error) {
     console.error('Error en POST /api/admin/inventory/generate-barcode:', error);
@@ -106,20 +133,14 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const productId = searchParams.get('productId');
+    const productId = searchParams.get('productId') || 'new';
     const currentBarcode = searchParams.get('currentBarcode');
     const format = searchParams.get('format') || 'EAN-13';
-
-    if (!productId) {
-      return NextResponse.json(
-        { error: 'ID de producto requerido' },
-        { status: 400 }
-      );
-    }
 
     let barcode: string;
     let attempts = 0;
     const maxAttempts = 10;
+    let dbValidationSkipped = false;
 
     do {
       if (format === 'CODE128') {
@@ -135,10 +156,24 @@ export async function GET(request: NextRequest) {
       }
 
       // Verificar unicidad en BD
-      const existing = await queryOne(
-        'SELECT id FROM inventory_products WHERE barcode = ? AND id != ?',
-        [barcode, productId]
-      );
+      let existing: unknown = null;
+      try {
+        if (productId === 'new') {
+          existing = await queryOne(
+            'SELECT id FROM inventory_products WHERE barcode = ?',
+            [barcode]
+          );
+        } else {
+          existing = await queryOne(
+            'SELECT id FROM inventory_products WHERE barcode = ? AND id != ?',
+            [barcode, productId]
+          );
+        }
+      } catch (dbError) {
+        // No bloquear la operación de regeneración por fallas de validación en BD.
+        dbValidationSkipped = true;
+        break;
+      }
 
       if (!existing) {
         break;
@@ -157,7 +192,10 @@ export async function GET(request: NextRequest) {
       success: true,
       barcode,
       format: format === 'CODE128' ? 'Code128' : 'EAN-13',
-      message: 'Código regenerado exitosamente'
+      message: dbValidationSkipped
+        ? 'Código regenerado (sin validación en BD por conexión)'
+        : 'Código regenerado exitosamente',
+      dbValidationSkipped
     });
   } catch (error) {
     console.error('Error en GET /api/admin/inventory/generate-barcode:', error);
