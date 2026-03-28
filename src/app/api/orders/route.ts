@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
         // Insertar item de orden
         await query(
           'INSERT INTO order_items (order_id, product_id, product_name, product_image, quantity, price) VALUES (?, ?, ?, ?, ?, ?)',
-          [orderId, item.id, item.name, item.image, item.quantity, item.price]
+          [orderId, item.id, item.name, item.image || '', item.quantity, item.price]
         );
 
         // Obtener información de inventario
@@ -182,16 +182,9 @@ export async function POST(request: NextRequest) {
           const prod = inventoryProduct[0];
           const previousStock = prod.current_stock;
           const newStock = previousStock - item.quantity;
-
-          // Validar que hay stock suficiente
-          if (newStock < 0) {
-            // Eliminar orden creada
-            await query('DELETE FROM orders WHERE id = ?', [orderId]);
-            return NextResponse.json(
-              { error: `Stock insuficiente para ${item.name}` },
-              { status: 400 }
-            );
-          }
+          
+          // Nota: Permitimos stock negativo para no perder órdenes que ya fueron pagadas
+          // o que el cliente finalizó con éxito en el frontend
 
           // Registrar movimiento de inventario
           await query(
