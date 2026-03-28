@@ -97,14 +97,19 @@ export default function FacturaHTML({ sale }: { sale: Sale }) {
             </div>
           </div>
           <div style={{ fontSize: 10, color: '#333', lineHeight: 1.6 }}>
-            <div>
-              {settings?.address || ''} — {settings?.city || ''},{' '}
-              {settings?.department || ''}
-            </div>
-            <div>
-              Tel: {settings?.phone || ''} | {settings?.email || ''}
-            </div>
-            <div>{settings?.website || ''}</div>
+            {(settings?.address || settings?.city || settings?.department) && (
+              <div>
+                {[settings?.address, settings?.city, settings?.department].filter(Boolean).join(', ')}
+              </div>
+            )}
+            {(settings?.phone || settings?.email) && (
+              <div>
+                {settings?.phone && <span>Tel: {settings.phone}</span>}
+                {settings?.phone && settings?.email && <span> | </span>}
+                {settings?.email && <span>{settings.email}</span>}
+              </div>
+            )}
+            {settings?.website && <div>{settings.website}</div>}
           </div>
         </div>
 

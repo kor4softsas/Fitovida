@@ -79,7 +79,7 @@ export default function VentasPage() {
             customerEmail: s.customer_email,
             customerPhone: s.customer_phone || '',
             customerDocument: s.customer_document || '',
-            items: [],
+            items: s.items || [],
             subtotal: s.subtotal || s.total,
             tax: s.tax || 0,
             discount: s.discount || 0,  

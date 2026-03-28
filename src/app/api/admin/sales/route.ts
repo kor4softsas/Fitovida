@@ -125,8 +125,58 @@ export async function GET(request: NextRequest) {
     // Ordenar todas las ventas por fecha descendente
     sales.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
+    const finalSales = sales.slice(0, limit);
+
+    // Fetch items limitando a las que se van a retornar
+    const clientIds = finalSales.filter(s => s.sale_type === 'client').map(s => s.id);
+    const adminIds = finalSales.filter(s => s.sale_type === 'admin').map(s => s.id);
+
+    try {
+      const clientItems = clientIds.length > 0 
+        ? await query(`SELECT * FROM order_items WHERE order_id IN (${clientIds.map(() => '?').join(',')})`, clientIds)
+        : [];
+        
+      const adminItems = adminIds.length > 0
+        ? await query(`SELECT * FROM admin_sale_items WHERE sale_id IN (${adminIds.map(() => '?').join(',')})`, adminIds)
+        : [];
+
+      finalSales.forEach(sale => {
+        if (sale.sale_type === 'client') {
+          const items = clientItems.filter((i: any) => i.order_id === sale.id);
+          sale.items = items.map((i: any) => ({
+            id: i.id,
+            productId: String(i.product_id),
+            productName: i.product_name,
+            quantity: i.quantity,
+            unitPrice: Number(i.price),
+            discount: 0,
+            tax: 0,
+            subtotal: Number(i.price) * i.quantity,
+            total: Number(i.price) * i.quantity
+          }));
+        } else {
+          const items = adminItems.filter((i: any) => i.sale_id === sale.id);
+          sale.items = items.map((i: any) => ({
+            id: i.id,
+            productId: String(i.product_id),
+            productName: i.product_name,
+            quantity: i.quantity,
+            unitPrice: Number(i.unit_price),
+            discount: Number(i.discount) || 0,
+            tax: Number(i.tax) || 0,
+            subtotal: Number(i.subtotal) || (Number(i.unit_price) * i.quantity),
+            total: Number(i.total) || (Number(i.unit_price) * i.quantity)
+          }));
+        }
+      });
+    } catch (itemError) {
+      console.error('Error fetching items for sales:', itemError);
+      // Opcionalmente podemos continuar sin items y se mostrarían vacíos
+      finalSales.forEach(sale => { if (!sale.items) sale.items = []; });
+    }
+
     return NextResponse.json({
-      sales: sales.slice(0, limit),
+      sales: finalSales,
       total: sales.length,
       degraded: degradedSources.length > 0,
       degradedSources
