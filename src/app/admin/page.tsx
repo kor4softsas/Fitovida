@@ -77,233 +77,199 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-1">
-            {new Date().toLocaleDateString('es-CO', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-            })}
-          </p>
-        </div>
+      <div className="flex flex-col gap-1">
+        <h2 className="text-4xl font-extrabold tracking-tight text-[#012d1d]">Vista General</h2>
+        <p className="text-[#414844] font-medium">
+          Bienvenido de vuelta. Tu tienda está respirando.
+        </p>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Ventas de Hoy */}
-        <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-emerald-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Ventas Hoy</p>
-              <p className="text-2xl font-bold text-gray-900 mt-2">
-                {formatCurrency(stats.sales.today)}
-              </p>
+        <div className="bg-[#f2f4f3] p-8 rounded-[3rem] hover:scale-[1.02] transition-transform duration-300 group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 rounded-full bg-[#c1ecd4] flex items-center justify-center text-[#002114]">
+              <ShoppingCart size={24} />
             </div>
-            <div className="p-3 bg-emerald-100 rounded-lg">
-              <ShoppingCart className="text-emerald-600" size={24} />
-            </div>
+            <span className="text-[#005236] font-bold text-sm bg-[#a0f4c8] px-3 py-1 rounded-full flex items-center gap-1">
+              <TrendingUp size={14} /> +12%
+            </span>
           </div>
-          <div className="mt-4 flex items-center text-sm">
-            <TrendingUp className="text-emerald-600 mr-1" size={16} />
-            <span className="text-emerald-600 font-medium">+12%</span>
-            <span className="text-gray-500 ml-2">vs ayer</span>
-          </div>
+          <p className="text-[#414844] text-sm font-semibold tracking-wider uppercase">Ventas Hoy</p>
+          <h3 className="text-3xl font-extrabold text-[#012d1d] mt-1">
+            {formatCurrency(stats.sales.today)}
+          </h3>
         </div>
 
         {/* Ventas del Mes */}
-        <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Ventas del Mes</p>
-              <p className="text-2xl font-bold text-gray-900 mt-2">
-                {formatCurrency(stats.sales.month)}
-              </p>
+        <div className="bg-[#f2f4f3] p-8 rounded-[3rem] hover:scale-[1.02] transition-transform duration-300 group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 rounded-full bg-[#cce6d0] flex items-center justify-center text-[#506856]">
+              <Calendar size={24} />
             </div>
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <Calendar className="text-blue-600" size={24} />
-            </div>
+            <span className="text-[#005236] font-bold text-sm bg-[#a0f4c8] px-3 py-1 rounded-full flex items-center gap-1">
+               <TrendingUp size={14} /> +8%
+            </span>
           </div>
-          <div className="mt-4 flex items-center text-sm">
-            <TrendingUp className="text-blue-600 mr-1" size={16} />
-            <span className="text-blue-600 font-medium">+8%</span>
-            <span className="text-gray-500 ml-2">vs mes anterior</span>
-          </div>
+          <p className="text-[#414844] text-sm font-semibold tracking-wider uppercase">Ventas del Mes</p>
+          <h3 className="text-3xl font-extrabold text-[#012d1d] mt-1">
+            {formatCurrency(stats.sales.month)}
+          </h3>
         </div>
 
         {/* Balance */}
-        <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-purple-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Balance Mensual</p>
-              <p className="text-2xl font-bold text-gray-900 mt-2">
-                {formatCurrency(stats.finances.balance)}
-              </p>
+        <div className="bg-[#f2f4f3] p-8 rounded-[3rem] hover:scale-[1.02] transition-transform duration-300 group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 rounded-full bg-[#a0f4c8] flex items-center justify-center text-[#002113]">
+              <DollarSign size={24} />
             </div>
-            <div className="p-3 bg-purple-100 rounded-lg">
-              <DollarSign className="text-purple-600" size={24} />
-            </div>
+            <span className="text-[#005236] font-bold text-sm bg-[#a0f4c8] px-3 py-1 rounded-full flex items-center gap-1">Mensual</span>
           </div>
-          <div className="mt-4 text-sm text-gray-600">
-            <div>Ingresos: {formatCurrency(stats.finances.totalIncome)}</div>
-            <div>Gastos: {formatCurrency(stats.finances.totalExpenses)}</div>
-          </div>
+          <p className="text-[#414844] text-sm font-semibold tracking-wider uppercase">Balance</p>
+          <h3 className="text-3xl font-extrabold text-[#012d1d] mt-1">
+            {formatCurrency(stats.finances.balance)}
+          </h3>
         </div>
 
         {/* Inventario */}
-        <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-orange-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Productos</p>
-              <p className="text-2xl font-bold text-gray-900 mt-2">
-                {stats.inventory.totalProducts}
-              </p>
+        <div className="bg-[#f2f4f3] p-8 rounded-[3rem] hover:scale-[1.02] transition-transform duration-300 group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 rounded-full bg-[#cee9d3] flex items-center justify-center text-[#092012]">
+              <Package size={24} />
             </div>
-            <div className="p-3 bg-orange-100 rounded-lg">
-              <Package className="text-orange-600" size={24} />
+            <div className="flex -space-x-2">
+              <div className="w-8 h-8 rounded-full border-2 border-[#f2f4f3] bg-[#a0f4c8] text-[#005236] text-[10px] flex items-center justify-center font-bold">
+                {stats.inventory.lowStock}
+              </div>
             </div>
           </div>
-          <div className="mt-4 flex items-center text-sm">
-            <AlertTriangle className="text-orange-600 mr-1" size={16} />
-            <span className="text-orange-600 font-medium">
-              {stats.inventory.lowStock} bajo stock
-            </span>
-          </div>
+          <p className="text-[#414844] text-sm font-semibold tracking-wider uppercase">Productos</p>
+          <h3 className="text-3xl font-extrabold text-[#012d1d] mt-1">
+            {stats.inventory.totalProducts}
+          </h3>
         </div>
       </div>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Ventas Recientes */}
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-900">Acciones Rápidas</h2>
+        {/* Acciones Rápidas */}
+        <div className="col-span-1 bg-[#f2f4f3] p-10 rounded-[2.5rem]">
+          <div className="flex items-center justify-between mb-8">
+            <h4 className="text-2xl font-bold text-[#012d1d]">Acciones Rápidas</h4>
+            <span className="material-symbols-outlined text-[#414844] cursor-pointer">more_horiz</span>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-6">
             <Link
               href="/admin/ventas?action=new"
-              className="block p-4 border border-gray-200 rounded-lg hover:bg-emerald-50 hover:border-emerald-500 transition-colors"
+              className="flex gap-4 group"
             >
-              <div className="flex items-center gap-3">
-                <ShoppingCart className="text-emerald-600" size={20} />
-                <div>
-                  <h3 className="font-medium text-gray-900">Registrar Venta</h3>
-                  <p className="text-sm text-gray-600">Crear nueva venta manual</p>
-                </div>
+              <div className="w-10 h-10 rounded-full bg-[#c1ecd4] flex-shrink-0 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <ShoppingCart className="text-[#012d1d] text-sm" size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-[#012d1d]">Registrar Venta</p>
+                <p className="text-xs text-[#414844]">Crear nueva venta manual</p>
+                <span className="text-[10px] text-[#3f6653] font-bold uppercase mt-1 block">Acción Principal</span>
               </div>
             </Link>
 
             <Link
               href="/admin/inventario?action=entry"
-              className="block p-4 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-500 transition-colors"
+              className="flex gap-4 group"
             >
-              <div className="flex items-center gap-3">
-                <Package className="text-blue-600" size={20} />
-                <div>
-                  <h3 className="font-medium text-gray-900">Entrada de Inventario</h3>
-                  <p className="text-sm text-gray-600">Registrar compra de productos</p>
-                </div>
+              <div className="w-10 h-10 rounded-full bg-[#cce6d0] flex-shrink-0 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Package className="text-[#506856] text-sm" size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-[#012d1d]">Entrada de Inventario</p>
+                <p className="text-xs text-[#414844]">Registrar compra de productos</p>
+                <span className="text-[10px] text-[#3f6653] font-bold uppercase mt-1 block">Gestión</span>
               </div>
             </Link>
 
             <Link
               href="/admin/finanzas?action=expense"
-              className="block p-4 border border-gray-200 rounded-lg hover:bg-purple-50 hover:border-purple-500 transition-colors"
+              className="flex gap-4 group"
             >
-              <div className="flex items-center gap-3">
-                <DollarSign className="text-purple-600" size={20} />
-                <div>
-                  <h3 className="font-medium text-gray-900">Registrar Gasto</h3>
-                  <p className="text-sm text-gray-600">Añadir nuevo gasto</p>
-                </div>
+              <div className="w-10 h-10 rounded-full bg-[#a0f4c8] flex-shrink-0 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <DollarSign className="text-[#002113] text-sm" size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-[#012d1d]">Registrar Gasto</p>
+                <p className="text-xs text-[#414844]">Añadir nuevo gasto</p>
+                <span className="text-[10px] text-[#3f6653] font-bold uppercase mt-1 block">Finanzas</span>
               </div>
             </Link>
           </div>
+          <Link href="/admin/ventas" className="w-full block text-center mt-10 py-3 rounded-full border border-[#c1c8c2]/30 text-xs font-bold text-[#414844] hover:bg-[#e6e9e8] transition-all">
+             Ver Todo el Historial
+          </Link>
         </div>
 
         {/* Alertas */}
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-900">Alertas</h2>
+        <div className="col-span-1 bg-[#f2f4f3] p-10 rounded-[2.5rem]">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-[#012d1d]">notifications_active</span>
+              <h4 className="text-2xl font-bold text-[#012d1d]">Alertas</h4>
+            </div>
+            <div className="flex -space-x-3">
+              <div className="w-8 h-8 rounded-full border-2 border-[#f2f4f3] bg-[#ba1a1a] text-[10px] text-white flex items-center justify-center font-bold">
+                 {stats.inventory.outOfStock + stats.inventory.lowStock}
+              </div>
+            </div>
           </div>
-          <div className="space-y-3">
+          
+          <div className="space-y-4">
             {stats.inventory.lowStock > 0 && (
-              <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="text-orange-600 mt-0.5" size={20} />
+              <div className="flex items-center justify-between bg-white p-4 rounded-[1.25rem]">
+                <div className="flex items-center gap-4">
+                  <div className="w-2 h-10 bg-amber-500 rounded-full"></div>
                   <div>
-                    <h3 className="font-medium text-orange-900">Stock Bajo</h3>
-                    <p className="text-sm text-orange-700 mt-1">
-                      {stats.inventory.lowStock} productos con stock bajo
-                    </p>
-                    <Link 
-                      href="/admin/inventario?filter=lowStock" 
-                      className="text-sm text-orange-600 hover:text-orange-800 font-medium mt-2 inline-block"
-                    >
-                      Ver productos →
-                    </Link>
+                    <p className="text-sm font-bold text-[#012d1d]">Stock Bajo</p>
+                    <p className="text-xs text-[#414844]">{stats.inventory.lowStock} productos por reponer</p>
                   </div>
                 </div>
+                <Link href="/admin/inventario?filter=lowStock" className="bg-[#c1ecd4] text-[#012d1d] px-4 py-2 rounded-full text-xs font-bold hover:bg-[#a5d0b9] transition-colors">Ver</Link>
               </div>
             )}
 
             {stats.inventory.outOfStock > 0 && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="text-red-600 mt-0.5" size={20} />
+              <div className="flex items-center justify-between bg-white p-4 rounded-[1.25rem]">
+                <div className="flex items-center gap-4">
+                  <div className="w-2 h-10 bg-[#ba1a1a] rounded-full"></div>
                   <div>
-                    <h3 className="font-medium text-red-900">Sin Stock</h3>
-                    <p className="text-sm text-red-700 mt-1">
-                      {stats.inventory.outOfStock} productos sin stock
-                    </p>
-                    <Link 
-                      href="/admin/inventario?filter=outOfStock" 
-                      className="text-sm text-red-600 hover:text-red-800 font-medium mt-2 inline-block"
-                    >
-                      Ver productos →
-                    </Link>
+                    <p className="text-sm font-bold text-[#012d1d]">Sin Stock</p>
+                    <p className="text-xs text-[#414844]">{stats.inventory.outOfStock} productos agotados</p>
                   </div>
                 </div>
+                <Link href="/admin/inventario?filter=outOfStock" className="bg-[#ffdad6] text-[#93000a] px-4 py-2 rounded-full text-xs font-bold hover:bg-[#ffb4ab] transition-colors">Ver</Link>
               </div>
             )}
 
             {stats.finances.pendingPayments > 0 && (
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <DollarSign className="text-yellow-600 mt-0.5" size={20} />
+              <div className="flex items-center justify-between bg-white p-4 rounded-[1.25rem] bg-opacity-80">
+                <div className="flex items-center gap-4">
+                  <div className="w-2 h-10 bg-amber-400 rounded-full"></div>
                   <div>
-                    <h3 className="font-medium text-yellow-900">Pagos Pendientes</h3>
-                    <p className="text-sm text-yellow-700 mt-1">
-                      {formatCurrency(stats.finances.pendingPayments)} en pagos pendientes
-                    </p>
-                    <Link 
-                      href="/admin/finanzas?filter=pending" 
-                      className="text-sm text-yellow-600 hover:text-yellow-800 font-medium mt-2 inline-block"
-                    >
-                      Ver detalles →
-                    </Link>
+                    <p className="text-sm font-bold text-[#012d1d]">Pagos Pendientes</p>
+                    <p className="text-xs text-[#414844]">{formatCurrency(stats.finances.pendingPayments)} pendientes</p>
                   </div>
                 </div>
+                <Link href="/admin/finanzas?filter=pending" className="bg-amber-100 text-amber-900 px-4 py-2 rounded-full text-xs font-bold hover:bg-amber-200 transition-colors">Revisar</Link>
               </div>
             )}
 
             {stats.inventory.lowStock === 0 && stats.inventory.outOfStock === 0 && stats.finances.pendingPayments === 0 && (
-              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-emerald-100 rounded-full">
-                    <svg className="w-5 h-5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  </div>
+              <div className="flex items-center justify-between bg-white p-4 rounded-[1.25rem]">
+                <div className="flex items-center gap-4">
+                  <div className="w-2 h-10 bg-[#a0f4c8] rounded-full"></div>
                   <div>
-                    <h3 className="font-medium text-emerald-900">Todo en Orden</h3>
-                    <p className="text-sm text-emerald-700 mt-1">
-                      No hay alertas pendientes en este momento
-                    </p>
+                    <p className="text-sm font-bold text-[#012d1d]">Todo en Orden</p>
+                    <p className="text-xs text-[#414844]">No hay alertas en curso</p>
                   </div>
                 </div>
               </div>

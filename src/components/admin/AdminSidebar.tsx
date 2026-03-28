@@ -64,92 +64,84 @@ export default function AdminSidebar() {
       {/* Sidebar */}
       <aside
         className={`
-          fixed top-0 left-0 z-40 h-screen w-64 bg-gray-900 text-white
+          fixed top-0 left-0 z-40 h-screen flex flex-col py-8 gap-2 bg-emerald-50 text-emerald-900 w-72 rounded-r-[3rem] shadow-[0_20px_40px_rgba(1,45,29,0.06)]
           transition-transform duration-300 ease-in-out
           ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
           lg:translate-x-0
         `}
       >
-        <div className="flex flex-col h-full">
-          {/* Logo/Header */}
-          <div className="p-6 border-b border-gray-800">
-            <Link href="/admin" className="flex items-center gap-3">
+        <div className="px-8 mb-10">
+          <Link href="/admin" className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-900 to-emerald-700 flex items-center justify-center text-white overflow-hidden shrink-0">
               <Image 
                 src="/img/logo.png"
                 width={40} 
                 height={40}
                 alt="Fitovida" 
-                className="h-10 w-10 object-contain"
+                className="h-full w-full object-cover"
                 onError={(e) => {
-                  // Fallback si no existe la imagen
                   e.currentTarget.style.display = 'none';
                   e.currentTarget.nextElementSibling?.classList.remove('hidden');
                 }}
               />
-              <TrendingUp className="text-emerald-500 hidden" size={32} />
-              <div>
-                <h1 className="text-xl font-bold">Fitovida</h1>
-                <p className="text-xs text-gray-400">Panel Admin</p>
-              </div>
-            </Link>
-          </div>
-
-          {/* User info */}
-          {user && (
-            <div className="p-4 border-b border-gray-800">
-              <p className="text-sm font-medium">{user.firstName} {user.lastName}</p>
-              <p className="text-xs text-gray-400">{user.email}</p>
+              <TrendingUp className="text-white hidden" size={24} />
             </div>
-          )}
+            <div>
+              <h1 className="text-lg font-extrabold text-emerald-900 tracking-tight">Fitovida</h1>
+              <p className="text-[10px] uppercase tracking-widest text-emerald-700/60 font-bold">Panel Admin</p>
+            </div>
+          </Link>
+        </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-            {navigation.map((item) => {
-              const IconComponent = item.icon;
-              const isActive = pathname === item.href;
-              
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={`
-                    flex items-center gap-3 px-4 py-3 rounded-lg
-                    transition-colors duration-200
-                    ${isActive 
-                      ? 'bg-emerald-600 text-white' 
-                      : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                    }
-                  `}
-                >
-                  <IconComponent size={20} />
-                  <span className="font-medium">{item.name}</span>
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* Footer Actions */}
-          <div className="p-4 border-t border-gray-800">
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg
-                text-gray-300 hover:bg-gray-800 hover:text-white
-                transition-colors duration-200"
-            >
-              <LogOut size={20} />
-              <span className="font-medium">Cerrar Sesión</span>
-            </button>
-            
-            <Link
-              href="/"
-              className="mt-2 w-full flex items-center justify-center px-4 py-2 rounded-lg
-                text-sm text-gray-400 hover:text-white
-                transition-colors duration-200"
-            >
-              ← Volver a la tienda
-            </Link>
+        {/* User info */}
+        {user && (
+          <div className="px-8 mb-6">
+            <p className="text-sm font-bold text-emerald-900">{user.firstName} {user.lastName}</p>
+            <p className="text-xs text-emerald-700/70">{user.email}</p>
           </div>
+        )}
+
+        <nav className="flex-1 flex flex-col gap-1 overflow-y-auto w-full">
+          {navigation.map((item) => {
+            const IconComponent = item.icon;
+            const isActive = pathname === item.href;
+            
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`
+                  mx-4 py-3 px-6 flex items-center gap-4 transition-all duration-200 active:scale-95
+                  ${isActive 
+                    ? 'bg-gradient-to-br from-emerald-900 to-emerald-800 text-white rounded-full shadow-lg' 
+                    : 'text-emerald-800/70 rounded-full hover:bg-emerald-200/50 hover:scale-[1.02]'
+                  }
+                `}
+              >
+                <IconComponent size={20} />
+                <span className="font-semibold text-sm">{item.name}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="px-8 mt-auto flex flex-col gap-6 py-6 border-t border-emerald-100/50">
+          <Link
+            href="/"
+            className="text-emerald-800/60 flex items-center gap-3 px-2 py-2 text-sm font-medium hover:text-emerald-900 transition-colors"
+          >
+            <Settings size={20} />
+            Volver a la tienda
+          </Link>
+          
+          <button
+            onClick={handleLogout}
+            className="text-emerald-800/60 flex items-center gap-3 px-2 py-2 text-sm font-medium hover:text-emerald-900 transition-colors w-full text-left"
+          >
+            <LogOut size={20} />
+            Cerrar Sesión
+          </button>
         </div>
       </aside>
 

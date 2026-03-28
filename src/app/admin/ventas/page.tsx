@@ -117,9 +117,9 @@ export default function VentasPage() {
 
   const getStatusBadge = (status: Sale['status']) => {
     const styles = {
-      completed: 'bg-emerald-100 text-emerald-800',
-      pending: 'bg-yellow-100 text-yellow-800',
-      cancelled: 'bg-red-100 text-red-800'
+      completed: 'bg-[#a0f4c8] text-[#002113]',
+      pending: 'bg-amber-100 text-amber-900',
+      cancelled: 'bg-[#ffdad6] text-[#93000a]'
     };
     const labels = {
       completed: 'Completada',
@@ -127,7 +127,7 @@ export default function VentasPage() {
       cancelled: 'Cancelada'
     };
     return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${styles[status]}`}>
+      <span className={`px-3 py-1 text-[10px] uppercase font-bold tracking-wider rounded-full ${styles[status]}`}>
         {labels[status]}
       </span>
     );
@@ -159,16 +159,16 @@ export default function VentasPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Ventas</h1>
-          <p className="text-gray-600 mt-1">Gestión de ventas internas y registro</p>
+        <div className="flex flex-col gap-1">
+          <h1 className="text-4xl font-extrabold tracking-tight text-[#012d1d]">Ventas</h1>
+          <p className="text-[#414844] font-medium">Gestión de ventas internas y registro</p>
         </div>
         <button
           onClick={() => setShowNewSaleModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+          className="flex items-center justify-center gap-2 px-6 py-3 bg-[#012d1d] text-white rounded-full font-bold hover:scale-[1.02] transition-transform shadow-lg"
         >
           <Plus size={20} />
           Nueva Venta
@@ -176,23 +176,23 @@ export default function VentasPage() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-md p-4">
+      <div className="bg-[#f2f4f3] rounded-[2.5rem] p-8">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#414844]/50" size={20} />
             <input
               type="text"
               placeholder="Buscar por número, cliente o documento..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="w-full pl-12 pr-4 py-3 bg-white border-none rounded-full text-sm font-medium focus:ring-2 focus:ring-[#012d1d]/20 transition-all"
             />
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          <button className="flex items-center justify-center gap-2 px-6 py-3 bg-white text-[#012d1d] font-bold text-sm rounded-full shadow-sm hover:bg-[#e1e3e2] transition-colors">
             <Filter size={20} />
             Filtros
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          <button className="flex items-center justify-center gap-2 px-6 py-3 bg-white text-[#012d1d] font-bold text-sm rounded-full shadow-sm hover:bg-[#e1e3e2] transition-colors">
             <Download size={20} />
             Exportar
           </button>
@@ -200,63 +200,63 @@ export default function VentasPage() {
       </div>
 
       {/* Sales Table */}
-      <div className="bg-white rounded-xl shadow-md overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-[#f2f4f3] rounded-[2.5rem] overflow-hidden p-8">
+        <div className="overflow-x-auto bg-white rounded-3xl pb-2">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-[#e6e9e8] border-b border-[#d8dada]">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-bold text-[#414844] uppercase tracking-wider">
                   Número
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-bold text-[#414844] uppercase tracking-wider">
                   Fecha
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-bold text-[#414844] uppercase tracking-wider">
                   Cliente
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-bold text-[#414844] uppercase tracking-wider">
                   Total
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-bold text-[#414844] uppercase tracking-wider">
                   Método de Pago
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-bold text-[#414844] uppercase tracking-wider">
                   Estado
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-bold text-[#414844] uppercase tracking-wider">
                   Factura DIAN
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-right text-xs font-bold text-[#414844] uppercase tracking-wider">
                   Acciones
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white divide-y divide-[#eceeed]">
               {filteredSales.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-[#414844] font-medium">
                     No se encontraron ventas
                   </td>
                 </tr>
               ) : (
                 filteredSales.map((sale) => (
-                  <tr key={sale.id} className="hover:bg-gray-50">
+                  <tr key={sale.id} className="hover:bg-[#f8faf9] transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="font-medium text-gray-900">{sale.saleNumber}</span>
+                      <span className="font-bold text-[#012d1d]">{sale.saleNumber}</span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#414844]">
                       {new Date(sale.date).toLocaleDateString('es-CO')}
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm">
-                        <div className="font-medium text-gray-900">{sale.customerName}</div>
-                        <div className="text-gray-500">{sale.customerDocument}</div>
+                        <div className="font-bold text-[#012d1d]">{sale.customerName}</div>
+                        <div className="text-[#414844] font-medium">{sale.customerDocument}</div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="font-medium text-gray-900">{formatCurrency(sale.total)}</span>
+                      <span className="font-extrabold text-[#012d1d]">{formatCurrency(sale.total)}</span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#414844]">
                       {getPaymentMethodLabel(sale.paymentMethod)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -265,31 +265,31 @@ export default function VentasPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {sale.invoiceNumber ? (
                         <div>
-                          <div className="font-medium text-gray-900">{sale.invoiceNumber}</div>
-                          <div className={`text-xs ${
-                            sale.invoiceStatus === 'authorized' ? 'text-emerald-600' :
-                            sale.invoiceStatus === 'pending' ? 'text-yellow-600' :
-                            'text-red-600'
+                          <div className="font-bold text-[#012d1d]">{sale.invoiceNumber}</div>
+                          <div className={`text-[10px] uppercase tracking-wider font-bold mt-1 ${
+                            sale.invoiceStatus === 'authorized' ? 'text-[#005236]' :
+                            sale.invoiceStatus === 'pending' ? 'text-amber-600' :
+                            'text-[#ba1a1a]'
                           }`}>
                             {sale.invoiceStatus === 'authorized' ? 'Autorizada' :
                              sale.invoiceStatus === 'pending' ? 'Pendiente' : 'Rechazada'}
                           </div>
                         </div>
                       ) : (
-                        <span className="text-gray-400">Sin facturar</span>
+                        <span className="text-[#414844]/60 font-medium italic">Sin facturar</span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => setSelectedSale(sale)}
-                          className="text-emerald-600 hover:text-emerald-900"
+                          className="p-2 bg-[#c1ecd4] rounded-full text-[#012d1d] hover:bg-[#a5d0b9] transition-all hover:scale-110"
                           title="Ver detalles"
                         >
                           <Eye size={18} />
                         </button>
                         <button
-                          className="text-blue-600 hover:text-blue-900"
+                          className="p-2 bg-[#cce6d0] rounded-full text-[#012d1d] hover:bg-[#b3cdb7] transition-all hover:scale-110"
                           title="Imprimir"
                           onClick={() => printFactura(sale)}
                         >
@@ -394,59 +394,65 @@ function SaleDetailModal({ sale, onClose, onPrint }: { sale: Sale; onClose: () =
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
-          <h2 className="text-xl font-bold text-gray-900">Detalle de Venta {sale.saleNumber}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-[#f2f4f3] rounded-[2.5rem] max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="p-8 border-b border-[#e1e3e2] flex items-center justify-between sticky top-0 bg-[#f2f4f3]/90 backdrop-blur-md z-10 rounded-t-[2.5rem]">
+          <h2 className="text-2xl font-extrabold text-[#012d1d]">Detalle de Venta {sale.saleNumber}</h2>
+          <button onClick={onClose} className="p-2 bg-white rounded-full text-[#414844] hover:bg-[#e6e9e8] transition-all">
             <X size={24} />
           </button>
         </div>
         
-        <div className="p-6 space-y-6">
+        <div className="p-8 space-y-6">
           {/* Customer Info */}
-          <div>
-            <h3 className="font-semibold text-gray-900 mb-3">Información del Cliente</h3>
+          <div className="bg-white p-6 rounded-[1.5rem] shadow-sm">
+            <h3 className="font-bold text-[#012d1d] mb-4 flex items-center gap-2">
+               <span className="material-symbols-outlined text-[#3f6653]">person</span>
+               Información del Cliente
+            </h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <span className="text-gray-600">Nombre:</span>
-                <span className="ml-2 font-medium">{sale.customerName}</span>
+                <span className="text-[#414844]">Nombre:</span>
+                <span className="ml-2 font-bold text-[#012d1d]">{sale.customerName}</span>
               </div>
               <div>
-                <span className="text-gray-600">Documento:</span>
-                <span className="ml-2 font-medium">{sale.customerDocument}</span>
+                <span className="text-[#414844]">Documento:</span>
+                <span className="ml-2 font-bold text-[#012d1d]">{sale.customerDocument}</span>
               </div>
               <div>
-                <span className="text-gray-600">Email:</span>
-                <span className="ml-2 font-medium">{sale.customerEmail}</span>
+                <span className="text-[#414844]">Email:</span>
+                <span className="ml-2 font-bold text-[#012d1d]">{sale.customerEmail}</span>
               </div>
               <div>
-                <span className="text-gray-600">Teléfono:</span>
-                <span className="ml-2 font-medium">{sale.customerPhone}</span>
+                <span className="text-[#414844]">Teléfono:</span>
+                <span className="ml-2 font-bold text-[#012d1d]">{sale.customerPhone}</span>
               </div>
             </div>
           </div>
 
           {/* Items */}
-          <div>
-            <h3 className="font-semibold text-gray-900 mb-3">Productos</h3>
-            <div className="border rounded-lg overflow-hidden">
+          <div className="bg-white p-6 rounded-[1.5rem] shadow-sm">
+            <h3 className="font-bold text-[#012d1d] mb-4 flex items-center gap-2">
+               <span className="material-symbols-outlined text-[#3f6653]">inventory_2</span>
+               Productos
+            </h3>
+            <div className="rounded-xl overflow-hidden border border-[#e1e3e2]">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50">
+                <thead className="bg-[#e6e9e8]">
                   <tr>
-                    <th className="px-4 py-2 text-left">Producto</th>
-                    <th className="px-4 py-2 text-center">Cant.</th>
-                    <th className="px-4 py-2 text-right">Precio Unit.</th>
-                    <th className="px-4 py-2 text-right">Total</th>
+                    <th className="px-4 py-3 text-left font-bold text-[#414844]">Producto</th>
+                    <th className="px-4 py-3 text-center font-bold text-[#414844]">Cant.</th>
+                    <th className="px-4 py-3 text-right font-bold text-[#414844]">Precio Unit.</th>
+                    <th className="px-4 py-3 text-right font-bold text-[#414844]">Total</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="divide-y divide-[#e1e3e2]">
                   {sale.items.map((item) => (
-                    <tr key={item.id}>
-                      <td className="px-4 py-3">{item.productName}</td>
-                      <td className="px-4 py-3 text-center">{item.quantity}</td>
-                      <td className="px-4 py-3 text-right">{formatCurrency(item.unitPrice)}</td>
-                      <td className="px-4 py-3 text-right font-medium">{formatCurrency(item.total)}</td>
+                    <tr key={item.id} className="hover:bg-[#f8faf9]">
+                      <td className="px-4 py-3 font-medium text-[#012d1d]">{item.productName}</td>
+                      <td className="px-4 py-3 text-center text-[#414844]">{item.quantity}</td>
+                      <td className="px-4 py-3 text-right text-[#414844]">{formatCurrency(item.unitPrice)}</td>
+                      <td className="px-4 py-3 text-right font-bold text-[#012d1d]">{formatCurrency(item.total)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -455,41 +461,39 @@ function SaleDetailModal({ sale, onClose, onPrint }: { sale: Sale; onClose: () =
           </div>
 
           {/* Totals */}
-          <div className="border-t pt-4">
-            <div className="flex justify-end">
-              <div className="w-64 space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Subtotal:</span>
-                  <span className="font-medium">{formatCurrency(sale.subtotal)}</span>
+          <div className="pt-4 flex justify-end">
+            <div className="w-64 space-y-3 bg-white p-6 rounded-[1.5rem] shadow-sm text-sm">
+              <div className="flex justify-between items-center">
+                <span className="text-[#414844]">Subtotal:</span>
+                <span className="font-bold text-[#012d1d]">{formatCurrency(sale.subtotal)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[#414844]">IVA:</span>
+                <span className="font-bold text-[#012d1d]">{formatCurrency(sale.tax)}</span>
+              </div>
+              {sale.discount > 0 && (
+                <div className="flex justify-between items-center text-[#005236]">
+                  <span>Descuento:</span>
+                  <span className="font-bold">-{formatCurrency(sale.discount)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">IVA:</span>
-                  <span className="font-medium">{formatCurrency(sale.tax)}</span>
-                </div>
-                {sale.discount > 0 && (
-                  <div className="flex justify-between text-emerald-600">
-                    <span>Descuento:</span>
-                    <span className="font-medium">-{formatCurrency(sale.discount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-lg font-bold border-t pt-2">
-                  <span>Total:</span>
-                  <span>{formatCurrency(sale.total)}</span>
-                </div>
+              )}
+              <div className="flex justify-between items-center text-lg font-bold border-t border-[#e1e3e2] pt-3 text-[#012d1d]">
+                <span>Total:</span>
+                <span>{formatCurrency(sale.total)}</span>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="p-6 border-t border-gray-200 flex gap-3 justify-end">
+        <div className="p-8 border-t border-[#e1e3e2] flex gap-4 justify-end rounded-b-[2.5rem] bg-[#f2f4f3]">
           <button
             onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-6 py-3 bg-white rounded-full font-bold text-[#414844] hover:bg-[#e1e3e2] transition-colors shadow-sm"
           >
             Cerrar
           </button>
           <button
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            className="px-6 py-3 bg-[#012d1d] text-white rounded-full font-bold flex items-center justify-center gap-2 hover:scale-[1.02] shadow-lg transition-transform"
             onClick={onPrint}
           >
             <Printer size={18} />
@@ -651,68 +655,74 @@ function NewSaleModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
-          <h2 className="text-xl font-bold text-gray-900">Nueva Venta</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-[#f2f4f3] rounded-[2.5rem] max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="p-8 border-b border-[#e1e3e2] flex items-center justify-between sticky top-0 bg-[#f2f4f3]/90 backdrop-blur-md z-10 rounded-t-[2.5rem]">
+          <h2 className="text-2xl font-extrabold text-[#012d1d]">Nueva Venta</h2>
+          <button onClick={onClose} className="p-2 bg-white rounded-full text-[#414844] hover:bg-[#e6e9e8] transition-all">
             <X size={24} />
           </button>
         </div>
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-8 space-y-8">
           {/* Información del Cliente */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-900">Información del Cliente</h3>
-            <div className="grid grid-cols-2 gap-4">
+          <div className="bg-white p-6 rounded-[1.5rem] shadow-sm space-y-4">
+            <h3 className="font-bold text-[#012d1d] flex items-center gap-2">
+               <span className="material-symbols-outlined text-[#3f6653]">person_add</span>
+               Información del Cliente
+            </h3>
+            <div className="grid grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Nombre *</label>
+                <label className="block text-xs font-bold text-[#414844] uppercase tracking-wider mb-2">Nombre *</label>
                 <input
                   type="text"
                   required
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-[#f2f4f3] border-none rounded-2xl focus:ring-2 focus:ring-[#012d1d]/20 transition-all font-medium text-[#012d1d]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                <label className="block text-xs font-bold text-[#414844] uppercase tracking-wider mb-2">Email</label>
                 <input
                   type="email"
                   value={customerEmail}
                   onChange={(e) => setCustomerEmail(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-[#f2f4f3] border-none rounded-2xl focus:ring-2 focus:ring-[#012d1d]/20 transition-all font-medium text-[#012d1d]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Teléfono</label>
+                <label className="block text-xs font-bold text-[#414844] uppercase tracking-wider mb-2">Teléfono</label>
                 <input
                   type="tel"
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-[#f2f4f3] border-none rounded-2xl focus:ring-2 focus:ring-[#012d1d]/20 transition-all font-medium text-[#012d1d]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Documento</label>
+                <label className="block text-xs font-bold text-[#414844] uppercase tracking-wider mb-2">Documento</label>
                 <input
                   type="text"
                   value={customerDocument}
                   onChange={(e) => setCustomerDocument(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-[#f2f4f3] border-none rounded-2xl focus:ring-2 focus:ring-[#012d1d]/20 transition-all font-medium text-[#012d1d]"
                 />
               </div>
             </div>
           </div>
 
           {/* Productos y Lector de Código de Barras */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-900">Productos</h3>
+          <div className="bg-white p-6 rounded-[1.5rem] shadow-sm space-y-6">
+            <h3 className="font-bold text-[#012d1d] flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#3f6653]">barcode_scanner</span>
+              Productos
+            </h3>
             
             {/* Buscador / Lector */}
-            <div className="flex gap-4 mb-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Escáner de Código de Barras (Presiona Enter)</label>
+            <div className="bg-[#f2f4f3] p-6 rounded-[1.5rem]">
+              <label className="block text-xs font-bold text-[#414844] uppercase tracking-wider mb-2">Escáner de Código de Barras (Presiona Enter)</label>
+              <div className="relative">
                 <input
                   ref={barcodeInputRef}
                   type="text"
@@ -720,27 +730,28 @@ function NewSaleModal({
                   onChange={(e) => setBarcodeInput(e.target.value)}
                   onKeyDown={handleBarcodeSubmit}
                   placeholder="Escanea el código del producto aquí..."
-                  className="w-full px-4 py-3 border-2 border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white text-lg shadow-inner"
+                  className="w-full pl-12 pr-4 py-4 bg-white border-2 border-[#c1ecd4] rounded-2xl focus:ring-2 focus:ring-[#012d1d]/20 focus:border-[#a0f4c8] text-lg font-bold text-[#012d1d] shadow-sm transition-all"
                 />
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#3f6653]">qr_code_scanner</span>
               </div>
             </div>
 
-            <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50 flex gap-2 flex-wrap">
+            <div className="max-h-48 overflow-y-auto rounded-[1.5rem] p-4 bg-[#f2f4f3] flex gap-3 flex-wrap">
               {products.map(product => (
                 <button
                   key={product.id}
                   type="button"
                   onClick={() => addItem(product.product_id)}
                   disabled={product.current_stock <= 0}
-                  className={`px-3 py-2 border rounded-lg text-sm text-left flex flex-col min-w-[150px] transition-colors
+                  className={`px-4 py-3 rounded-2xl text-sm text-left flex flex-col min-w-[160px] shadow-sm transition-transform active:scale-95
                     ${product.current_stock > 0 
-                      ? 'bg-white hover:bg-emerald-50 hover:border-emerald-300 border-gray-200' 
-                      : 'bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed'}`}
+                      ? 'bg-white hover:bg-[#c1ecd4] hover:scale-[1.02] border border-[#e1e3e2]/50' 
+                      : 'bg-[#e6e9e8] opacity-60 cursor-not-allowed'}`}
                 >
-                  <span className="font-medium text-gray-900 truncate w-full">{product.name}</span>
-                  <div className="flex justify-between items-center w-full mt-1">
-                     <span className="text-emerald-600 font-bold">{formatCurrency(product.price)}</span>
-                     <span className={`text-xs px-1.5 py-0.5 rounded ${product.current_stock > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                  <span className="font-bold text-[#012d1d] truncate w-full">{product.name}</span>
+                  <div className="flex justify-between items-center w-full mt-2">
+                     <span className="text-[#005236] font-extrabold">{formatCurrency(product.price)}</span>
+                     <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full ${product.current_stock > 0 ? 'bg-[#a0f4c8] text-[#002113]' : 'bg-[#ffdad6] text-[#93000a]'}`}>
                        Stock: {product.current_stock}
                      </span>
                   </div>
@@ -749,39 +760,39 @@ function NewSaleModal({
             </div>
 
             {selectedItems.length > 0 && (
-              <div className="border border-gray-300 rounded-lg overflow-hidden">
+              <div className="rounded-[1.5rem] overflow-hidden border border-[#e1e3e2]">
                 <table className="w-full">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-[#e6e9e8]">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Producto</th>
-                      <th className="px-4 py-2 text-center text-xs font-medium text-gray-500">Cant.</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">P. Unit.</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Total</th>
-                      <th className="px-4 py-2 text-center text-xs font-medium text-gray-500">Acción</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-[#414844] uppercase tracking-wider">Producto</th>
+                      <th className="px-4 py-3 text-center text-xs font-bold text-[#414844] uppercase tracking-wider">Cant.</th>
+                      <th className="px-4 py-3 text-right text-xs font-bold text-[#414844] uppercase tracking-wider">P. Unit.</th>
+                      <th className="px-4 py-3 text-right text-xs font-bold text-[#414844] uppercase tracking-wider">Total</th>
+                      <th className="px-4 py-3 text-center text-xs font-bold text-[#414844] uppercase tracking-wider">Acción</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-[#e1e3e2]">
                     {selectedItems.map(item => (
-                      <tr key={item.id}>
-                        <td className="px-4 py-2 text-sm">{item.productName}</td>
-                        <td className="px-4 py-2 text-center">
+                      <tr key={item.id} className="hover:bg-[#f8faf9]">
+                        <td className="px-4 py-3 text-sm font-bold text-[#012d1d]">{item.productName}</td>
+                        <td className="px-4 py-3 text-center">
                           <input
                             type="number"
                             min="1"
                             value={item.quantity}
                             onChange={(e) => updateQuantity(item.id, parseInt(e.target.value) || 0)}
-                            className="w-16 px-2 py-1 border border-gray-300 rounded text-center"
+                            className="w-16 px-2 py-1 border-none bg-[#f2f4f3] rounded-lg text-center font-bold focus:ring-2 focus:ring-[#012d1d]/20"
                           />
                         </td>
-                        <td className="px-4 py-2 text-right text-sm">{formatCurrency(item.unitPrice)}</td>
-                        <td className="px-4 py-2 text-right text-sm font-medium">{formatCurrency(item.total)}</td>
-                        <td className="px-4 py-2 text-center">
+                        <td className="px-4 py-3 text-right text-sm font-medium text-[#414844]">{formatCurrency(item.unitPrice)}</td>
+                        <td className="px-4 py-3 text-right text-sm font-extrabold text-[#012d1d]">{formatCurrency(item.total)}</td>
+                        <td className="px-4 py-3 text-center">
                           <button
                             type="button"
                             onClick={() => removeItem(item.id)}
-                            className="text-red-600 hover:text-red-900"
+                            className="p-1 min-h-0 bg-[#ffdad6] text-[#93000a] rounded-full hover:bg-[#ffb4ab] transition-colors"
                           >
-                            <X size={18} />
+                            <X size={16} />
                           </button>
                         </td>
                       </tr>
@@ -792,52 +803,57 @@ function NewSaleModal({
             )}
           </div>
 
-          {/* Método de Pago */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Método de Pago *</label>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value as Sale['paymentMethod'])}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-            >
-              <option value="cash">Efectivo</option>
-              <option value="card">Tarjeta</option>
-              <option value="transfer">Transferencia</option>
-              <option value="pse">PSE</option>
-              <option value="wompi">Wompi</option>
-            </select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Método de Pago */}
+            <div className="bg-white p-6 rounded-[1.5rem] shadow-sm">
+              <label className="block text-xs font-bold text-[#414844] uppercase tracking-wider mb-4 flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#3f6653]">payments</span>
+                Método de Pago *
+              </label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as Sale['paymentMethod'])}
+                className="w-full px-4 py-3 bg-[#f2f4f3] border-none rounded-2xl focus:ring-2 focus:ring-[#012d1d]/20 transition-all font-bold text-[#012d1d] cursor-pointer"
+              >
+                <option value="cash">Efectivo</option>
+                <option value="card">Tarjeta</option>
+                <option value="transfer">Transferencia</option>
+                <option value="pse">PSE</option>
+                <option value="wompi">Wompi</option>
+              </select>
+            </div>
+
+            {/* Totales */}
+            {selectedItems.length > 0 && (
+              <div className="bg-[#c1ecd4]/20 p-6 rounded-[1.5rem] border border-[#c1ecd4] space-y-3 flex flex-col justify-center">
+                <div className="flex justify-between text-sm items-center">
+                  <span className="text-[#414844] font-medium">Subtotal:</span>
+                  <span className="font-bold text-[#012d1d]">{formatCurrency(subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-sm items-center">
+                  <span className="text-[#414844] font-medium">IVA (19%):</span>
+                  <span className="font-bold text-[#012d1d]">{formatCurrency(tax)}</span>
+                </div>
+                <div className="flex justify-between text-xl font-extrabold border-t border-[#a0f4c8] pt-3 text-[#012d1d]">
+                  <span>Total:</span>
+                  <span>{formatCurrency(total)}</span>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Totales */}
-          {selectedItems.length > 0 && (
-            <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Subtotal:</span>
-                <span className="font-medium">{formatCurrency(subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">IVA (19%):</span>
-                <span className="font-medium">{formatCurrency(tax)}</span>
-              </div>
-              <div className="flex justify-between text-lg font-bold border-t pt-2">
-                <span>Total:</span>
-                <span>{formatCurrency(total)}</span>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-3 justify-end pt-4 border-t">
+          <div className="p-8 border-t border-[#e1e3e2] flex gap-4 justify-end rounded-b-[2.5rem] bg-[#f2f4f3] -mx-8 -mb-8 mt-8">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="px-6 py-3 bg-white rounded-full font-bold text-[#414844] hover:bg-[#e1e3e2] transition-colors shadow-sm"
             >
               Cancelar
             </button>
             <button 
               type="submit"
               disabled={!customerName || selectedItems.length === 0}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              className="px-6 py-3 bg-[#012d1d] text-white rounded-full font-bold flex items-center justify-center gap-2 hover:scale-[1.02] shadow-lg transition-transform disabled:bg-[#d8dada] disabled:text-[#717973] disabled:cursor-not-allowed disabled:hover:scale-100 disabled:shadow-none"
             >
               Guardar Venta
             </button>
