@@ -142,19 +142,19 @@ function BarcodeLabel({
   const barcodeRef = useRef<SVGSVGElement>(null);
   const isThermal = format.kind === 'thermal';
   const contentWidth = format.contentWidth ?? format.width;
+  const isCompactThermal = format.height <= 30;
 
   useEffect(() => {
     if (barcodeRef.current && product.barcode) {
       try {
-        const isCompactThermal = format.height <= 30;
-        const barcodeHeight = isCompactThermal ? 14 : 20;
+        const barcodeHeight = isCompactThermal ? 24 : 22;
         JsBarcode(barcodeRef.current, product.barcode, {
           format: 'CODE128',
-          width: isThermal ? (isCompactThermal ? 1.15 : 1.3) : 2,
+          width: isThermal ? (isCompactThermal ? 1.55 : 1.35) : 2,
           height: isThermal ? barcodeHeight : 40,
           displayValue: !isThermal,
           margin: isThermal ? 0 : 5,
-          fontSize: isThermal ? 9 : 12,
+          fontSize: isThermal ? 11 : 12,
           textMargin: isThermal ? 0 : 5
         });
       } catch (error) {
@@ -175,15 +175,15 @@ function BarcodeLabel({
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
-        padding: isThermal ? '1mm' : '2mm',
+        justifyContent: isThermal ? 'flex-start' : 'center',
+        padding: isThermal ? '0.4mm 0.7mm 0.4mm' : '2mm',
         overflow: 'hidden',
         color: '#111827',
         fontFamily: 'Arial, sans-serif'
       }}
     >
       {/* Nombre del producto */}
-      <div style={{ textAlign: 'center', marginBottom: '1px', fontSize: isThermal ? '6px' : '8px', fontWeight: 'bold', lineHeight: '1', width: '100%' }}>
+      <div style={{ textAlign: 'center', marginBottom: '0.3mm', fontSize: isThermal ? '8px' : '8px', fontWeight: 'bold', lineHeight: '1', width: '100%' }}>
         <p
           style={{
             overflow: 'hidden',
@@ -198,7 +198,7 @@ function BarcodeLabel({
 
       {/* SKU */}
       {product.sku && (
-        <div style={{ fontSize: isThermal ? '5.5px' : '7px', marginBottom: '1px' }}>
+        <div style={{ fontSize: isThermal ? '6.5px' : '7px', marginBottom: '0.25mm' }}>
           <span>SKU: {product.sku}</span>
         </div>
       )}
@@ -209,23 +209,23 @@ function BarcodeLabel({
         style={{
           maxWidth: '100%',
           height: 'auto',
-          margin: isThermal ? '0.5px 0' : '2px 0'
+          margin: isThermal ? '0.1mm 0' : '2px 0'
         }}
       />
 
       {/* Código visible debajo */}
-      <div style={{ fontSize: isThermal ? '5.5px' : '7px', fontFamily: 'monospace', marginTop: '0px' }}>
+      <div style={{ fontSize: isThermal ? '6.8px' : '7px', fontFamily: 'monospace', marginTop: '0' }}>
         {product.barcode}
       </div>
 
       {/* Precio */}
       <div
         style={{
-          fontSize: isThermal ? '6px' : '8px',
+          fontSize: isThermal ? '7px' : '8px',
           fontWeight: 'bold',
-          marginTop: '1px',
+          marginTop: '0.2mm',
           borderTop: '1px solid #ccc',
-          paddingTop: '1px'
+          paddingTop: '0.2mm'
         }}
       >
         ${product.salePrice.toLocaleString('es-CO')}
