@@ -16,6 +16,8 @@ interface LabelFormat {
   description: string;
   width: number; // en mm
   height: number; // en mm
+  paperWidth?: number; // ancho real del papel en mm
+  contentWidth?: number; // ancho imprimible en mm
   columns: number;
   rows: number;
   marginTop: number;
@@ -71,6 +73,8 @@ const FORMATS: Record<string, LabelFormat> = {
     description: 'Rollo térmico compacto',
     width: 58,
     height: 32.76,
+    paperWidth: 57.5,
+    contentWidth: 48,
     columns: 1,
     rows: 1,
     marginTop: 0,
@@ -84,6 +88,8 @@ const FORMATS: Record<string, LabelFormat> = {
     description: 'Rollo térmico corto',
     width: 58,
     height: 29.7,
+    paperWidth: 57.5,
+    contentWidth: 48,
     columns: 1,
     rows: 1,
     marginTop: 0,
@@ -97,6 +103,23 @@ const FORMATS: Record<string, LabelFormat> = {
     description: 'Rollo térmico amplio',
     width: 58,
     height: 42,
+    paperWidth: 57.5,
+    contentWidth: 48,
+    columns: 1,
+    rows: 1,
+    marginTop: 0,
+    marginLeft: 0,
+    spacingX: 0,
+    spacingY: 0,
+    kind: 'thermal'
+  },
+  'JK-58PL-50x30': {
+    title: 'JK-58PL 50 x 30 mm',
+    description: 'Rollo incluido, optimizado para 48 mm de impresión',
+    width: 50,
+    height: 30,
+    paperWidth: 57.5,
+    contentWidth: 48,
     columns: 1,
     rows: 1,
     marginTop: 0,
@@ -107,7 +130,7 @@ const FORMATS: Record<string, LabelFormat> = {
   }
 };
 
-const THERMAL_FORMATS = new Set<keyof typeof FORMATS>(['58x32.76', '58x29.7', '58x42']);
+const THERMAL_FORMATS = new Set<keyof typeof FORMATS>(['58x32.76', '58x29.7', '58x42', 'JK-58PL-50x30']);
 
 function BarcodeLabel({
   product,
@@ -118,19 +141,21 @@ function BarcodeLabel({
 }) {
   const barcodeRef = useRef<SVGSVGElement>(null);
   const isThermal = format.kind === 'thermal';
+  const contentWidth = format.contentWidth ?? format.width;
 
   useEffect(() => {
     if (barcodeRef.current && product.barcode) {
       try {
-        const barcodeHeight = format.height <= 30 ? 16 : 22;
+        const isCompactThermal = format.height <= 30;
+        const barcodeHeight = isCompactThermal ? 14 : 20;
         JsBarcode(barcodeRef.current, product.barcode, {
           format: 'CODE128',
-          width: isThermal ? 1.4 : 2,
+          width: isThermal ? (isCompactThermal ? 1.15 : 1.3) : 2,
           height: isThermal ? barcodeHeight : 40,
-          displayValue: true,
+          displayValue: !isThermal,
           margin: isThermal ? 0 : 5,
-          fontSize: isThermal ? 10 : 12,
-          textMargin: isThermal ? 2 : 5
+          fontSize: isThermal ? 9 : 12,
+          textMargin: isThermal ? 0 : 5
         });
       } catch (error) {
         console.error('Error generating barcode:', error);
@@ -141,7 +166,7 @@ function BarcodeLabel({
   return (
     <div
       style={{
-        width: `${format.width}mm`,
+        width: `${contentWidth}mm`,
         height: `${format.height}mm`,
         pageBreakInside: 'avoid',
         breakInside: 'avoid',
@@ -158,7 +183,7 @@ function BarcodeLabel({
       }}
     >
       {/* Nombre del producto */}
-      <div style={{ textAlign: 'center', marginBottom: '2px', fontSize: isThermal ? '7px' : '8px', fontWeight: 'bold', lineHeight: '1', width: '100%' }}>
+      <div style={{ textAlign: 'center', marginBottom: '1px', fontSize: isThermal ? '6px' : '8px', fontWeight: 'bold', lineHeight: '1', width: '100%' }}>
         <p
           style={{
             overflow: 'hidden',
@@ -169,7 +194,7 @@ function BarcodeLabel({
         >
           {product.name}
         </p>
-      </div>
+            <div style={{ fontSize: isThermal ? '5.5px' : '7px', marginBottom: '1px' }}>
 
       {/* SKU */}
       {product.sku && (
@@ -184,23 +209,23 @@ function BarcodeLabel({
         style={{
           maxWidth: '100%',
           height: 'auto',
-          margin: isThermal ? '1px 0' : '2px 0'
+          margin: isThermal ? '0.5px 0' : '2px 0'
         }}
       />
 
       {/* Código visible debajo */}
-      <div style={{ fontSize: isThermal ? '6px' : '7px', fontFamily: 'monospace', marginTop: '1px' }}>
+      <div style={{ fontSize: isThermal ? '5.5px' : '7px', fontFamily: 'monospace', marginTop: '0px' }}>
         {product.barcode}
       </div>
 
       {/* Precio */}
       <div
         style={{
-          fontSize: isThermal ? '7px' : '8px',
+          fontSize: isThermal ? '6px' : '8px',
           fontWeight: 'bold',
-          marginTop: '2px',
+          marginTop: '1px',
           borderTop: '1px solid #ccc',
-          paddingTop: '2px'
+          paddingTop: '1px'
         }}
       >
         ${product.salePrice.toLocaleString('es-CO')}
@@ -213,7 +238,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
   const [selectedProducts, setSelectedProducts] = useState<string[]>(
     products.map(p => p.id)
   );
-  const [selectedFormat, setSelectedFormat] = useState<keyof typeof FORMATS>('58x42');
+  const [selectedFormat, setSelectedFormat] = useState<keyof typeof FORMATS>('JK-58PL-50x30');
   const [printQty, setPrintQty] = useState<Record<string, number>>(
     Object.fromEntries(products.map(p => [p.id, 1]))
   );
@@ -222,6 +247,8 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
 
   const format = FORMATS[selectedFormat];
   const isThermalFormat = THERMAL_FORMATS.has(selectedFormat);
+  const paperWidth = format.paperWidth ?? format.width;
+  const contentWidth = format.contentWidth ?? format.width;
   const productsToprint = products.filter(
     p => selectedProducts.includes(p.id) && p.barcode
   );
@@ -264,7 +291,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
             font-family: Arial, sans-serif;
           }
           @page {
-            size: ${isThermalFormat ? `${format.width}mm ${format.height}mm` : 'A4'};
+            size: ${isThermalFormat ? `${paperWidth}mm ${format.height}mm` : 'A4'};
             margin: 0;
           }
           .print-container {
@@ -273,7 +300,8 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
             grid-template-columns: repeat(${format.columns}, ${format.width}mm);
             gap: ${format.spacingX}mm ${format.spacingY}mm;
             padding: ${format.marginTop}mm ${format.marginLeft}mm;
-            width: ${isThermalFormat ? `${format.width}mm` : `${(format.columns * format.width) + (format.marginLeft * 2)}mm`};
+            width: ${isThermalFormat ? `${paperWidth}mm` : `${(format.columns * format.width) + (format.marginLeft * 2)}mm`};
+            ${isThermalFormat ? 'align-items: center;' : ''}
           }
           .print-container > div {
             page-break-inside: avoid;
@@ -480,9 +508,12 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
                   borderRadius: '1.25rem',
                   color: '#111827',
                   fontFamily: 'Arial, sans-serif',
-                  display: 'grid',
-                  gridTemplateColumns: `repeat(${format.columns}, ${format.width}mm)`,
-                  gap: `${format.spacingX}mm ${format.spacingY}mm`
+                  display: isThermalFormat ? 'flex' : 'grid',
+                  flexDirection: isThermalFormat ? 'column' : 'initial',
+                  alignItems: isThermalFormat ? 'center' : 'stretch',
+                  gridTemplateColumns: isThermalFormat ? undefined : `repeat(${format.columns}, ${contentWidth}mm)`,
+                  gap: `${format.spacingX}mm ${format.spacingY}mm`,
+                  width: isThermalFormat ? `${paperWidth}mm` : 'auto'
                 }}
               >
                 {productsToprint.map((product, idx) =>
