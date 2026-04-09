@@ -194,11 +194,11 @@ function BarcodeLabel({
         >
           {product.name}
         </p>
-            <div style={{ fontSize: isThermal ? '5.5px' : '7px', marginBottom: '1px' }}>
+      </div>
 
       {/* SKU */}
       {product.sku && (
-        <div style={{ fontSize: isThermal ? '6px' : '7px', marginBottom: '2px' }}>
+        <div style={{ fontSize: isThermal ? '5.5px' : '7px', marginBottom: '1px' }}>
           <span>SKU: {product.sku}</span>
         </div>
       )}
