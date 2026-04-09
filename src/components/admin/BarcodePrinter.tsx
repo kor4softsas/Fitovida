@@ -12,6 +12,8 @@ interface BarcodePrinterProps {
 }
 
 interface LabelFormat {
+  title: string;
+  description: string;
   width: number; // en mm
   height: number; // en mm
   columns: number;
@@ -20,11 +22,14 @@ interface LabelFormat {
   marginLeft: number;
   spacingX: number;
   spacingY: number;
+  kind: 'sheet' | 'thermal';
 }
 
 // Formatos predefinidos
 const FORMATS: Record<string, LabelFormat> = {
   '4x6': {
+    title: '4 x 6 pulgadas',
+    description: 'Etiqueta grande para impresión estándar',
     width: 101.6, // 4 pulgadas en mm
     height: 152.4, // 6 pulgadas en mm
     columns: 1,
@@ -32,9 +37,12 @@ const FORMATS: Record<string, LabelFormat> = {
     marginTop: 5,
     marginLeft: 5,
     spacingX: 0,
-    spacingY: 0
+    spacingY: 0,
+    kind: 'sheet'
   },
   'A4-4x2': {
+    title: 'A4 - 4 x 2',
+    description: '4 columnas por 2 filas',
     width: 50,
     height: 76.2,
     columns: 4,
@@ -42,9 +50,12 @@ const FORMATS: Record<string, LabelFormat> = {
     marginTop: 10,
     marginLeft: 5,
     spacingX: 3,
-    spacingY: 3
+    spacingY: 3,
+    kind: 'sheet'
   },
   'A4-3x3': {
+    title: 'A4 - 3 x 3',
+    description: '3 columnas por 3 filas',
     width: 65,
     height: 60,
     columns: 3,
@@ -52,9 +63,51 @@ const FORMATS: Record<string, LabelFormat> = {
     marginTop: 10,
     marginLeft: 10,
     spacingX: 3,
-    spacingY: 5
+    spacingY: 5,
+    kind: 'sheet'
+  },
+  '58x32.76': {
+    title: '58 x 32.76 mm',
+    description: 'Rollo térmico compacto',
+    width: 58,
+    height: 32.76,
+    columns: 1,
+    rows: 1,
+    marginTop: 0,
+    marginLeft: 0,
+    spacingX: 0,
+    spacingY: 0,
+    kind: 'thermal'
+  },
+  '58x29.7': {
+    title: '58 x 29.7 mm',
+    description: 'Rollo térmico corto',
+    width: 58,
+    height: 29.7,
+    columns: 1,
+    rows: 1,
+    marginTop: 0,
+    marginLeft: 0,
+    spacingX: 0,
+    spacingY: 0,
+    kind: 'thermal'
+  },
+  '58x42': {
+    title: '58 x 42 mm',
+    description: 'Rollo térmico amplio',
+    width: 58,
+    height: 42,
+    columns: 1,
+    rows: 1,
+    marginTop: 0,
+    marginLeft: 0,
+    spacingX: 0,
+    spacingY: 0,
+    kind: 'thermal'
   }
 };
+
+const THERMAL_FORMATS = new Set<keyof typeof FORMATS>(['58x32.76', '58x29.7', '58x42']);
 
 function BarcodeLabel({
   product,
@@ -64,25 +117,26 @@ function BarcodeLabel({
   format: LabelFormat;
 }) {
   const barcodeRef = useRef<SVGSVGElement>(null);
+  const isThermal = format.kind === 'thermal';
 
   useEffect(() => {
     if (barcodeRef.current && product.barcode) {
       try {
+        const barcodeHeight = format.height <= 30 ? 16 : 22;
         JsBarcode(barcodeRef.current, product.barcode, {
           format: 'CODE128',
-          width: 2,
-          height: 40,
+          width: isThermal ? 1.4 : 2,
+          height: isThermal ? barcodeHeight : 40,
           displayValue: true,
-          margin: 5
+          margin: isThermal ? 0 : 5,
+          fontSize: isThermal ? 10 : 12,
+          textMargin: isThermal ? 2 : 5
         });
       } catch (error) {
         console.error('Error generating barcode:', error);
       }
     }
-  }, [product.barcode]);
-
-  const widthCm = (format.width / 10).toFixed(1);
-  const heightCm = (format.height / 10).toFixed(1);
+  }, [product.barcode, format, isThermal]);
 
   return (
     <div
@@ -90,20 +144,21 @@ function BarcodeLabel({
         width: `${format.width}mm`,
         height: `${format.height}mm`,
         pageBreakInside: 'avoid',
+        breakInside: 'avoid',
         backgroundColor: '#ffffff',
-        border: '1px solid #d1d5db',
+        border: isThermal ? 'none' : '1px solid #d1d5db',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '2mm',
+        padding: isThermal ? '1mm' : '2mm',
         overflow: 'hidden',
         color: '#111827',
         fontFamily: 'Arial, sans-serif'
       }}
     >
       {/* Nombre del producto */}
-      <div style={{ textAlign: 'center', marginBottom: '2px', fontSize: '8px', fontWeight: 'bold', lineHeight: '1', width: '100%' }}>
+      <div style={{ textAlign: 'center', marginBottom: '2px', fontSize: isThermal ? '7px' : '8px', fontWeight: 'bold', lineHeight: '1', width: '100%' }}>
         <p
           style={{
             overflow: 'hidden',
@@ -118,7 +173,7 @@ function BarcodeLabel({
 
       {/* SKU */}
       {product.sku && (
-        <div style={{ fontSize: '7px', marginBottom: '2px' }}>
+        <div style={{ fontSize: isThermal ? '6px' : '7px', marginBottom: '2px' }}>
           <span>SKU: {product.sku}</span>
         </div>
       )}
@@ -129,19 +184,19 @@ function BarcodeLabel({
         style={{
           maxWidth: '100%',
           height: 'auto',
-          margin: '2px 0'
+          margin: isThermal ? '1px 0' : '2px 0'
         }}
       />
 
       {/* Código visible debajo */}
-      <div style={{ fontSize: '7px', fontFamily: 'monospace', marginTop: '1px' }}>
+      <div style={{ fontSize: isThermal ? '6px' : '7px', fontFamily: 'monospace', marginTop: '1px' }}>
         {product.barcode}
       </div>
 
       {/* Precio */}
       <div
         style={{
-          fontSize: '8px',
+          fontSize: isThermal ? '7px' : '8px',
           fontWeight: 'bold',
           marginTop: '2px',
           borderTop: '1px solid #ccc',
@@ -158,7 +213,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
   const [selectedProducts, setSelectedProducts] = useState<string[]>(
     products.map(p => p.id)
   );
-  const [selectedFormat, setSelectedFormat] = useState<keyof typeof FORMATS>('4x6');
+  const [selectedFormat, setSelectedFormat] = useState<keyof typeof FORMATS>('58x42');
   const [printQty, setPrintQty] = useState<Record<string, number>>(
     Object.fromEntries(products.map(p => [p.id, 1]))
   );
@@ -166,6 +221,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
   const printRef = useRef<HTMLDivElement>(null);
 
   const format = FORMATS[selectedFormat];
+  const isThermalFormat = THERMAL_FORMATS.has(selectedFormat);
   const productsToprint = products.filter(
     p => selectedProducts.includes(p.id) && p.barcode
   );
@@ -208,61 +264,35 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
             font-family: Arial, sans-serif;
           }
           @page {
-            size: ${selectedFormat === '4x6' ? 'label-4x6' : 'A4'};
+            size: ${isThermalFormat ? `${format.width}mm ${format.height}mm` : 'A4'};
             margin: 0;
           }
           .print-container {
-            display: grid;
+            display: ${isThermalFormat ? 'flex' : 'grid'};
+            flex-direction: ${isThermalFormat ? 'column' : 'initial'};
             grid-template-columns: repeat(${format.columns}, ${format.width}mm);
             gap: ${format.spacingX}mm ${format.spacingY}mm;
             padding: ${format.marginTop}mm ${format.marginLeft}mm;
-            width: ${(format.columns * format.width) + (format.marginLeft * 2)}mm;
+            width: ${isThermalFormat ? `${format.width}mm` : `${(format.columns * format.width) + (format.marginLeft * 2)}mm`};
           }
-          .label {
-            width: ${format.width}mm;
-            height: ${format.height}mm;
-            border: 1px solid #ccc;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 2mm;
-            font-family: Arial, sans-serif;
+          .print-container > div {
             page-break-inside: avoid;
+            break-inside: avoid;
+            ${isThermalFormat ? 'page-break-after: always; break-after: page;' : ''}
           }
-          .label-title {
-            font-size: 8px;
-            font-weight: bold;
-            text-align: center;
-            line-height: 1;
-            margin-bottom: 2px;
-            max-width: 100%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+          .print-container > div:last-child {
+            page-break-after: auto;
+            break-after: auto;
           }
-          .label-sku {
-            font-size: 7px;
-            margin-bottom: 2px;
+          ${isThermalFormat ? `
+          .print-container > div {
+            border: none !important;
+            margin: 0 auto;
           }
-          .label-barcode {
-            margin: 2px 0;
-          }
-          .label-barcode svg {
+          ` : ''}
+          .print-container svg {
             max-width: 100%;
             height: auto;
-          }
-          .label-code {
-            font-size: 7px;
-            font-family: monospace;
-            margin-top: 1px;
-          }
-          .label-price {
-            font-size: 8px;
-            font-weight: bold;
-            margin-top: 2px;
-            border-top: 1px solid #ccc;
-            padding-top: 2px;
           }
         </style>
       </head>
@@ -371,9 +401,9 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
                       className="h-4 w-4 border-[#c7cdc9] text-[#012d1d] focus:ring-[#005236]"
                     />
                     <span className="text-sm text-[#012d1d]">
-                      {key}
+                      {fmt.title}
                       <span className="block text-xs text-[#414844]">
-                        {fmt.width}mm × {fmt.height}mm ({fmt.columns}×{fmt.rows})
+                        {fmt.description} · {fmt.width}mm × {fmt.height}mm ({fmt.columns}×{fmt.rows})
                       </span>
                     </span>
                   </label>
@@ -474,7 +504,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
               <p className="mb-2 font-bold">Informacion:</p>
               <ul className="list-disc list-inside space-y-1">
                 <li>Selecciona los productos que deseas imprimir</li>
-                <li>Elige el formato de etiqueta (4x6 para impresoras térmicas)</li>
+                <li>Elige el formato de etiqueta según tu papel o rollo térmico</li>
                 <li>Especifica la cantidad de etiquetas por producto</li>
                 <li>Haz clic en Vista previa para ver cómo se vería antes de imprimir</li>
               </ul>
