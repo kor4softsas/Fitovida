@@ -122,6 +122,27 @@ export async function GET(request: NextRequest) {
       { value: 0 }
     );
 
+    const expirationCritical = await safeFirstRow(
+      `SELECT COUNT(*) as count
+       FROM inventory_products ip
+       JOIN products p ON p.id = ip.product_id
+       WHERE ip.status = 'active'
+         AND p.fecha_vencimiento IS NOT NULL
+         AND p.fecha_vencimiento >= CURDATE()
+         AND p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 3 MONTH)`,
+      { count: 0 }
+    );
+
+    const expirationWarning = await safeFirstRow(
+      `SELECT COUNT(*) as count
+       FROM inventory_products ip
+       JOIN products p ON p.id = ip.product_id
+       WHERE ip.status = 'active'
+         AND p.fecha_vencimiento > DATE_ADD(CURDATE(), INTERVAL 3 MONTH)
+         AND p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 6 MONTH)`,
+      { count: 0 }
+    );
+
     // Ingresos totales
     const totalIncomes = await safeFirstRow(
       `SELECT COALESCE(SUM(amount), 0) as amount FROM incomes 
@@ -171,7 +192,9 @@ export async function GET(request: NextRequest) {
         total_products: totalProducts?.count || 0,
         low_stock: lowStockProducts?.count || 0,
         out_of_stock: outOfStockProducts?.count || 0,
-        total_value: toNumber(inventoryValue?.value)
+        total_value: toNumber(inventoryValue?.value),
+        expiration_critical: expirationCritical?.count || 0,
+        expiration_warning: expirationWarning?.count || 0
       },
       finances: {
         total_income: totalIncomeAmount,

@@ -12,6 +12,7 @@ import {
   Calendar
 } from 'lucide-react';
 import type { Income, Expense } from '@/types/admin';
+import { useAdminFeedback } from '@/components/admin/AdminFeedback';
 
 type TransactionType = 'income' | 'expense';
 
@@ -23,6 +24,7 @@ export default function FinanzasPage() {
   const [filterType, setFilterType] = useState<'all' | TransactionType>('all');
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [transactionType, setTransactionType] = useState<TransactionType>('income');
+  const { pushMessage } = useAdminFeedback();
 
   useEffect(() => {
     const fetchFinances = async () => {
@@ -418,7 +420,7 @@ export default function FinanzasPage() {
               }
               setShowTransactionModal(false);
             } catch (error) {
-              alert(error instanceof Error ? error.message : 'Error al guardar');
+                pushMessage(error instanceof Error ? error.message : 'Error al guardar', 'error');
             }
           }}
         />

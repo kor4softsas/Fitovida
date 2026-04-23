@@ -11,6 +11,22 @@ export async function GET(
     const product = await queryOne(
       `SELECT 
         ip.id, ip.product_id, p.name, p.description, p.price, p.category,
+        p.has_invima, p.invima_registry_number,
+        p.fecha_vencimiento,
+        CASE
+          WHEN p.fecha_vencimiento IS NULL THEN 'unknown'
+          WHEN p.fecha_vencimiento < CURDATE() THEN 'expired'
+          WHEN p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 3 MONTH) THEN 'red'
+          WHEN p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 6 MONTH) THEN 'yellow'
+          ELSE 'green'
+        END as expiration_status,
+        CASE
+          WHEN p.fecha_vencimiento IS NULL THEN 'sin_fecha'
+          WHEN p.fecha_vencimiento < CURDATE() THEN 'vencido'
+          WHEN p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 3 MONTH) THEN 'rojo'
+          WHEN p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 6 MONTH) THEN 'amarillo'
+          ELSE 'verde'
+        END as estado_vencimiento,
         ip.sku, ip.barcode, ip.current_stock, ip.min_stock, ip.max_stock,
         ip.unit_cost, ip.tax_rate, ip.supplier, ip.status,
         (ip.current_stock * ip.unit_cost) as stock_value

@@ -4,6 +4,40 @@ import { query } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+interface PublicProductRow {
+  id: number;
+  name: string;
+  description: string;
+  price: string | number;
+  original_price: string | number | null;
+  image: string;
+  category: string;
+  stock: number;
+  featured: boolean;
+  discount: number | null;
+  rating: string | number;
+  reviews: number;
+  benefits: string | string[] | null;
+  inventory_stock: number | null;
+}
+
+async function hasProductsColumn(columnName: string): Promise<boolean> {
+  try {
+    const rows = await query<{ count: number }>(
+      `SELECT COUNT(*) as count
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'products'
+         AND COLUMN_NAME = ?`,
+      [columnName]
+    );
+
+    return Number(rows?.[0]?.count || 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
 // GET - Obtener todos los productos o filtrar por categoría
 export async function GET(request: NextRequest) {
   try {
@@ -11,6 +45,18 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category');
     const featured = searchParams.get('featured');
     const limit = searchParams.get('limit');
+
+    const supportsInvima = await hasProductsColumn('has_invima');
+
+    // Fail-closed: si el esquema no tiene INVIMA, no exponer productos en la vitrina.
+    if (!supportsInvima) {
+      return NextResponse.json({
+        products: [],
+        count: 0,
+        degraded: true,
+        reason: 'invima_schema_missing'
+      });
+    }
 
     // Construir query SQL uniendo estrictamente con inventory_products
     // para que productos eliminados del inventario no aparezcan en la tienda
@@ -20,7 +66,10 @@ export async function GET(request: NextRequest) {
       JOIN inventory_products ip ON p.id = ip.product_id
       WHERE ip.status = 'active'
     `;
-    const params: any[] = [];
+        // Solo productos con INVIMA vigente en vitrina publica.
+        sql += ' AND p.has_invima = 1';
+
+    const params: Array<string | number> = [];
 
     // Filtrar por categoría
     if (category && category !== 'todos') {
@@ -46,7 +95,7 @@ export async function GET(request: NextRequest) {
     }
 
     // El tipo de los resultados
-    const products = await query<any>(sql, params);
+    const products = await query<PublicProductRow>(sql, params);
 
     // Transformar al formato esperado por el frontend
     const transformedProducts = products.map(p => ({

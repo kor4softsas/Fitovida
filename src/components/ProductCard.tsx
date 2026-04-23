@@ -18,6 +18,8 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
   const [imageError, setImageError] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const { addToCart } = useCartStore();
+  const safeImageSrc = typeof product.image === 'string' ? product.image.trim() : '';
+  const canRenderImage = safeImageSrc.length > 0 && !imageError;
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -39,7 +41,7 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
           className="relative aspect-square overflow-hidden cursor-pointer bg-[var(--background)]"
           onClick={handleOpenModal}
         >
-          {imageError ? (
+          {!canRenderImage ? (
             <div className="w-full h-full bg-[var(--accent-light)]/30 flex items-center justify-center p-2">
               <span className="text-[var(--primary)] text-center font-medium text-xs sm:text-sm">
                 {product.name}
@@ -47,7 +49,7 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
             </div>
           ) : (
             <Image
-              src={product.image}
+              src={safeImageSrc}
               alt={product.name}
               fill
               priority={priority}

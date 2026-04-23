@@ -3,11 +3,9 @@
 import { useEffect, useState } from 'react';
 import { 
   TrendingUp, 
-  TrendingDown, 
   ShoppingCart, 
   Package, 
   DollarSign,
-  AlertTriangle,
   Calendar
 } from 'lucide-react';
 import Link from 'next/link';
@@ -40,7 +38,9 @@ export default function AdminDashboard() {
             totalProducts: data.inventory.total_products || 0,
             lowStock: data.inventory.low_stock || 0,
             outOfStock: data.inventory.out_of_stock || 0,
-            totalValue: data.inventory.total_value || 0
+            totalValue: data.inventory.total_value || 0,
+            expirationCritical: data.inventory.expiration_critical || 0,
+            expirationWarning: data.inventory.expiration_warning || 0
           },
           finances: {
             totalIncome: data.finances.total_income || 0,
@@ -263,7 +263,33 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {stats.inventory.lowStock === 0 && stats.inventory.outOfStock === 0 && stats.finances.pendingPayments === 0 && (
+            {(stats.inventory.expirationCritical || 0) > 0 && (
+              <div className="flex items-center justify-between bg-white p-4 rounded-[1.25rem]">
+                <div className="flex items-center gap-4">
+                  <div className="w-2 h-10 bg-[#ba1a1a] rounded-full"></div>
+                  <div>
+                    <p className="text-sm font-bold text-[#012d1d]">Vencimiento Crítico</p>
+                    <p className="text-xs text-[#414844]">{stats.inventory.expirationCritical} productos vencen en 0-3 meses</p>
+                  </div>
+                </div>
+                <Link href="/admin/inventario" className="bg-[#ffdad6] text-[#93000a] px-4 py-2 rounded-full text-xs font-bold hover:bg-[#ffb4ab] transition-colors">Ver</Link>
+              </div>
+            )}
+
+            {(stats.inventory.expirationWarning || 0) > 0 && (
+              <div className="flex items-center justify-between bg-white p-4 rounded-[1.25rem]">
+                <div className="flex items-center gap-4">
+                  <div className="w-2 h-10 bg-amber-500 rounded-full"></div>
+                  <div>
+                    <p className="text-sm font-bold text-[#012d1d]">Próximo a Vencer</p>
+                    <p className="text-xs text-[#414844]">{stats.inventory.expirationWarning} productos vencen en 3-6 meses</p>
+                  </div>
+                </div>
+                <Link href="/admin/inventario" className="bg-amber-100 text-amber-900 px-4 py-2 rounded-full text-xs font-bold hover:bg-amber-200 transition-colors">Ver</Link>
+              </div>
+            )}
+
+            {stats.inventory.lowStock === 0 && stats.inventory.outOfStock === 0 && stats.finances.pendingPayments === 0 && (stats.inventory.expirationCritical || 0) === 0 && (stats.inventory.expirationWarning || 0) === 0 && (
               <div className="flex items-center justify-between bg-white p-4 rounded-[1.25rem]">
                 <div className="flex items-center gap-4">
                   <div className="w-2 h-10 bg-[#a0f4c8] rounded-full"></div>

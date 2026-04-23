@@ -35,6 +35,9 @@ CREATE TABLE products (
   image VARCHAR(500) NOT NULL,
   category VARCHAR(100) NOT NULL,
   stock INT DEFAULT 100,
+  has_invima TINYINT(1) NOT NULL DEFAULT 0,
+  invima_registry_number VARCHAR(120) DEFAULT NULL,
+  fecha_vencimiento DATE DEFAULT NULL,
   featured BOOLEAN DEFAULT FALSE,
   discount INT DEFAULT NULL,
   rating DECIMAL(2, 1) DEFAULT 4.5,
@@ -44,7 +47,8 @@ CREATE TABLE products (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   
   INDEX idx_products_category (category),
-  INDEX idx_products_featured (featured)
+  INDEX idx_products_featured (featured),
+  INDEX idx_products_has_invima (has_invima)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================

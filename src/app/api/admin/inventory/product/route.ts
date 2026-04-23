@@ -24,7 +24,10 @@ function mapDbError(error: unknown): { status: number; message: string } {
   }
 
   if (code === 'ER_NO_SUCH_TABLE' || code === 'ER_BAD_FIELD_ERROR' || code === 'ER_BAD_DB_ERROR') {
-    return { status: 500, message: 'La base de datos no tiene el esquema completo para inventario.' };
+    return {
+      status: 500,
+      message: 'La base de datos no tiene el esquema completo para inventario. Ejecuta mysql/add-invima-fields.sql para habilitar campos INVIMA.'
+    };
   }
 
   if (
@@ -41,6 +44,39 @@ function mapDbError(error: unknown): { status: number; message: string } {
   return { status: 500, message: 'Error interno al guardar el producto.' };
 }
 
+async function supportsRequiredProductColumns(connection: Awaited<ReturnType<typeof pool.getConnection>>): Promise<boolean> {
+  const [rows] = await connection.execute<Array<{ count: number }>>(
+    `SELECT COUNT(*) as count
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'products'
+       AND COLUMN_NAME IN ('has_invima', 'invima_registry_number', 'fecha_vencimiento')`
+  );
+
+  return Number(rows?.[0]?.count || 0) === 3;
+}
+
+function normalizeExpirationDate(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return null;
+  }
+
+  const parsed = new Date(`${trimmed}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (parsed < today) {
+    return null;
+  }
+
+  return trimmed;
+}
+
 export async function POST(request: NextRequest) {
   let connection: Awaited<ReturnType<typeof pool.getConnection>> | null = null;
   let transactionStarted = false;
@@ -51,10 +87,55 @@ export async function POST(request: NextRequest) {
     await connection.beginTransaction();
     transactionStarted = true;
 
+    const hasInvima = Boolean(data.hasInvima);
+    const invimaRegistryNumber = hasInvima && data.invimaRegistryNumber
+      ? String(data.invimaRegistryNumber).trim()
+      : null;
+    const expirationDate = normalizeExpirationDate(data.expirationDate);
+    if (!expirationDate) {
+      return NextResponse.json(
+        { error: 'La fecha de vencimiento es obligatoria, debe tener formato valido y no puede estar en el pasado.' },
+        { status: 400 }
+      );
+    }
+
+    const hasRequiredColumns = await supportsRequiredProductColumns(connection);
+
+    if (!hasRequiredColumns) {
+      return NextResponse.json(
+        {
+          error: 'La base de datos no tiene los campos requeridos de INVIMA y/o fecha de vencimiento. Ejecuta mysql/add-invima-fields.sql y mysql/add-expiration-date.sql.'
+        },
+        { status: 409 }
+      );
+    }
+
     const [result] = await connection.execute<ResultSetHeader>(
-      `INSERT INTO products (name, description, price, category, stock, image, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-      [data.name, data.description || '', data.salePrice || 0, data.category || '', data.currentStock || 0, data.image || '']
+      `INSERT INTO products (
+        name,
+        description,
+        price,
+        category,
+        stock,
+        image,
+        has_invima,
+        invima_registry_number,
+        fecha_vencimiento,
+        created_at,
+        updated_at
+      )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      [
+        data.name,
+        data.description || '',
+        data.salePrice || 0,
+        data.category || '',
+        data.currentStock || 0,
+        data.image || '',
+        hasInvima,
+        invimaRegistryNumber,
+        expirationDate
+      ]
     );
     const productId = result.insertId;
 
@@ -112,11 +193,45 @@ export async function PUT(request: NextRequest) {
     await connection.beginTransaction();
   transactionStarted = true;
 
+    const hasInvima = Boolean(data.hasInvima);
+    const invimaRegistryNumber = hasInvima && data.invimaRegistryNumber
+      ? String(data.invimaRegistryNumber).trim()
+      : null;
+    const expirationDate = normalizeExpirationDate(data.expirationDate);
+    if (!expirationDate) {
+      return NextResponse.json(
+        { error: 'La fecha de vencimiento es obligatoria, debe tener formato valido y no puede estar en el pasado.' },
+        { status: 400 }
+      );
+    }
+
+    const hasRequiredColumns = await supportsRequiredProductColumns(connection);
+
+    if (!hasRequiredColumns) {
+      return NextResponse.json(
+        {
+          error: 'La base de datos no tiene los campos requeridos de INVIMA y/o fecha de vencimiento. Ejecuta mysql/add-invima-fields.sql y mysql/add-expiration-date.sql.'
+        },
+        { status: 409 }
+      );
+    }
+
     await connection.execute(
       `UPDATE products 
-       SET name=?, description=?, price=?, category=?, stock=?, image=?, updated_at=NOW()
+        SET name=?, description=?, price=?, category=?, stock=?, image=?, has_invima=?, invima_registry_number=?, fecha_vencimiento=?, updated_at=NOW()
        WHERE id=?`,
-       [data.name, data.description || '', data.salePrice || 0, data.category || '', data.currentStock || 0, data.image || '', productId]
+      [
+        data.name,
+        data.description || '',
+        data.salePrice || 0,
+        data.category || '',
+        data.currentStock || 0,
+        data.image || '',
+        hasInvima,
+        invimaRegistryNumber,
+        expirationDate,
+        productId
+      ]
     );
 
     await connection.execute(
@@ -182,7 +297,7 @@ export async function DELETE(request: NextRequest) {
     await connection.commit();
     transactionStarted = false;
     return NextResponse.json({ success: true, deletedCount: ids.length });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (connection && transactionStarted) {
       try {
         await connection.rollback();
@@ -192,7 +307,8 @@ export async function DELETE(request: NextRequest) {
     }
 
     console.error('Error in DELETE /api/admin/inventory/product:', error);
-    if (error.code === 'ER_ROW_IS_REFERENCED_2') {
+    const errorCode = String((error as { code?: string })?.code || '');
+    if (errorCode === 'ER_ROW_IS_REFERENCED_2') {
       return NextResponse.json({ error: 'No se puede eliminar porque algunos productos seleccionados tienen movimientos o pedidos asociados. Puedes marcarlos como INACTIVOS en su lugar.' }, { status: 400 });
     }
 

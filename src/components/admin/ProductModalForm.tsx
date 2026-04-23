@@ -5,7 +5,6 @@ import {
   X,
   Package,
   Upload,
-  Scan,
   Barcode,
   Loader2,
   Check,
@@ -28,12 +27,27 @@ export default function ProductModalForm({
   onClose,
   onSave
 }: ProductModalFormProps) {
+  const toDateInputValue = (value?: string | Date) => {
+    if (!value) return '';
+    const date = typeof value === 'string' ? new Date(value) : value;
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toISOString().split('T')[0];
+  };
+
+  const today = new Date();
+  const todayInput = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    .toISOString()
+    .split('T')[0];
+
   const [formData, setFormData] = useState<Partial<InventoryProduct>>({
     name: product?.name || '',
     sku: product?.sku || '',
     barcode: product?.barcode || '',
     category: product?.category || '',
     description: product?.description || '',
+    hasInvima: product?.hasInvima ?? false,
+    invimaRegistryNumber: product?.invimaRegistryNumber || '',
+    expirationDate: toDateInputValue(product?.expirationDate),
     currentStock: product?.currentStock || 0,
     minStock: product?.minStock || 5,
     maxStock: product?.maxStock || undefined,
@@ -204,8 +218,51 @@ export default function ProductModalForm({
     setBarcodeMessage('');
   };
 
+  const getExpirationPreview = (dateValue?: string) => {
+    if (!dateValue) {
+      return { label: 'Sin fecha', color: 'text-gray-600 bg-gray-100' };
+    }
+
+    const date = new Date(`${dateValue}T00:00:00`);
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    if (Number.isNaN(date.getTime())) {
+      return { label: 'Fecha invalida', color: 'text-gray-600 bg-gray-100' };
+    }
+
+    const redLimit = new Date(todayDate);
+    redLimit.setMonth(redLimit.getMonth() + 3);
+
+    const yellowLimit = new Date(todayDate);
+    yellowLimit.setMonth(yellowLimit.getMonth() + 6);
+
+    if (date < todayDate) {
+      return { label: 'Vencido', color: 'text-red-700 bg-red-100' };
+    }
+    if (date <= redLimit) {
+      return { label: 'Rojo: vence pronto', color: 'text-red-700 bg-red-100' };
+    }
+    if (date <= yellowLimit) {
+      return { label: 'Amarillo: proximo a vencer', color: 'text-amber-700 bg-amber-100' };
+    }
+    return { label: 'Verde: vigente', color: 'text-emerald-700 bg-emerald-100' };
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!formData.expirationDate) {
+      alert('La fecha de vencimiento es obligatoria.');
+      return;
+    }
+
+    const expirationDate = new Date(`${formData.expirationDate}T00:00:00`);
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    if (Number.isNaN(expirationDate.getTime()) || expirationDate < todayDate) {
+      alert('La fecha de vencimiento debe ser valida y no puede estar en el pasado.');
+      return;
+    }
 
     if (formData.barcode) {
       const validation = validateBarcodeFormat(formData.barcode);
@@ -394,6 +451,64 @@ export default function ProductModalForm({
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
                       placeholder="Descripción del producto..."
                     />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        ¿El producto cuenta con registro INVIMA vigente? *
+                      </label>
+                      <select
+                        required
+                        value={formData.hasInvima ? 'yes' : 'no'}
+                        onChange={(e) => {
+                          const hasInvima = e.target.value === 'yes';
+                          setFormData({
+                            ...formData,
+                            hasInvima,
+                            invimaRegistryNumber: hasInvima ? (formData.invimaRegistryNumber || '') : ''
+                          });
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+                      >
+                        <option value="yes">Si</option>
+                        <option value="no">No</option>
+                      </select>
+                    </div>
+
+                    {formData.hasInvima && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Numero de registro INVIMA
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.invimaRegistryNumber || ''}
+                          onChange={(e) => setFormData({ ...formData, invimaRegistryNumber: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+                          placeholder="Ej: INVIMA 2026M-000000-R1"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Fecha de vencimiento *
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      min={todayInput}
+                      value={formData.expirationDate || ''}
+                      onChange={(e) => setFormData({ ...formData, expirationDate: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+                    />
+                    <div className="mt-2">
+                      <span className={`inline-block px-2.5 py-1 text-xs font-medium rounded-full ${getExpirationPreview(formData.expirationDate).color}`}>
+                        {getExpirationPreview(formData.expirationDate).label}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

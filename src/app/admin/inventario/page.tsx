@@ -18,6 +18,71 @@ import type { InventoryProduct, InventoryMovement } from '@/types/admin';
 import { useBarcodeScanner, validateBarcodeFormat } from '@/components/admin/BarcodeInput';
 import ProductModalForm from '@/components/admin/ProductModalForm';
 import BarcodePrinter from '@/components/admin/BarcodePrinter';
+import { useAdminFeedback } from '@/components/admin/AdminFeedback';
+
+type InventoryApiRow = {
+  product_id: string | number;
+  name: string;
+  sku?: string | null;
+  category: string;
+  description?: string | null;
+  has_invima?: number | boolean;
+  invima_registry_number?: string | null;
+  fecha_vencimiento?: string | null;
+  expiration_status?: 'red' | 'yellow' | 'green' | 'expired' | 'unknown' | null;
+  current_stock: number;
+  min_stock: number;
+  max_stock?: number | null;
+  unit_cost: number;
+  price: number;
+  tax_rate: number;
+  status: 'active' | 'inactive' | 'discontinued';
+  supplier?: string | null;
+  barcode?: string | null;
+  image?: string | null;
+};
+
+type MovementApiRow = {
+  id: string;
+  product_id: string | number;
+  product_name: string;
+  type: 'entry' | 'exit' | 'adjustment';
+  quantity: number;
+  previous_stock: number;
+  new_stock: number;
+  unit_cost?: number;
+  total_cost?: number;
+  reason: string;
+  reference?: string;
+  created_by: string;
+  created_at: string;
+};
+
+function mapInventoryRowToProduct(p: InventoryApiRow): InventoryProduct {
+  return {
+    id: String(p.product_id),
+    name: p.name,
+    sku: p.sku || undefined,
+    category: p.category,
+    description: p.description || undefined,
+    hasInvima: Boolean(p.has_invima),
+    invimaRegistryNumber: p.invima_registry_number || undefined,
+    expirationDate: p.fecha_vencimiento ? String(p.fecha_vencimiento).split('T')[0] : '',
+    expirationStatus: p.expiration_status || 'unknown',
+    currentStock: p.current_stock,
+    minStock: p.min_stock,
+    maxStock: p.max_stock || undefined,
+    unitCost: p.unit_cost,
+    salePrice: p.price,
+    taxRate: p.tax_rate,
+    status: p.status,
+    supplier: p.supplier || undefined,
+    barcode: p.barcode || undefined,
+    image: p.image || undefined,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+}
 
 export default function InventarioPage() {
   const [products, setProducts] = useState<InventoryProduct[]>([]);
@@ -38,6 +103,7 @@ export default function InventarioPage() {
   const scanFeedbackTimeoutRef = useRef<number | null>(null);
   const highlightTimeoutRef = useRef<number | null>(null);
   const productRowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
+  const { pushMessage, pushConfirm } = useAdminFeedback();
 
   const handleBarcodeScanned = useCallback((barcode: string) => {
     const cleanedBarcode = barcode.trim();
@@ -125,7 +191,7 @@ export default function InventarioPage() {
       }
 
       const movementsData = await movementsRes.json();
-      const mappedMovements = (movementsData.movements || []).map((m: any) => ({
+      const mappedMovements = ((movementsData.movements || []) as MovementApiRow[]).map((m) => ({
         id: m.id,
         productId: String(m.product_id),
         productName: m.product_name,
@@ -150,29 +216,33 @@ export default function InventarioPage() {
   }, []);
 
   const handleDelete = useCallback(async (ids: string[]) => {
-    if (!window.confirm(`¿Estás seguro de que quieres eliminar ${ids.length} producto(s)?`)) return;
-    
-    setIsDeleting(true);
-    try {
-      const res = await fetch(`/api/admin/inventory/product?ids=${ids.join(',')}`, {
-        method: 'DELETE'
-      });
-      
-      if (!res.ok) {
-        const message = await readErrorMessage(res, 'Error al eliminar');
-        throw new Error(message);
-      }
-      
-      // Update local state by filtering out deleted products
-      setProducts(prevProducts => prevProducts.filter(p => !ids.includes(p.id)));
-      setSelectedIds([]);
-    } catch (error: any) {
-      console.error(error);
-      alert(error.message);
-    } finally {
-      setIsDeleting(false);
-    }
-  }, [readErrorMessage]);
+    pushConfirm(
+      `¿Estás seguro de que quieres eliminar ${ids.length} producto(s)?`,
+      async () => {
+        setIsDeleting(true);
+        try {
+          const res = await fetch(`/api/admin/inventory/product?ids=${ids.join(',')}`, {
+            method: 'DELETE'
+          });
+          
+          if (!res.ok) {
+            const message = await readErrorMessage(res, 'Error al eliminar');
+            throw new Error(message);
+          }
+          
+          setProducts(prevProducts => prevProducts.filter(p => !ids.includes(p.id)));
+          setSelectedIds([]);
+          pushMessage('Producto(s) eliminado(s) correctamente', 'success');
+        } catch (error: unknown) {
+          console.error(error);
+          pushMessage(error instanceof Error ? error.message : 'Error al eliminar', 'error');
+        } finally {
+          setIsDeleting(false);
+        }
+      },
+      'Eliminar productos'
+    );
+  }, [pushConfirm, pushMessage, readErrorMessage]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -185,24 +255,7 @@ export default function InventarioPage() {
         const productsData = await productsRes.json();
         
         // Mapear datos a formato esperado
-        const mappedProducts = productsData.products.map((p: any) => ({
-          id: String(p.product_id),
-          name: p.name,
-          sku: p.sku,
-          category: p.category,
-          currentStock: p.current_stock,
-          minStock: p.min_stock,
-          maxStock: p.max_stock,
-          unitCost: p.unit_cost,
-          salePrice: p.price,
-          taxRate: p.tax_rate,
-          status: p.status,
-          supplier: p.supplier,
-          barcode: p.barcode,
-          image: p.image,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }));
+        const mappedProducts = ((productsData.products || []) as InventoryApiRow[]).map(mapInventoryRowToProduct);
         
         setProducts(mappedProducts);
       } catch (error) {
@@ -280,6 +333,25 @@ export default function InventarioPage() {
       return { label: 'Stock bajo', color: 'text-amber-900 bg-amber-50' };
     }
     return { label: 'Stock OK', color: 'text-[#005236] bg-[#a0f4c8]' };
+  };
+
+  const getExpirationStatus = (product: InventoryProduct) => {
+    if (!product.expirationDate) {
+      return { label: 'Sin fecha', color: 'text-[#414844] bg-[#e6e9e8]' };
+    }
+
+    switch (product.expirationStatus) {
+      case 'expired':
+        return { label: 'Vencido', color: 'text-[#93000a] bg-[#ffdad6]' };
+      case 'red':
+        return { label: 'Vence pronto', color: 'text-[#93000a] bg-[#ffdad6]' };
+      case 'yellow':
+        return { label: 'Proximo a vencer', color: 'text-amber-900 bg-amber-50' };
+      case 'green':
+        return { label: 'Vigente', color: 'text-[#005236] bg-[#a0f4c8]' };
+      default:
+        return { label: 'Sin clasificar', color: 'text-[#414844] bg-[#e6e9e8]' };
+    }
   };
 
   const categories = ['all', ...Array.from(new Set(products.map(p => p.category)))];
@@ -513,6 +585,9 @@ export default function InventarioPage() {
                       Categoría
                     </th>
                     <th className="px-6 py-3 text-center text-xs font-bold uppercase tracking-wider text-[#414844]">
+                      Vencimiento
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-bold uppercase tracking-wider text-[#414844]">
                       Stock
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-[#414844]">
@@ -532,6 +607,7 @@ export default function InventarioPage() {
                 <tbody className="divide-y divide-[#e6e9e8] bg-white">
                   {filteredProducts.map((product) => {
                     const status = getStockStatus(product);
+                    const expiration = getExpirationStatus(product);
                     return (
                       <tr
                         key={product.id}
@@ -590,6 +666,16 @@ export default function InventarioPage() {
                         </td>
                         <td className="px-6 py-4 text-sm text-[#414844]">
                           {product.category}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="space-y-1">
+                            <div className="text-xs text-[#414844]">
+                              {product.expirationDate || '-'}
+                            </div>
+                            <span className={`inline-block px-3 py-1 text-xs font-medium rounded-full ${expiration.color}`}>
+                              {expiration.label}
+                            </span>
+                          </div>
                         </td>
                         <td className="px-6 py-4 text-center">
                           <div className="text-sm font-bold text-[#012d1d]">
@@ -771,31 +857,15 @@ export default function InventarioPage() {
               }
 
               const productsData = await productsRes.json();
-              const mappedProducts = productsData.products.map((p: any) => ({
-                id: String(p.product_id),
-                name: p.name,
-                sku: p.sku,
-                category: p.category,
-                currentStock: p.current_stock,
-                minStock: p.min_stock,
-                maxStock: p.max_stock,
-                unitCost: p.unit_cost,
-                salePrice: p.price,
-                taxRate: p.tax_rate,
-                status: p.status,
-                supplier: p.supplier,
-                barcode: p.barcode,
-                image: p.image,
-                createdAt: new Date(),
-                updatedAt: new Date()
-              }));
+              const mappedProducts = ((productsData.products || []) as InventoryApiRow[]).map(mapInventoryRowToProduct);
               
               setProducts(mappedProducts);
               setShowProductModal(false);
               setSelectedProduct(null);
+              pushMessage(selectedProduct ? 'Producto actualizado correctamente' : 'Producto creado correctamente', 'success');
             } catch (error) {
               console.error(error);
-              alert(error instanceof Error ? error.message : 'Error al guardar el producto');
+              pushMessage(error instanceof Error ? error.message : 'Error al guardar el producto', 'error');
             }
           }}
         />

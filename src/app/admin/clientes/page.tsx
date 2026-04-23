@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Users, Plus, Search, Filter, MapPin, Mail, Phone, TrendingUp, X, Save } from 'lucide-react';
+import { useAdminFeedback } from '@/components/admin/AdminFeedback';
 
 interface Customer {
   id: string;
@@ -35,6 +36,7 @@ export default function ClientesPage() {
     department: ''
   });
   const [submitting, setSubmitting] = useState(false);
+  const { pushMessage } = useAdminFeedback();
 
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -98,7 +100,7 @@ export default function ClientesPage() {
     e.preventDefault();
     
     if (!formData.first_name || !formData.email) {
-      alert('Por favor completa los campos requeridos');
+      pushMessage('Por favor completa los campos requeridos', 'warning');
       return;
     }
 
@@ -115,14 +117,14 @@ export default function ClientesPage() {
         const data = await fetch('/api/admin/customers');
         const newData = await data.json();
         setCustomers(newData.customers || []);
-        alert('Cliente guardado exitosamente');
+        pushMessage('Cliente guardado exitosamente', 'success');
         closeModal();
       } else {
-        alert('Error al guardar el cliente');
+        pushMessage('Error al guardar el cliente', 'error');
       }
     } catch (error) {
       console.error('Error:', error);
-      alert('Error al guardar el cliente');
+      pushMessage('Error al guardar el cliente', 'error');
     } finally {
       setSubmitting(false);
     }

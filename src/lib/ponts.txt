@@ -1,0 +1,75 @@
+Necesito implementar un sistema de control de vencimientos en el módulo de inventario, integrándolo sin afectar la funcionalidad actual.
+
+📌 Requerimientos funcionales
+1. Formulario de producto
+En la creación/edición de productos agregar un campo obligatorio:
+Fecha de vencimiento (fechaVencimiento, tipo DATE)
+2. Lógica de clasificación (semáforo)
+
+Clasificar los productos según la fecha actual:
+
+🔴 Rojo (Crítico):
+Productos que:
+Vencen en el mes actual o
+Vencen dentro de los próximos 3 meses
+🟡 Amarillo (Advertencia):
+Productos que vencen entre 3 y 6 meses
+🟢 Verde (Óptimo):
+Productos con vencimiento mayor a 6 meses
+3. Visualización en frontend
+
+Implementar indicadores visuales en:
+
+Listado de inventario
+Detalle del producto
+
+Usar:
+
+Badges (etiquetas de color)
+Colores de fila
+Iconos
+4. Backend
+
+Guardar el campo:
+
+fechaVencimiento DATE
+Calcular dinámicamente el estado del producto al consultar:
+estadoVencimiento: "rojo" | "amarillo" | "verde"
+5. Validaciones
+No permitir fechas pasadas al crear o editar productos
+Validar formato de fecha correcto
+6. Seguimiento automático
+Cada consulta de inventario debe recalcular el estado según la fecha actual
+No guardar el estado en BD (debe ser dinámico)
+7. Integración con sistema actual
+No romper funcionalidades existentes
+Mantener compatibilidad con:
+Sistema de inventario actual
+Lógica de INVIMA
+8. Alcance en vistas
+
+Esta lógica debe reflejarse en:
+
+/admin/inventario
+/admin
+Página pública:
+https://fitovida.k4soft.com/
+🎯 Objetivo final
+
+Implementar un sistema inteligente que:
+
+Controle fechas de vencimiento
+Muestre alertas visuales claras (tipo semáforo)
+Permita priorizar productos próximos a vencer
+Mejore la gestión del inventario
+⚙️ Requerimiento técnico final
+
+Generar el código necesario (frontend + backend), asegurando:
+
+Código limpio y modular
+Componentes reutilizables
+Buenas prácticas (validación, separación de responsabilidades)
+
+https://fitovida.k4soft.com/admin/inventario
+
+https://fitovida.k4soft.com/

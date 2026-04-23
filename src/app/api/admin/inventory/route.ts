@@ -81,6 +81,28 @@ export async function GET(request: NextRequest) {
       has(productColumns, 'description') ? 'p.description' : "'' as description",
       has(productColumns, 'price') ? 'p.price' : '0 as price',
       has(productColumns, 'category') ? 'p.category' : "'general' as category",
+      has(productColumns, 'image') ? 'p.image' : 'NULL as image',
+      has(productColumns, 'has_invima') ? 'p.has_invima' : '0 as has_invima',
+      has(productColumns, 'invima_registry_number') ? 'p.invima_registry_number' : 'NULL as invima_registry_number',
+      has(productColumns, 'fecha_vencimiento') ? 'p.fecha_vencimiento' : 'NULL as fecha_vencimiento',
+      has(productColumns, 'fecha_vencimiento')
+        ? `CASE
+             WHEN p.fecha_vencimiento IS NULL THEN 'unknown'
+             WHEN p.fecha_vencimiento < CURDATE() THEN 'expired'
+             WHEN p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 3 MONTH) THEN 'red'
+             WHEN p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 6 MONTH) THEN 'yellow'
+             ELSE 'green'
+           END as expiration_status`
+        : "'unknown' as expiration_status",
+      has(productColumns, 'fecha_vencimiento')
+        ? `CASE
+             WHEN p.fecha_vencimiento IS NULL THEN 'sin_fecha'
+             WHEN p.fecha_vencimiento < CURDATE() THEN 'vencido'
+             WHEN p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 3 MONTH) THEN 'rojo'
+             WHEN p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 6 MONTH) THEN 'amarillo'
+             ELSE 'verde'
+           END as estado_vencimiento`
+        : "'sin_fecha' as estado_vencimiento",
       has(inventoryColumns, 'sku') ? 'ip.sku' : 'NULL as sku',
       has(inventoryColumns, 'barcode') ? 'ip.barcode' : 'NULL as barcode',
       has(inventoryColumns, 'current_stock') ? 'ip.current_stock' : '0 as current_stock',
@@ -110,7 +132,7 @@ export async function GET(request: NextRequest) {
       WHERE 1=1
     `;
     
-    const params: any[] = [];
+    const params: Array<string> = [];
 
     if (status && status !== 'all' && has(inventoryColumns, 'status')) {
       sql += ' AND ip.status = ?';

@@ -17,6 +17,23 @@ interface ProductRow {
   benefits: string | null;
 }
 
+async function hasProductsColumn(columnName: string): Promise<boolean> {
+  try {
+    const rows = await query<{ count: number }>(
+      `SELECT COUNT(*) as count
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'products'
+         AND COLUMN_NAME = ?`,
+      [columnName]
+    );
+
+    return Number(rows?.[0]?.count || 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
 // GET - Obtener un producto por ID
 export async function GET(
   request: NextRequest,
@@ -33,10 +50,17 @@ export async function GET(
       );
     }
 
-    const product = await query<ProductRow>(
-      'SELECT * FROM products WHERE id = ?',
-      [productId]
-    );
+    const supportsInvima = await hasProductsColumn('has_invima');
+    if (!supportsInvima) {
+      return NextResponse.json(
+        { error: 'Producto no disponible para venta' },
+        { status: 404 }
+      );
+    }
+
+    const sql = 'SELECT * FROM products WHERE id = ? AND has_invima = 1';
+
+    const product = await query<ProductRow>(sql, [productId]);
 
     if (product.length === 0) {
       return NextResponse.json(

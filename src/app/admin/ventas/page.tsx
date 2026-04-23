@@ -15,6 +15,7 @@ import {
 import { PDFDownloadLink, pdf } from '@react-pdf/renderer';
 import FacturaHTML from '@/components/admin/FacturaHTML';
 import type { Sale, SaleItem } from '@/types/admin';
+import { useAdminFeedback } from '@/components/admin/AdminFeedback';
 
 export default function VentasPage() {
   const [sales, setSales] = useState<Sale[]>([]);
@@ -26,6 +27,7 @@ export default function VentasPage() {
   // Modal HTML para impresión nativa en la misma página
   const [showFactura, setShowFactura] = useState(false);
   const [facturaSale, setFacturaSale] = useState<Sale | null>(null);
+  const { pushMessage } = useAdminFeedback();
 
   const readErrorMessage = async (response: Response, fallback: string) => {
     try {
@@ -376,7 +378,7 @@ export default function VentasPage() {
               window.location.reload(); 
             } catch (error) {
               console.error('Error:', error);
-              alert(error instanceof Error ? error.message : 'Error al procesar la venta');
+              pushMessage(error instanceof Error ? error.message : 'Error al procesar la venta', 'error');
             }
           }}
         />
@@ -523,6 +525,7 @@ function NewSaleModal({
   const [customerDocument, setCustomerDocument] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<Sale['paymentMethod']>('cash');
   const [selectedItems, setSelectedItems] = useState<SaleItem[]>([]);
+  const { pushMessage } = useAdminFeedback();
 
   const [barcodeInput, setBarcodeInput] = useState('');
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -543,12 +546,12 @@ function NewSaleModal({
       const product = products.find(p => p.barcode === code);
       if (product) {
         if (product.current_stock <= 0) {
-          alert('Este producto no tiene stock disponible.');
+          pushMessage('Este producto no tiene stock disponible.', 'warning');
         } else {
           addItem(product.product_id);
         }
       } else {
-        alert('Producto no encontrado en el inventario.');
+        pushMessage('Producto no encontrado en el inventario.', 'warning');
       }
       setBarcodeInput('');
     }
@@ -561,7 +564,7 @@ function NewSaleModal({
     const existingItem = selectedItems.find(item => item.productId === String(productId));
     if (existingItem) {
       if (existingItem.quantity >= product.current_stock) {
-        alert('Stock máximo alcanzado para este producto.');
+        pushMessage('Stock máximo alcanzado para este producto.', 'warning');
         return;
       }
       setSelectedItems(selectedItems.map(item => 
@@ -571,7 +574,7 @@ function NewSaleModal({
       ));
     } else {
       if (product.current_stock <= 0) {
-        alert('Producto sin stock.');
+        pushMessage('Producto sin stock.', 'warning');
         return;
       }
       const taxRate = Number(product.tax_rate) || 0;

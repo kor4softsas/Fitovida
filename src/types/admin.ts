@@ -55,6 +55,10 @@ export interface InventoryProduct {
   sku?: string;
   category: string;
   description?: string;
+  hasInvima: boolean;
+  invimaRegistryNumber?: string;
+  expirationDate: string;
+  expirationStatus?: 'red' | 'yellow' | 'green' | 'expired' | 'unknown';
   currentStock: number;
   minStock: number; // Alerta de stock mínimo
   maxStock?: number;
@@ -129,6 +133,8 @@ export interface DashboardStats {
     lowStock: number;
     outOfStock: number;
     totalValue: number;
+    expirationCritical?: number;
+    expirationWarning?: number;
   };
   finances: {
     totalIncome: number;
