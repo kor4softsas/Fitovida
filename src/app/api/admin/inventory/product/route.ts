@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { ResultSetHeader } from 'mysql2';
+import { ResultSetHeader, RowDataPacket } from 'mysql2';
 
 type DbError = {
   code?: string;
@@ -45,7 +45,7 @@ function mapDbError(error: unknown): { status: number; message: string } {
 }
 
 async function supportsRequiredProductColumns(connection: Awaited<ReturnType<typeof pool.getConnection>>): Promise<boolean> {
-  const [rows] = await connection.execute<Array<{ count: number }>>(
+  const [rows] = await connection.execute<RowDataPacket[]>(
     `SELECT COUNT(*) as count
      FROM INFORMATION_SCHEMA.COLUMNS
      WHERE TABLE_SCHEMA = DATABASE()
@@ -53,7 +53,7 @@ async function supportsRequiredProductColumns(connection: Awaited<ReturnType<typ
        AND COLUMN_NAME IN ('has_invima', 'invima_registry_number', 'fecha_vencimiento')`
   );
 
-  return Number(rows?.[0]?.count || 0) === 3;
+  return Number((rows[0] as RowDataPacket & { count?: number })?.count || 0) === 3;
 }
 
 function normalizeExpirationDate(value: unknown): string | null {
