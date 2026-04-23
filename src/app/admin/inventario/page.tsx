@@ -12,7 +12,10 @@ import {
   Trash2,
   X,
   Barcode,
-  Printer
+  Printer,
+  Download,
+  ChevronDown,
+  Loader2
 } from 'lucide-react';
 import type { InventoryProduct, InventoryMovement } from '@/types/admin';
 import { useBarcodeScanner, validateBarcodeFormat } from '@/components/admin/BarcodeInput';
@@ -95,6 +98,8 @@ export default function InventarioPage() {
   const [showMovementModal, setShowMovementModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
   const [showBarcodePrinter, setShowBarcodePrinter] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState<'json' | 'excel' | 'pdf' | 'sql' | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<InventoryProduct | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -325,6 +330,62 @@ export default function InventarioPage() {
     }).format(value);
   };
 
+  const parseDownloadFileName = (contentDisposition: string | null, fallback: string) => {
+    if (!contentDisposition) return fallback;
+
+    const utfMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utfMatch?.[1]) {
+      try {
+        return decodeURIComponent(utfMatch[1]);
+      } catch {
+        return fallback;
+      }
+    }
+
+    const plainMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+    return plainMatch?.[1] || fallback;
+  };
+
+  const downloadBlob = (blob: Blob, fileName: string) => {
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
+  };
+
+  const handleExportInventory = useCallback(async (format: 'json' | 'excel' | 'pdf' | 'sql') => {
+    setExportingFormat(format);
+    try {
+      const response = await fetch(`/api/admin/inventory/export/${format}`);
+      if (!response.ok) {
+        const message = await readErrorMessage(response, 'Error al exportar inventario');
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const fallbackFileNames: Record<typeof format, string> = {
+        json: 'inventario.json',
+        excel: 'inventario.xlsx',
+        pdf: 'inventario.pdf',
+        sql: 'inventario.sql'
+      };
+      const fileName = parseDownloadFileName(response.headers.get('Content-Disposition'), fallbackFileNames[format]);
+
+      downloadBlob(blob, fileName);
+      pushMessage(`Exportación ${format.toUpperCase()} generada correctamente`, 'success');
+    } catch (error) {
+      console.error(error);
+      pushMessage(error instanceof Error ? error.message : 'Error al exportar inventario', 'error');
+    } finally {
+      setExportingFormat(null);
+      setShowExportMenu(false);
+    }
+  }, [pushMessage, readErrorMessage]);
+
   const getStockStatus = (product: InventoryProduct) => {
     if (product.currentStock === 0) {
       return { label: 'Sin stock', color: 'text-[#93000a] bg-[#ffdad6]' };
@@ -391,6 +452,37 @@ export default function InventarioPage() {
               Eliminar ({selectedIds.length})
             </button>
           )}
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu((current) => !current)}
+              disabled={Boolean(exportingFormat)}
+              className="flex items-center gap-2 rounded-full border border-[#cce6d0] bg-[#e7f9ee] px-4 py-2 font-bold text-[#005236] transition-colors hover:bg-[#d6f2df] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {exportingFormat ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} />}
+              {exportingFormat ? `Exportando ${exportingFormat.toUpperCase()}` : 'Exportar Inventario'}
+              <ChevronDown size={16} />
+            </button>
+
+            {showExportMenu && !exportingFormat && (
+              <div className="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded-[1.5rem] border border-[#e6e9e8] bg-white shadow-[0_12px_40px_rgba(1,45,29,0.12)]">
+                {([
+                  ['json', 'JSON'],
+                  ['excel', 'Excel (.xlsx)'],
+                  ['pdf', 'PDF'],
+                  ['sql', 'SQL (MySQL)']
+                ] as const).map(([format, label]) => (
+                  <button
+                    key={format}
+                    onClick={() => void handleExportInventory(format)}
+                    className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-[#012d1d] transition-colors hover:bg-[#f2f4f3]"
+                  >
+                    <span>{label}</span>
+                    <Download size={16} className="text-[#005236]" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             onClick={() => {
               setSelectedProduct(null);

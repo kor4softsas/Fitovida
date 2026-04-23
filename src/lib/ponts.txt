@@ -1,75 +1,77 @@
-Necesito implementar un sistema de control de vencimientos en el módulo de inventario, integrándolo sin afectar la funcionalidad actual.
-
-📌 Requerimientos funcionales
-1. Formulario de producto
-En la creación/edición de productos agregar un campo obligatorio:
-Fecha de vencimiento (fechaVencimiento, tipo DATE)
-2. Lógica de clasificación (semáforo)
-
-Clasificar los productos según la fecha actual:
-
-🔴 Rojo (Crítico):
-Productos que:
-Vencen en el mes actual o
-Vencen dentro de los próximos 3 meses
-🟡 Amarillo (Advertencia):
-Productos que vencen entre 3 y 6 meses
-🟢 Verde (Óptimo):
-Productos con vencimiento mayor a 6 meses
-3. Visualización en frontend
-
-Implementar indicadores visuales en:
-
-Listado de inventario
-Detalle del producto
-
-Usar:
-
-Badges (etiquetas de color)
-Colores de fila
-Iconos
-4. Backend
-
-Guardar el campo:
-
-fechaVencimiento DATE
-Calcular dinámicamente el estado del producto al consultar:
-estadoVencimiento: "rojo" | "amarillo" | "verde"
-5. Validaciones
-No permitir fechas pasadas al crear o editar productos
-Validar formato de fecha correcto
-6. Seguimiento automático
-Cada consulta de inventario debe recalcular el estado según la fecha actual
-No guardar el estado en BD (debe ser dinámico)
-7. Integración con sistema actual
-No romper funcionalidades existentes
-Mantener compatibilidad con:
-Sistema de inventario actual
-Lógica de INVIMA
-8. Alcance en vistas
-
-Esta lógica debe reflejarse en:
+Necesito agregar una funcionalidad de exportación de inventario en múltiples formatos dentro de la vista:
 
 /admin/inventario
-/admin
-Página pública:
-https://fitovida.k4soft.com/
+
+Sin afectar la funcionalidad actual del sistema.
+
+📌 Requerimiento principal
+
+Agregar un botón visible en la interfaz:
+
+"Exportar Inventario"
+
+Este botón debe permitir exportar los datos en los siguientes formatos:
+
+JSON
+Excel (.xlsx)
+PDF
+SQL (.sql compatible con MySQL)
+🟢 Funcionalidades esperadas
+1. Datos a exportar
+
+El inventario debe incluir campos como:
+
+id
+nombre
+descripción
+precio
+stock
+fechaVencimiento
+estadoVencimiento (rojo, amarillo, verde)
+tieneInvima
+numeroInvima
+fechaCreación
+2. Formatos de exportación
+📦 JSON
+Estructura limpia tipo array de objetos
+Compatible con APIs
+📊 Excel (.xlsx)
+Hoja con columnas organizadas
+Encabezados claros
+Formato legible para usuarios administrativos
+📄 PDF
+Tabla estructurada
+Título: "Reporte de Inventario"
+Fecha de generación
+Diseño limpio y profesional
+🗄️ SQL (MySQL)
+Script con INSERT INTO productos (...) VALUES (...)
+Compatible para respaldo o migración
+3. Backend
+Crear endpoints por formato, por ejemplo:
+GET /api/inventario/export/json
+GET /api/inventario/export/excel
+GET /api/inventario/export/pdf
+GET /api/inventario/export/sql
+Generar archivos dinámicamente
+Manejar headers de descarga (Content-Disposition)
+4. Frontend
+Botón "Exportar Inventario" con menú desplegable
+Opciones por formato
+Llamar al endpoint correspondiente
+Descargar archivo automáticamente
+5. Buenas prácticas
+No duplicar lógica
+Reutilizar consulta base de inventario
+Manejar errores correctamente
+Optimizar rendimiento para grandes volúmenes
 🎯 Objetivo final
 
-Implementar un sistema inteligente que:
+Permitir al usuario:
 
-Controle fechas de vencimiento
-Muestre alertas visuales claras (tipo semáforo)
-Permita priorizar productos próximos a vencer
-Mejore la gestión del inventario
+Exportar el inventario fácilmente
+Usar la información para reportes, backups o análisis
+Mantener estándares comunes de exportación empresarial
 ⚙️ Requerimiento técnico final
 
-Generar el código necesario (frontend + backend), asegurando:
-
-Código limpio y modular
-Componentes reutilizables
-Buenas prácticas (validación, separación de responsabilidades)
-
-https://fitovida.k4soft.com/admin/inventario
-
-https://fitovida.k4soft.com/
+Generar el código necesario (frontend + backend) implementando esta funcionalidad con buenas prácticas y estructura limpia.

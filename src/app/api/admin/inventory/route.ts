@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, queryOne } from '@/lib/db';
-
-type ColumnRow = { column_name: string };
-
-const SCHEMA_CACHE_TTL_MS = 5 * 60 * 1000;
-const columnCache = new Map<string, { expiresAt: number; columns: Set<string> }>();
+import { query } from '@/lib/db';
+import { queryOne } from '@/lib/db';
+import { getInventoryData } from '@/lib/admin/inventory-export';
 
 function isSchemaIssue(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
@@ -35,143 +32,19 @@ function isDatabaseIssue(error: unknown): boolean {
   ].includes(code);
 }
 
-async function getColumnSet(tableName: string): Promise<Set<string>> {
-  const now = Date.now();
-  const cached = columnCache.get(tableName);
-  if (cached && cached.expiresAt > now) {
-    return cached.columns;
-  }
-
-  try {
-    const rows = await query<ColumnRow>(
-      `SELECT LOWER(COLUMN_NAME) as column_name
-       FROM INFORMATION_SCHEMA.COLUMNS
-       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
-      [tableName]
-    );
-
-    const columns = new Set(rows.map((row) => row.column_name));
-    columnCache.set(tableName, { expiresAt: now + SCHEMA_CACHE_TTL_MS, columns });
-
-    return columns;
-  } catch {
-    return new Set<string>();
-  }
-}
-
-function has(columns: Set<string>, columnName: string): boolean {
-  return columns.has(columnName.toLowerCase());
-}
-
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const category = searchParams.get('category');
-    const status = searchParams.get('status') || 'active';
-    const searchTerm = searchParams.get('search');
-    const lowStock = searchParams.get('lowStock') === 'true';
-
-    const inventoryColumns = await getColumnSet('inventory_products');
-    const productColumns = await getColumnSet('products');
-
-    const selectFields = [
-      'ip.id',
-      'ip.product_id',
-      'p.name',
-      has(productColumns, 'description') ? 'p.description' : "'' as description",
-      has(productColumns, 'price') ? 'p.price' : '0 as price',
-      has(productColumns, 'category') ? 'p.category' : "'general' as category",
-      has(productColumns, 'image') ? 'p.image' : 'NULL as image',
-      has(productColumns, 'has_invima') ? 'p.has_invima' : '0 as has_invima',
-      has(productColumns, 'invima_registry_number') ? 'p.invima_registry_number' : 'NULL as invima_registry_number',
-      has(productColumns, 'fecha_vencimiento') ? 'p.fecha_vencimiento' : 'NULL as fecha_vencimiento',
-      has(productColumns, 'fecha_vencimiento')
-        ? `CASE
-             WHEN p.fecha_vencimiento IS NULL THEN 'unknown'
-             WHEN p.fecha_vencimiento < CURDATE() THEN 'expired'
-             WHEN p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 3 MONTH) THEN 'red'
-             WHEN p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 6 MONTH) THEN 'yellow'
-             ELSE 'green'
-           END as expiration_status`
-        : "'unknown' as expiration_status",
-      has(productColumns, 'fecha_vencimiento')
-        ? `CASE
-             WHEN p.fecha_vencimiento IS NULL THEN 'sin_fecha'
-             WHEN p.fecha_vencimiento < CURDATE() THEN 'vencido'
-             WHEN p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 3 MONTH) THEN 'rojo'
-             WHEN p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 6 MONTH) THEN 'amarillo'
-             ELSE 'verde'
-           END as estado_vencimiento`
-        : "'sin_fecha' as estado_vencimiento",
-      has(inventoryColumns, 'sku') ? 'ip.sku' : 'NULL as sku',
-      has(inventoryColumns, 'barcode') ? 'ip.barcode' : 'NULL as barcode',
-      has(inventoryColumns, 'current_stock') ? 'ip.current_stock' : '0 as current_stock',
-      has(inventoryColumns, 'min_stock') ? 'ip.min_stock' : '0 as min_stock',
-      has(inventoryColumns, 'max_stock') ? 'ip.max_stock' : 'NULL as max_stock',
-      has(inventoryColumns, 'unit_cost') ? 'ip.unit_cost' : '0 as unit_cost',
-      has(inventoryColumns, 'tax_rate') ? 'ip.tax_rate' : '19 as tax_rate',
-      has(inventoryColumns, 'supplier') ? 'ip.supplier' : 'NULL as supplier',
-      has(inventoryColumns, 'status') ? 'ip.status' : "'active' as status",
-      has(inventoryColumns, 'current_stock') && has(inventoryColumns, 'unit_cost')
-        ? '(ip.current_stock * ip.unit_cost) as stock_value'
-        : '0 as stock_value',
-      has(inventoryColumns, 'current_stock') && has(inventoryColumns, 'min_stock') && has(inventoryColumns, 'max_stock')
-        ? `CASE
-             WHEN ip.current_stock <= ip.min_stock THEN 'low'
-             WHEN ip.current_stock > ip.max_stock THEN 'high'
-             ELSE 'normal'
-           END as stock_status`
-        : "'normal' as stock_status"
-    ];
-
-    let sql = `
-      SELECT
-        ${selectFields.join(',\n        ')}
-      FROM inventory_products ip
-      JOIN products p ON ip.product_id = p.id
-      WHERE 1=1
-    `;
-    
-    const params: Array<string> = [];
-
-    if (status && status !== 'all' && has(inventoryColumns, 'status')) {
-      sql += ' AND ip.status = ?';
-      params.push(status);
-    }
-
-    if (category && has(productColumns, 'category')) {
-      sql += ' AND p.category = ?';
-      params.push(category);
-    }
-
-    if (lowStock && has(inventoryColumns, 'current_stock') && has(inventoryColumns, 'min_stock')) {
-      sql += ' AND ip.current_stock <= ip.min_stock';
-    }
-
-    if (searchTerm) {
-      const searchConditions: string[] = ['p.name LIKE ?'];
-      const searchPattern = `%${searchTerm}%`;
-
-      params.push(searchPattern);
-      if (has(inventoryColumns, 'barcode')) {
-        searchConditions.push('ip.barcode LIKE ?');
-        params.push(searchPattern);
-      }
-      if (has(inventoryColumns, 'sku')) {
-        searchConditions.push('ip.sku LIKE ?');
-        params.push(searchPattern);
-      }
-
-      sql += ` AND (${searchConditions.join(' OR ')})`;
-    }
-
-    sql += ' ORDER BY p.name ASC';
-
-    const products = await query(sql, params);
+    const data = await getInventoryData({
+      category: searchParams.get('category'),
+      status: searchParams.get('status') || 'active',
+      searchTerm: searchParams.get('search'),
+      lowStock: searchParams.get('lowStock') === 'true'
+    });
 
     return NextResponse.json({
-      products,
-      total: products.length
+      products: data.rows,
+      total: data.rows.length
     });
   } catch (error) {
     if (isSchemaIssue(error) || isDatabaseIssue(error)) {
