@@ -11,6 +11,7 @@ import {
   AlertCircle,
   RefreshCw
 } from 'lucide-react';
+import { useEffect } from 'react';
 import BarcodeInput, { validateBarcodeFormat } from './BarcodeInput';
 import type { InventoryProduct } from '@/types/admin';
 
@@ -68,6 +69,30 @@ export default function ProductModalForm({
   const [barcodeMessage, setBarcodeMessage] = useState('');
 
   const [isSkuManuallyEdited, setIsSkuManuallyEdited] = useState(!!product?.sku);
+  const [lots, setLots] = useState<any[] | null>(null);
+  const [lotsLoading, setLotsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!product) return;
+    let mounted = true;
+    const fetchLots = async () => {
+      setLotsLoading(true);
+      try {
+        const res = await fetch(`/api/admin/inventory/lots?productId=${product.id}`);
+        if (!res.ok) throw new Error('No se pudieron cargar los lotes');
+        const data = await res.json();
+        if (mounted) setLots(data.lots || []);
+      } catch (err) {
+        console.error('Error cargando lotes:', err);
+        if (mounted) setLots([]);
+      } finally {
+        if (mounted) setLotsLoading(false);
+      }
+    };
+
+    void fetchLots();
+    return () => { mounted = false; };
+  }, [product]);
 
   // Generar SKU automático
   const generateSKUFromName = (name: string) => {
@@ -683,6 +708,54 @@ export default function ProductModalForm({
               </div>
             </div>
           </div>
+
+          {/* Lotes */}
+          {product && (
+            <div className="space-y-3">
+              <h3 className="font-semibold text-gray-900">Lotes</h3>
+              {lotsLoading ? (
+                <div className="text-sm text-gray-600">Cargando lotes...</div>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border bg-white">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Lote</th>
+                        <th className="px-3 py-2 text-left">Barcode</th>
+                        <th className="px-3 py-2 text-center">Cantidad</th>
+                        <th className="px-3 py-2 text-center">Vencimiento</th>
+                        <th className="px-3 py-2 text-right">Costo Unit.</th>
+                        <th className="px-3 py-2 text-right">Precio Venta (override)</th>
+                        <th className="px-3 py-2 text-left">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(lots || []).map((l) => (
+                        <tr key={l.id} className="border-t">
+                          <td className="px-3 py-2">{l.lot_code}</td>
+                          <td className="px-3 py-2">{l.barcode || '-'}</td>
+                          <td className="px-3 py-2 text-center">{l.quantity}</td>
+                          <td className="px-3 py-2 text-center">{l.expiration_date || '-'}</td>
+                          <td className="px-3 py-2 text-right">{l.unit_cost ? Number(l.unit_cost).toFixed(2) : '-'}</td>
+                          <td className="px-3 py-2 text-right">{l.sale_price_override ? Number(l.sale_price_override).toFixed(2) : '-'}</td>
+                          <td className="px-3 py-2">{l.status}</td>
+                        </tr>
+                      ))}
+                      {(!lots || lots.length === 0) && (
+                        <tr>
+                          <td colSpan={7} className="px-3 py-4 text-sm text-gray-600">No hay lotes registrados para este producto.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="text-sm text-gray-700">
+                Existencia total por lotes: <span className="font-bold">{(lots || []).reduce((s, l) => s + Number(l.quantity || 0), 0)}</span>
+              </div>
+            </div>
+          )}
 
           {/* Proveedor y Estado */}
           <div className="grid grid-cols-2 gap-4">

@@ -22,6 +22,7 @@ import {
 import type { InventoryProduct, InventoryMovement } from '@/types/admin';
 import { useBarcodeScanner, validateBarcodeFormat } from '@/components/admin/BarcodeInput';
 import ProductModalForm from '@/components/admin/ProductModalForm';
+import ReceiveStockModal from '@/components/admin/ReceiveStockModal';
 import BarcodePrinter from '@/components/admin/BarcodePrinter';
 import { useAdminFeedback } from '@/components/admin/AdminFeedback';
 
@@ -101,6 +102,7 @@ export default function InventarioPage() {
   const [view, setView] = useState<'products' | 'movements'>('products');
   const [showMovementModal, setShowMovementModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [showBarcodePrinter, setShowBarcodePrinter] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exportingFormat, setExportingFormat] = useState<'json' | 'excel' | 'pdf' | 'sql' | null>(null);
@@ -279,6 +281,21 @@ export default function InventarioPage() {
 
     void fetchData();
   }, [fetchMovements]);
+
+  const refreshProducts = async () => {
+    try {
+      setLoading(true);
+      const productsRes = await fetch('/api/admin/inventory');
+      if (!productsRes.ok) throw new Error('Error cargando productos');
+      const productsData = await productsRes.json();
+      const mappedProducts = ((productsData.products || []) as InventoryApiRow[]).map(mapInventoryRowToProduct);
+      setProducts(mappedProducts);
+    } catch (error) {
+      console.error('Error recargando productos:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (view === 'movements' && movements.length === 0 && !movementsLoading) {
@@ -520,6 +537,13 @@ export default function InventarioPage() {
           >
             <Plus size={20} />
             Movimiento
+          </button>
+          <button
+            onClick={() => setShowReceiveModal(true)}
+            className="flex items-center gap-2 rounded-full bg-[#005236] px-4 py-2 font-bold text-white transition-colors hover:bg-[#003d2d]"
+          >
+            <Plus size={20} />
+            Ingreso Mercancía
           </button>
           <button
             onClick={() => setShowBarcodePrinter(true)}
@@ -1039,6 +1063,15 @@ export default function InventarioPage() {
         <BarcodePrinter
           products={products}
           onClose={() => setShowBarcodePrinter(false)}
+        />
+      )}
+      {/* Receive Stock Modal */}
+      {showReceiveModal && (
+        <ReceiveStockModal
+          open={showReceiveModal}
+          onClose={() => setShowReceiveModal(false)}
+          products={products.map(p => ({ id: p.id, name: p.name, sku: p.sku }))}
+          onSuccess={() => void refreshProducts()}
         />
       )}
     </div>

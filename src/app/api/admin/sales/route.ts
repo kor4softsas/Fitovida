@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
+import pool from '@/lib/db';
 
 function isSchemaOrDbIssue(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
@@ -191,8 +192,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  let conn: Awaited<ReturnType<typeof pool.getConnection>> | null = null;
+  let transactionStarted = false;
+
   try {
     const body = await request.json();
+    console.log('POST /api/admin/sales body:', JSON.stringify(body));
     const {
       customer_name,
       customer_email,
@@ -208,19 +213,17 @@ export async function POST(request: NextRequest) {
       created_by
     } = body;
 
-    // Validar datos requeridos
     if (!customer_name || !items || items.length === 0 || !total || !created_by) {
-      return NextResponse.json(
-        { error: 'Datos incompletos para registrar venta' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Datos incompletos para registrar venta' }, { status: 400 });
     }
 
-    // Generar número de venta
-    const [lastSale] = await query(
-      `SELECT sale_number FROM admin_sales ORDER BY created_at DESC LIMIT 1`
-    );
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    transactionStarted = true;
 
+    // Generar número de venta usando conexión
+    const [lastSaleRows] = await conn.query(`SELECT sale_number FROM admin_sales ORDER BY created_at DESC LIMIT 1`);
+    const lastSale = (lastSaleRows as any[])[0];
     let saleNumber = 'V-2026-001';
     if (lastSale && lastSale.sale_number) {
       const parts = lastSale.sale_number.split('-');
@@ -228,11 +231,11 @@ export async function POST(request: NextRequest) {
       saleNumber = `V-2026-${String(lastNum).padStart(3, '0')}`;
     }
 
-    // Generar UUID para la venta
     const saleId = crypto.randomUUID();
 
     // Insertar venta principal
-    await query(
+    console.log('Inserting admin_sales', saleId, saleNumber);
+    await conn.query(
       `INSERT INTO admin_sales 
        (id, sale_number, customer_name, customer_email, customer_phone, customer_document,
         subtotal, tax, discount, total, payment_method, payment_status, notes, created_by)
@@ -255,45 +258,108 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // Insertar items de la venta
+    // Procesar cada item: descontar de lotes (por barcode si viene) priorizando vencimiento
+    console.log('Processing items count=', items.length);
     for (const item of items) {
-      // Validar stock y registrar movimiento de inventario
-      const inventoryProduct = await queryOne(
-        'SELECT product_id, current_stock FROM inventory_products WHERE product_id = ?',
-        [item.product_id]
-      );
+      const productId = Number(item.product_id || item.productId || item.product_id);
+      let required = Number(item.quantity || item.qty || 0);
+      if (!productId || required <= 0) {
+        console.error('Invalid item data', item);
+        await conn.rollback();
+        return NextResponse.json({ error: 'Item con product_id o quantity inválidos' }, { status: 400 });
+      }
 
-      if (inventoryProduct && inventoryProduct.current_stock >= item.quantity) {
-        // Registrar movimiento de salida
-        await query(
-          `INSERT INTO inventory_movements 
-           (product_id, product_name, type, quantity, previous_stock, new_stock, reason, reference, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      // Bloquear fila de inventory_products para consistencia
+      const [ipRows] = await conn.query('SELECT current_stock FROM inventory_products WHERE product_id = ? FOR UPDATE', [productId]);
+      const ip = (ipRows as any[])[0];
+      const currentStock = ip ? Number(ip.current_stock || 0) : 0;
+      if (currentStock < required) {
+        await conn.rollback();
+        return NextResponse.json({ error: `Stock insuficiente para el producto ${productId}` }, { status: 400 });
+      }
+
+      // We'll keep track of the remaining global stock locally and update DB after each lot consume
+      let remainingGlobal = currentStock;
+
+      // If item has barcode, prefer that specific lot first
+      const barcode = item.barcode || item.barcode_lot || null;
+      let firstLoop = true;
+
+      while (required > 0) {
+        let lotRows: any[] = [];
+
+        if (barcode && firstLoop) {
+          const [rows] = await conn.query('SELECT * FROM inventory_lots WHERE barcode = ? FOR UPDATE', [barcode]);
+          lotRows = rows as any[];
+        } else {
+          const [rows] = await conn.query(
+            `SELECT * FROM inventory_lots WHERE product_id = ? AND (quantity - COALESCE(reserved,0)) > 0 ORDER BY (expiration_date IS NULL), expiration_date ASC, created_at ASC LIMIT 1 FOR UPDATE`,
+            [productId]
+          );
+          lotRows = rows as any[];
+        }
+
+        if (!lotRows || lotRows.length === 0) {
+          console.error('No lot rows for product', productId);
+          await conn.rollback();
+          return NextResponse.json({ error: `No hay lotes con stock disponible para el producto ${productId}` }, { status: 400 });
+        }
+
+        const lot = lotRows[0];
+        const available = Number(lot.quantity || 0) - Number(lot.reserved || 0);
+        if (available <= 0) {
+          // mark consumed and continue
+          await conn.query('UPDATE inventory_lots SET status = ? WHERE id = ?', ['consumed', lot.id]);
+          firstLoop = false;
+          continue;
+        }
+
+        const take = Math.min(available, required);
+        const newLotQty = Number(lot.quantity) - take;
+        const newLotStatus = newLotQty <= 0 ? 'consumed' : lot.status;
+
+        await conn.query('UPDATE inventory_lots SET quantity = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [newLotQty, newLotStatus, lot.id]);
+        console.log('Updated lot', lot.id, 'newQty=', newLotQty);
+
+        // Registrar movimiento por lote
+        const prevStock = remainingGlobal;
+        remainingGlobal = remainingGlobal - take;
+
+        await conn.query(
+          `INSERT INTO inventory_movements (id, product_id, product_name, type, quantity, previous_stock, new_stock, unit_cost, total_cost, reason, reference, notes, created_by)
+           VALUES (UUID(), ?, ?, 'exit', ?, ?, ?, ?, ?, 'sale', ?, ?, ?)`,
           [
-            item.product_id,
-            item.product_name,
-            'exit',
-            item.quantity,
-            inventoryProduct.current_stock,
-            inventoryProduct.current_stock - item.quantity,
-            'sale',
+            productId,
+            item.product_name || item.name || '',
+            take,
+            prevStock,
+            remainingGlobal,
+            lot.unit_cost || null,
+            (Number(lot.unit_cost || 0) * take) || null,
             saleNumber,
+            `lot:${lot.id} code:${lot.lot_code}`,
             created_by
           ]
         );
+        console.log('Inserted movement for product', productId, 'lot', lot.id, 'qty', take);
 
-        // Stock is auto-updated by DB trigger after_inventory_movement_insert
+        // Actualizar stock global en inventory_products
+        await conn.query('UPDATE inventory_products SET current_stock = ? WHERE product_id = ?', [remainingGlobal, productId]);
+        console.log('Updated inventory_products for', productId, 'newStock=', remainingGlobal);
+
+        required -= take;
+        firstLoop = false;
       }
 
-      // Insertar item de venta
-      await query(
+      // Insertar item de venta (una fila por producto)
+      await conn.query(
         `INSERT INTO admin_sale_items 
          (sale_id, product_id, product_name, quantity, unit_price, discount, tax, subtotal, total)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           saleId,
-          item.product_id,
-          item.product_name,
+          productId,
+          item.product_name || item.name || '',
           item.quantity,
           item.unit_price,
           item.discount || 0,
@@ -304,8 +370,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Registrar ingreso automáticamente en la tabla incomes
-    await query(
+    // Registrar ingreso en incomes
+    console.log('Inserting incomes for sale', saleId, 'total=', total);
+    await conn.query(
       `INSERT INTO incomes (date, description, amount, category, reference, payment_method, status, notes, created_by)
        VALUES (CURDATE(), ?, ?, 'sales', ?, ?, 'received', ?, ?)`,
       [
@@ -318,8 +385,9 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // --- GENERAR FACTURA DIAN AUTOMÁTICAMENTE ---
-    const [lastInvoice] = await query('SELECT invoice_number FROM admin_sales WHERE invoice_number IS NOT NULL ORDER BY created_at DESC LIMIT 1') as any[];
+    // Generar número de factura
+    const [lastInvoiceRows] = await conn.query('SELECT invoice_number FROM admin_sales WHERE invoice_number IS NOT NULL ORDER BY created_at DESC LIMIT 1');
+    const lastInvoice = (lastInvoiceRows as any[])[0];
     let nextNum = 1001;
     if (lastInvoice && lastInvoice.invoice_number) {
        const parts = lastInvoice.invoice_number.split('-');
@@ -331,24 +399,20 @@ export async function POST(request: NextRequest) {
     }
     const invoiceNumber = `FAC-${nextNum}`;
 
-    // Actualizar la venta con el número de factura
-    await query(
-      'UPDATE admin_sales SET invoice_number = ?, invoice_status = ? WHERE id = ?', 
-      [invoiceNumber, 'authorized', saleId]
-    );
-    // --------------------------------------------
+    await conn.query('UPDATE admin_sales SET invoice_number = ?, invoice_status = ? WHERE id = ?', [invoiceNumber, 'authorized', saleId]);
+    console.log('Sale committed', saleId);
 
-    return NextResponse.json({
-      success: true,
-      message: 'Venta registrada exitosamente',
-      sale_number: saleNumber,
-      sale_id: saleId
-    });
+    await conn.commit();
+    transactionStarted = false;
+
+    return NextResponse.json({ success: true, message: 'Venta registrada exitosamente', sale_number: saleNumber, sale_id: saleId });
   } catch (error: any) {
+    if (conn && transactionStarted) {
+      try { await conn.rollback(); } catch {}
+    }
     console.error('Error en POST /api/admin/sales:', error);
-    return NextResponse.json(
-      { error: 'Error al registrar venta', detail: error?.message || String(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Error al registrar venta', detail: error?.message || String(error) }, { status: 500 });
+  } finally {
+    if (conn) conn?.release();
   }
 }

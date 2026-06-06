@@ -744,7 +744,7 @@ function NewSaleModal({
             <div className="max-h-48 overflow-y-auto rounded-[1.5rem] p-4 bg-[#f2f4f3] flex gap-3 flex-wrap">
               {products.map(product => (
                 <button
-                  key={product.id}
+                  key={`product-${product.product_id}`}
                   type="button"
                   onClick={() => addItem(product.product_id)}
                   disabled={product.current_stock <= 0}
