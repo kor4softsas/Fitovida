@@ -87,18 +87,21 @@ export async function GET(request: NextRequest) {
     conn = await pool.getConnection();
 
     if (barcode) {
-      const [rows] = await conn.query('SELECT * FROM inventory_lots WHERE barcode = ? LIMIT 1', [barcode]);
-      return NextResponse.json({ lot: rows[0] || null });
+      const res = await conn.query('SELECT * FROM inventory_lots WHERE barcode = ? LIMIT 1', [barcode]);
+      const rows = (res as any)[0] as any[];
+      return NextResponse.json({ lot: rows?.[0] || null });
     }
 
     if (productId) {
       const pid = Number(productId);
-      const [rows] = await conn.query('SELECT * FROM inventory_lots WHERE product_id = ? ORDER BY expiration_date IS NULL, expiration_date ASC, created_at DESC', [pid]);
+      const res = await conn.query('SELECT * FROM inventory_lots WHERE product_id = ? ORDER BY expiration_date IS NULL, expiration_date ASC, created_at DESC', [pid]);
+      const rows = (res as any)[0] as any[];
       return NextResponse.json({ lots: rows });
     }
 
     // Fallback: return recent lots
-    const [rows] = await conn.query('SELECT * FROM inventory_lots ORDER BY created_at DESC LIMIT 100');
+    const res = await conn.query('SELECT * FROM inventory_lots ORDER BY created_at DESC LIMIT 100');
+    const rows = (res as any)[0] as any[];
     return NextResponse.json({ lots: rows });
   } catch (error) {
     console.error('Error fetching lots:', error);
