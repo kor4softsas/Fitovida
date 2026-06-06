@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { CartItem, Product, Category, Order, CustomerInfo, PaymentMethod, PendingOrder, OrderStatus, PROMO_CODES, ORDER_CANCELLATION_WINDOW_MS } from '@/types';
+import { CartItem, Product, Order, CustomerInfo, PaymentMethod, PendingOrder, OrderStatus, PROMO_CODES, ORDER_CANCELLATION_WINDOW_MS } from '@/types';
 import { generateOrderNumber } from './utils';
 
 interface CartStore {
@@ -21,7 +21,7 @@ interface CartStore {
   pendingOrder: PendingOrder | null;
   
   // Filter state
-  currentCategory: Category;
+  currentCategory: string;
   searchQuery: string;
   sortBy: 'default' | 'price-low' | 'price-high' | 'name';
   
@@ -46,7 +46,7 @@ interface CartStore {
   clearPendingOrder: () => void;
   
   // Filter actions
-  setCategory: (category: Category) => void;
+  setCategory: (category: string) => void;
   setSearchQuery: (query: string) => void;
   setSortBy: (sort: 'default' | 'price-low' | 'price-high' | 'name') => void;
   

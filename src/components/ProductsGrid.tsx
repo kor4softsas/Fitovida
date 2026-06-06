@@ -5,19 +5,18 @@ import { LayoutGrid, Pill, Leaf, Droplet, Dumbbell, Sparkles, ChevronDown, Check
 import { useCartStore } from '@/lib/store';
 import gsap from 'gsap';
 import ProductCard from './ProductCard';
-import { Product, Category } from '@/types';
-import { cn } from '@/lib/utils';
+import { Product } from '@/types';
+import { cn, getCategoryName, getUniqueCategoryKeys, normalizeCategoryKey } from '@/lib/utils';
 
 const PRODUCTS_PER_PAGE = 12;
 
-const categories = [
-  { id: 'todos' as Category, name: 'Todos', icon: LayoutGrid },
-  { id: 'vitaminas' as Category, name: 'Vitaminas', icon: Pill },
-  { id: 'suplementos' as Category, name: 'Suplementos', icon: Sparkles },
-  { id: 'hierbas' as Category, name: 'Hierbas', icon: Leaf },
-  { id: 'aceites' as Category, name: 'Aceites', icon: Droplet },
-  { id: 'proteinas' as Category, name: 'Proteínas', icon: Dumbbell },
-];
+const categoryIcons: Record<string, typeof LayoutGrid> = {
+  vitaminas: Pill,
+  suplementos: Sparkles,
+  hierbas: Leaf,
+  aceites: Droplet,
+  proteinas: Dumbbell,
+};
 
 const sortOptions = [
   { value: 'default', label: 'Ordenar' },
@@ -33,10 +32,14 @@ export default function ProductsGrid() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [categoryIndicator, setCategoryIndicator] = useState({ left: 0, width: 0 });
+  const [categoryScroll, setCategoryScroll] = useState({ canScrollLeft: false, canScrollRight: false });
   const sortRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<(HTMLButtonElement | null)[]>([]);
   const productsGridRef = useRef<HTMLDivElement>(null);
+  const categoryRailRef = useRef<HTMLDivElement>(null);
+  const categoryButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [isPageTransitioning, setIsPageTransitioning] = useState(false);
 
   // Fetch products from API on mount
@@ -140,12 +143,86 @@ export default function ProductsGrid() {
 
   const currentSortLabel = sortOptions.find(opt => opt.value === sortBy)?.label || 'Ordenar';
 
+  const categoryOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    for (const product of allProducts) {
+      const key = normalizeCategoryKey(product.category);
+      if (!key) continue;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+
+    return [
+      { id: 'todos', label: 'Todos', count: allProducts.length },
+      ...getUniqueCategoryKeys(allProducts).map((categoryId) => ({
+        id: categoryId,
+        label: getCategoryName(categoryId),
+        count: counts.get(categoryId) || 0,
+      })),
+    ];
+  }, [allProducts]);
+
+  useEffect(() => {
+    const updateIndicator = () => {
+      const rail = categoryRailRef.current;
+      const activeButton = categoryButtonRefs.current[normalizeCategoryKey(currentCategory) === 'todos' ? 'todos' : normalizeCategoryKey(currentCategory)];
+
+      if (!rail || !activeButton) {
+        setCategoryIndicator({ left: 0, width: 0 });
+        return;
+      }
+
+      const railRect = rail.getBoundingClientRect();
+      const buttonRect = activeButton.getBoundingClientRect();
+
+      setCategoryIndicator({
+        left: buttonRect.left - railRect.left + rail.scrollLeft,
+        width: buttonRect.width,
+      });
+
+      const maxScrollLeft = rail.scrollWidth - rail.clientWidth;
+      setCategoryScroll({
+        canScrollLeft: rail.scrollLeft > 4,
+        canScrollRight: rail.scrollLeft < maxScrollLeft - 4,
+      });
+    };
+
+    const frame = window.requestAnimationFrame(updateIndicator);
+    window.addEventListener('resize', updateIndicator);
+    const rail = categoryRailRef.current;
+    rail?.addEventListener('scroll', updateIndicator, { passive: true });
+
+    const observer = rail ? new ResizeObserver(updateIndicator) : null;
+    if (rail && observer) {
+      observer.observe(rail);
+    }
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', updateIndicator);
+      rail?.removeEventListener('scroll', updateIndicator);
+      observer?.disconnect();
+    };
+  }, [currentCategory, categoryOptions.length, allProducts.length]);
+
+  const scrollCategoryRail = (direction: 'left' | 'right') => {
+    const rail = categoryRailRef.current;
+    if (!rail) return;
+
+    const distance = Math.max(220, Math.floor(rail.clientWidth * 0.7));
+    rail.scrollBy({
+      left: direction === 'left' ? -distance : distance,
+      behavior: 'smooth'
+    });
+  };
+
   const filteredProducts = useMemo(() => {
     let result = [...allProducts];
 
     // Filter by Category
-    if (currentCategory !== 'todos') {
-      result = result.filter(p => p.category === currentCategory);
+    const selectedCategory = normalizeCategoryKey(currentCategory);
+    if (selectedCategory !== 'todos') {
+      result = result.filter((p) => normalizeCategoryKey(p.category) === selectedCategory);
     }
 
     // Filter by Search Query
@@ -255,7 +332,7 @@ export default function ProductsGrid() {
     }
   };
 
-  const handleCategoryChange = (category: Category) => {
+  const handleCategoryChange = (category: string) => {
     setCategory(category);
     setCurrentPage(1); // Reset to first page when category changes
   };
@@ -278,31 +355,75 @@ export default function ProductsGrid() {
           </p>
         </div>
 
-        {/* Categories Filter - Horizontal scroll on mobile */}
-        <div className="relative mb-8 md:mb-10">
-          <div className="flex md:flex-wrap md:justify-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
-            {categories.map((category) => {
-              const Icon = category.icon;
-              const isActive = currentCategory === category.id;
-              
+        {/* Categories Filter - Horizontal rail */}
+        <nav className="mb-8 md:mb-10 rounded-[1.5rem] border border-[var(--border)] bg-white/90 px-2 py-2 shadow-[0_10px_28px_rgba(26,46,26,0.05)] backdrop-blur" aria-label="Categorías de productos">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => scrollCategoryRail('left')}
+              disabled={!categoryScroll.canScrollLeft}
+              className="hidden md:flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--muted)] transition-colors hover:bg-[var(--background)] hover:text-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-30"
+              aria-label="Ver categorías anteriores"
+            >
+              <ChevronLeft size={18} />
+            </button>
+
+            <div ref={categoryRailRef} className="relative flex flex-nowrap items-center gap-1 overflow-x-auto scrollbar-hide px-1 pb-1 flex-1">
+            <span
+              className="pointer-events-none absolute bottom-0 h-0.5 rounded-full bg-[linear-gradient(135deg,var(--primary)_0%,var(--primary-dark)_100%)] transition-all duration-300 ease-out"
+              style={{
+                left: `${categoryIndicator.left}px`,
+                width: `${categoryIndicator.width}px`,
+                opacity: categoryIndicator.width > 0 ? 1 : 0,
+              }}
+            />
+            {categoryOptions.map((category) => {
+              const normalizedId = normalizeCategoryKey(category.id);
+              const Icon = categoryIcons[normalizedId] || LayoutGrid;
+              const isActive = normalizeCategoryKey(currentCategory) === normalizedId;
+
               return (
                 <button
                   key={category.id}
+                  ref={(el) => {
+                    categoryButtonRefs.current[normalizedId] = el;
+                  }}
                   onClick={() => handleCategoryChange(category.id)}
                   className={cn(
-                    "flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap flex-shrink-0",
-                    isActive 
-                      ? "bg-[var(--primary)] text-white shadow-md shadow-[var(--primary)]/20" 
-                      : "bg-white text-[var(--muted)] border border-[var(--border)] hover:border-[var(--primary)]/50 hover:text-[var(--primary)]"
+                    "group relative flex items-center gap-2 rounded-full px-4 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-all duration-300",
+                    isActive
+                      ? "bg-[var(--background)] text-[var(--foreground)]"
+                      : "text-[var(--muted)] hover:bg-[var(--background)] hover:text-[var(--primary)]"
                   )}
                 >
-                  <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  {category.name}
+                  <span className={cn(
+                    "flex h-6 w-6 items-center justify-center rounded-full transition-all duration-300 shrink-0",
+                    isActive ? "bg-white text-[var(--primary)]" : "bg-[var(--accent-light)]/60 text-[var(--primary)] group-hover:bg-[var(--accent-light)]"
+                  )}>
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                  <span>{category.label}</span>
+                  <span className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-bold transition-colors",
+                    isActive ? "bg-white text-[var(--primary)]" : "bg-[var(--background)] text-[var(--muted)]"
+                  )}>
+                    {category.count}
+                  </span>
                 </button>
               );
             })}
           </div>
-        </div>
+          <button
+            type="button"
+            onClick={() => scrollCategoryRail('right')}
+            disabled={!categoryScroll.canScrollRight}
+            className="hidden md:flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--muted)] transition-colors hover:bg-[var(--background)] hover:text-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-30"
+            aria-label="Ver más categorías"
+          >
+            <ChevronRight size={18} />
+          </button>
+          </div>
+        </nav>
 
         {/* Filter Bar - Rearranges on mobile */}
         <div className="flex justify-between items-center gap-4 mb-6 md:mb-8 pb-4 md:pb-6 border-b border-[var(--border)]">

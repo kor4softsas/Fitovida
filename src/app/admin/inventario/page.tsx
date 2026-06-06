@@ -15,7 +15,9 @@ import {
   Printer,
   Download,
   ChevronDown,
-  Loader2
+  Loader2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import type { InventoryProduct, InventoryMovement } from '@/types/admin';
 import { useBarcodeScanner, validateBarcodeFormat } from '@/components/admin/BarcodeInput';
@@ -94,6 +96,8 @@ export default function InventarioPage() {
   const [movementsLoading, setMovementsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [view, setView] = useState<'products' | 'movements'>('products');
   const [showMovementModal, setShowMovementModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
@@ -425,6 +429,23 @@ export default function InventarioPage() {
     return matchesSearch && matchesCategory;
   });
 
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / itemsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStart = (safeCurrentPage - 1) * itemsPerPage;
+  const paginatedProducts = filteredProducts.slice(pageStart, pageStart + itemsPerPage);
+  const pageStartLabel = filteredProducts.length === 0 ? 0 : pageStart + 1;
+  const pageEndLabel = Math.min(pageStart + itemsPerPage, filteredProducts.length);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterCategory, view, itemsPerPage]);
+
+  useEffect(() => {
+    if (currentPage !== safeCurrentPage) {
+      setCurrentPage(safeCurrentPage);
+    }
+  }, [currentPage, safeCurrentPage]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -653,12 +674,14 @@ export default function InventarioPage() {
                     <th className="px-6 py-3 text-left w-10">
                       <input 
                         type="checkbox" 
-                        checked={selectedIds.length === filteredProducts.length && filteredProducts.length > 0}
+                        checked={paginatedProducts.length > 0 && paginatedProducts.every((product) => selectedIds.includes(product.id))}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setSelectedIds(filteredProducts.map(p => p.id));
+                            const visibleIds = paginatedProducts.map((p) => p.id);
+                            setSelectedIds((currentSelected) => Array.from(new Set([...currentSelected, ...visibleIds])));
                           } else {
-                            setSelectedIds([]);
+                            const visibleIds = new Set(paginatedProducts.map((p) => p.id));
+                            setSelectedIds((currentSelected) => currentSelected.filter((id) => !visibleIds.has(id)));
                           }
                         }}
                         className="cursor-pointer rounded border-[#c7cdc9] text-[#005236] focus:ring-[#005236]"
@@ -697,7 +720,7 @@ export default function InventarioPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e6e9e8] bg-white">
-                  {filteredProducts.map((product) => {
+                  {paginatedProducts.map((product) => {
                     const status = getStockStatus(product);
                     const expiration = getExpirationStatus(product);
                     return (
@@ -817,6 +840,54 @@ export default function InventarioPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+
+            <div className="flex flex-col gap-4 border-t border-[#e6e9e8] px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-3 text-sm text-[#414844]">
+                <span>
+                  Mostrando {pageStartLabel}-{pageEndLabel} de {filteredProducts.length} productos
+                </span>
+                <label className="flex items-center gap-2">
+                  <span className="font-semibold text-[#012d1d]">Por página</span>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                    className="rounded-full border border-[#e6e9e8] bg-white px-3 py-1 text-sm text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
+                  >
+                    {[10, 20, 50].map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={safeCurrentPage === 1}
+                  className="flex items-center gap-2 rounded-full border border-[#e6e9e8] bg-white px-4 py-2 text-sm font-semibold text-[#012d1d] transition-colors hover:bg-[#f8faf9] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <ChevronLeft size={16} />
+                  Anterior
+                </button>
+
+                <span className="rounded-full bg-[#e6e9e8] px-4 py-2 text-sm font-semibold text-[#012d1d]">
+                  Página {safeCurrentPage} de {totalPages}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={safeCurrentPage === totalPages}
+                  className="flex items-center gap-2 rounded-full border border-[#e6e9e8] bg-white px-4 py-2 text-sm font-semibold text-[#012d1d] transition-colors hover:bg-[#f8faf9] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Siguiente
+                  <ChevronRight size={16} />
+                </button>
+              </div>
             </div>
           </div>
         </>

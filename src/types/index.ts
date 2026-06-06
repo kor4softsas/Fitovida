@@ -3,20 +3,14 @@
 export interface Product {
   id: number;
   name: string;
-  category: Category;
+  category: string;
   price: number;
   image: string;
   description: string;
   stock?: number;
 }
 
-export type Category = 
-  | 'todos'
-  | 'vitaminas' 
-  | 'suplementos' 
-  | 'hierbas' 
-  | 'aceites' 
-  | 'proteinas';
+export type Category = string;
 
 export interface CartItem extends Product {
   quantity: number;

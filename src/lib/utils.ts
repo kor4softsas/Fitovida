@@ -20,6 +20,10 @@ export function generateOrderNumber(): string {
   return `#${timestamp}${random}`.slice(0, 10);
 }
 
+export function normalizeCategoryKey(category: string): string {
+  return category.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 export function getCategoryName(category: string): string {
   const categories: Record<string, string> = {
     'todos': 'Todos',
@@ -29,5 +33,36 @@ export function getCategoryName(category: string): string {
     'aceites': 'Aceites',
     'proteinas': 'Proteínas'
   };
-  return categories[category] || category;
+
+  const key = normalizeCategoryKey(category);
+  if (categories[key]) {
+    return categories[key];
+  }
+
+  const cleaned = category.trim().replace(/\s+/g, ' ');
+  if (!cleaned) {
+    return category;
+  }
+
+  return cleaned
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+export function getUniqueCategoryKeys(items: Array<{ category: string }>): string[] {
+  const seen = new Set<string>();
+  const categories: string[] = [];
+
+  for (const item of items) {
+    const key = normalizeCategoryKey(item.category);
+    if (!key || key === 'todos' || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    categories.push(key);
+  }
+
+  return categories.sort((a, b) => getCategoryName(a).localeCompare(getCategoryName(b), 'es'));
 }
