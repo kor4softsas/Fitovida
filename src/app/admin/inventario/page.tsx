@@ -64,6 +64,12 @@ type MovementApiRow = {
   created_at: string;
 };
 
+type InventoryLotApiRow = {
+  product_id: string | number;
+  barcode?: string | null;
+  lot_code?: string | null;
+};
+
 function mapInventoryRowToProduct(p: InventoryApiRow): InventoryProduct {
   return {
     id: String(p.product_id),
@@ -113,21 +119,48 @@ export default function InventarioPage() {
   const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null);
   const scanFeedbackTimeoutRef = useRef<number | null>(null);
   const highlightTimeoutRef = useRef<number | null>(null);
+  const barcodeLookupTimeoutRef = useRef<number | null>(null);
   const productRowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
   const { pushMessage, pushConfirm } = useAdminFeedback();
 
-  const handleBarcodeScanned = useCallback((barcode: string) => {
+  const resolveProductByBarcode = useCallback(async (barcode: string) => {
+    const normalized = barcode.trim().toLowerCase();
+    if (!normalized) return null;
+
+    const directMatch = products.find((product) =>
+      product.barcode?.toLowerCase() === normalized ||
+      product.sku?.toLowerCase() === normalized
+    );
+    if (directMatch) {
+      return directMatch;
+    }
+
+    const lotResponse = await fetch(`/api/admin/inventory/lots?barcode=${encodeURIComponent(normalized)}`);
+    if (!lotResponse.ok) {
+      return null;
+    }
+
+    const lotData = await lotResponse.json() as { lot?: InventoryLotApiRow | null };
+    const productId = lotData.lot ? String(lotData.lot.product_id) : null;
+    if (!productId) return null;
+
+    const cachedProduct = products.find((product) => product.id === productId);
+    if (cachedProduct) {
+      return cachedProduct;
+    }
+
+    const productResponse = await fetch(`/api/admin/inventory/${productId}`);
+    if (!productResponse.ok) {
+      return null;
+    }
+
+    const productData = await productResponse.json() as { product?: InventoryApiRow | null };
+    return productData.product ? mapInventoryRowToProduct(productData.product) : null;
+  }, [products]);
+
+  const handleBarcodeScanned = useCallback(async (barcode: string) => {
     const cleanedBarcode = barcode.trim();
     if (!cleanedBarcode) return;
-
-    const validation = validateBarcodeFormat(cleanedBarcode);
-    if (!validation.isValid) {
-      setScanFeedback({
-        type: 'error',
-        message: 'El código escaneado no es válido.'
-      });
-      return;
-    }
 
     setSearchTerm(cleanedBarcode);
     setFilterCategory('all');
@@ -138,14 +171,25 @@ export default function InventarioPage() {
       product.sku?.toLowerCase() === normalized
     );
 
-    const foundProduct = products.find((product) =>
+    let foundProduct = products.find((product) =>
       product.barcode?.toLowerCase() === normalized ||
       product.sku?.toLowerCase() === normalized ||
       product.name.toLowerCase().includes(normalized)
     );
 
+    if (!foundProduct) {
+      try {
+        foundProduct = await resolveProductByBarcode(cleanedBarcode);
+      } catch (error) {
+        console.error('Error resolving barcode through lots:', error);
+      }
+    }
+
     if (exactMatches.length === 1) {
       setHighlightedProductId(exactMatches[0].id);
+    } else if (foundProduct) {
+      setHighlightedProductId(foundProduct.id);
+      setSearchTerm(foundProduct.name);
     } else {
       setHighlightedProductId(null);
     }
@@ -164,7 +208,7 @@ export default function InventarioPage() {
       setScanFeedback(null);
       scanFeedbackTimeoutRef.current = null;
     }, 3000);
-  }, [products]);
+  }, [products, resolveProductByBarcode]);
 
   const { setIsListening } = useBarcodeScanner(handleBarcodeScanned);
 
@@ -462,6 +506,48 @@ export default function InventarioPage() {
       setCurrentPage(safeCurrentPage);
     }
   }, [currentPage, safeCurrentPage]);
+
+  useEffect(() => {
+    const trimmedSearch = searchTerm.trim();
+    if (!trimmedSearch || view !== 'products') return;
+
+    const normalized = trimmedSearch.toLowerCase();
+    const directMatch = products.some((product) =>
+      product.name.toLowerCase().includes(normalized) ||
+      product.barcode?.toLowerCase().includes(normalized) ||
+      product.sku?.toLowerCase().includes(normalized)
+    );
+
+    if (directMatch) {
+      return;
+    }
+
+    if (barcodeLookupTimeoutRef.current) {
+      window.clearTimeout(barcodeLookupTimeoutRef.current);
+    }
+
+    barcodeLookupTimeoutRef.current = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const product = await resolveProductByBarcode(trimmedSearch);
+          if (product) {
+            setHighlightedProductId(product.id);
+            setSearchTerm(product.name);
+          }
+        } catch (error) {
+          console.error('Error resolving barcode from search:', error);
+        }
+      })();
+    }, 250);
+  }, [products, resolveProductByBarcode, searchTerm, view]);
+
+  useEffect(() => {
+    return () => {
+      if (barcodeLookupTimeoutRef.current) {
+        window.clearTimeout(barcodeLookupTimeoutRef.current);
+      }
+    };
+  }, []);
 
   if (loading) {
     return (

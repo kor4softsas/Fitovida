@@ -28,6 +28,14 @@ Crea tablas para panel administrativo:
 - incomes
 - expenses
 
+### 4. Lotes de Inventario
+```sql
+SOURCE C:/Users/camil/OneDrive/Escritorio/Fitovida/mysql/06-inventory-lots.sql
+```
+Crea el soporte para lotes de inventario:
+- inventory_lots
+- register_lot_entry()
+
 ## 🗂️ Resumen de Tablas Creadas
 
 ### Tablas Principales (schema-mysql.sql)
@@ -48,6 +56,9 @@ Crea tablas para panel administrativo:
 - ✅ `incomes` - Registro de ingresos
 - ✅ `expenses` - Registro de gastos
 
+### Tablas de Lotes (06-inventory-lots.sql)
+- ✅ `inventory_lots` - Lotes de inventario
+
 ## 🔍 Vistas Creadas
 
 ### Panel Admin
@@ -64,6 +75,7 @@ Crea tablas para panel administrativo:
 
 - `register_inventory_entry()` - Registrar entrada de inventario
 - `register_inventory_exit()` - Registrar salida de inventario
+- `register_lot_entry()` - Registrar entrada de lotes y actualizar stock global
 
 ## 🔔 Triggers Automáticos
 
@@ -81,12 +93,14 @@ En MySQL Workbench o cliente MySQL:
 mysql -u root -p fitovida < C:/Users/camil/OneDrive/Escritorio/Fitovida/mysql/schema-mysql.sql
 mysql -u root -p fitovida < C:/Users/camil/OneDrive/Escritorio/Fitovida/mysql/auth-update.sql
 mysql -u root -p fitovida < C:/Users/camil/OneDrive/Escritorio/Fitovida/mysql/admin-schema.sql
+mysql -u root -p fitovida < C:/Users/camil/OneDrive/Escritorio/Fitovida/mysql/06-inventory-lots.sql
 
 -- Opción 2: Desde consola MySQL
 USE fitovida;
 SOURCE C:/Users/camil/OneDrive/Escritorio/Fitovida/mysql/schema-mysql.sql;
 SOURCE C:/Users/camil/OneDrive/Escritorio/Fitovida/mysql/auth-update.sql;
 SOURCE C:/Users/camil/OneDrive/Escritorio/Fitovida/mysql/admin-schema.sql;
+SOURCE C:/Users/camil/OneDrive/Escritorio/Fitovida/mysql/06-inventory-lots.sql;
 ```
 
 ## ✅ Verificación
