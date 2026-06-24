@@ -171,11 +171,11 @@ export default function InventarioPage() {
       product.sku?.toLowerCase() === normalized
     );
 
-    let foundProduct = products.find((product) =>
+    let foundProduct: InventoryProduct | null = products.find((product) =>
       product.barcode?.toLowerCase() === normalized ||
       product.sku?.toLowerCase() === normalized ||
       product.name.toLowerCase().includes(normalized)
-    );
+    ) || null;
 
     if (!foundProduct) {
       try {
