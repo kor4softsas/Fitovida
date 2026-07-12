@@ -24,6 +24,7 @@ import { useBarcodeScanner, validateBarcodeFormat } from '@/components/admin/Bar
 import ProductModalForm from '@/components/admin/ProductModalForm';
 import ReceiveStockModal from '@/components/admin/ReceiveStockModal';
 import BarcodePrinter from '@/components/admin/BarcodePrinter';
+import ImportExcelModal from '@/components/admin/ImportExcelModal';
 import { useAdminFeedback } from '@/components/admin/AdminFeedback';
 
 type InventoryApiRow = {
@@ -110,6 +111,7 @@ export default function InventarioPage() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [showBarcodePrinter, setShowBarcodePrinter] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exportingFormat, setExportingFormat] = useState<'json' | 'excel' | 'pdf' | 'sql' | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<InventoryProduct | null>(null);
@@ -576,6 +578,13 @@ export default function InventarioPage() {
               Eliminar ({selectedIds.length})
             </button>
           )}
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-2 rounded-full border border-[#cce6d0] bg-[#e7f9ee] px-4 py-2 font-bold text-[#005236] transition-colors hover:bg-[#d6f2df]"
+          >
+            <Download size={20} className="rotate-180" />
+            Importar Excel
+          </button>
           <div className="relative">
             <button
               onClick={() => setShowExportMenu((current) => !current)}
@@ -1158,6 +1167,17 @@ export default function InventarioPage() {
           onClose={() => setShowReceiveModal(false)}
           products={products.map(p => ({ id: p.id, name: p.name, sku: p.sku }))}
           onSuccess={() => void refreshProducts()}
+        />
+      )}
+
+      {/* Import Excel Modal */}
+      {showImportModal && (
+        <ImportExcelModal
+          onClose={() => setShowImportModal(false)}
+          onSuccess={() => {
+            void refreshProducts();
+            pushMessage('Importación completada. El inventario ha sido actualizado.', 'success');
+          }}
         />
       )}
     </div>

@@ -243,6 +243,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
     Object.fromEntries(products.map(p => [p.id, 1]))
   );
   const [showPreview, setShowPreview] = useState(false);
+  const [printPending, setPrintPending] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   const format = FORMATS[selectedFormat];
@@ -261,78 +262,78 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
     }
   };
 
-  const handlePrint = async () => {
-    if (!printRef.current) {
-      setShowPreview(true);
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    
-    if (!printRef.current) return;
+  // ── iframe-based print (avoids popup blockers) ────────────────────────────
+  useEffect(() => {
+    if (!printPending || !printRef.current) return;
+    setPrintPending(false);
 
-    const printWindow = window.open('', '', 'width=800,height=600');
-    if (!printWindow) {
-      alert('No se pudo abrir la ventana de impresión');
+    const labelsHtml = printRef.current.innerHTML;
+    const pageSize = isThermalFormat ? `${paperWidth}mm ${format.height}mm` : 'A4';
+    const containerStyle = [
+      `display:${isThermalFormat ? 'flex' : 'grid'}`,
+      isThermalFormat ? 'flex-direction:column' : '',
+      isThermalFormat ? '' : `grid-template-columns:repeat(${format.columns},${format.width}mm)`,
+      `gap:${format.spacingX}mm ${format.spacingY}mm`,
+      `padding:${format.marginTop}mm ${format.marginLeft}mm`,
+      isThermalFormat
+        ? `width:${paperWidth}mm;align-items:center`
+        : `width:${(format.columns * format.width) + (format.marginLeft * 2)}mm`,
+    ].filter(Boolean).join(';');
+
+    const html = `<!DOCTYPE html><html><head>
+      <meta charset="utf-8">
+      <title>Etiquetas</title>
+      <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:Arial,sans-serif}
+        @page{size:${pageSize};margin:0}
+        .pc{${containerStyle}}
+        .pc>div{page-break-inside:avoid;break-inside:avoid;${isThermalFormat ? 'page-break-after:always;break-after:page' : ''}}
+        .pc>div:last-child{page-break-after:auto;break-after:auto}
+        ${isThermalFormat ? '.pc>div{border:none!important;margin:0 auto}' : ''}
+        .pc svg{max-width:100%;height:auto}
+      </style>
+    </head><body>
+      <div class="pc">${labelsHtml}</div>
+    </body></html>`;
+
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
+    if (!doc) {
+      document.body.removeChild(iframe);
       return;
     }
 
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Imprimir Etiquetas de Código de Barras</title>
-        <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-          body {
-            padding: 0;
-            font-family: Arial, sans-serif;
-          }
-          @page {
-            size: ${isThermalFormat ? `${paperWidth}mm ${format.height}mm` : 'A4'};
-            margin: 0;
-          }
-          .print-container {
-            display: ${isThermalFormat ? 'flex' : 'grid'};
-            flex-direction: ${isThermalFormat ? 'column' : 'initial'};
-            grid-template-columns: repeat(${format.columns}, ${format.width}mm);
-            gap: ${format.spacingX}mm ${format.spacingY}mm;
-            padding: ${format.marginTop}mm ${format.marginLeft}mm;
-            width: ${isThermalFormat ? `${paperWidth}mm` : `${(format.columns * format.width) + (format.marginLeft * 2)}mm`};
-            ${isThermalFormat ? 'align-items: center;' : ''}
-          }
-          .print-container > div {
-            page-break-inside: avoid;
-            break-inside: avoid;
-            ${isThermalFormat ? 'page-break-after: always; break-after: page;' : ''}
-          }
-          .print-container > div:last-child {
-            page-break-after: auto;
-            break-after: auto;
-          }
-          ${isThermalFormat ? `
-          .print-container > div {
-            border: none !important;
-            margin: 0 auto;
-          }
-          ` : ''}
-          .print-container svg {
-            max-width: 100%;
-            height: auto;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="print-container">
-          ${printRef.current.innerHTML}
-        </div>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.print();
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    const doPrint = () => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (err) {
+        console.error('Error al imprimir:', err);
+      }
+      setTimeout(() => {
+        try { document.body.removeChild(iframe); } catch { /* already removed */ }
+      }, 2000);
+    };
+
+    if ((iframe.contentDocument?.readyState ?? '') === 'complete') {
+      doPrint();
+    } else {
+      iframe.onload = doPrint;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printPending]);
+
+  const handlePrint = () => {
+    setShowPreview(true);   // ensures printRef.current is populated
+    setPrintPending(true);  // triggers the useEffect after render
   };
 
   const handleDownloadPDF = async () => {
