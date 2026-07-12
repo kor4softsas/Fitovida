@@ -1,549 +1,332 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Printer, X, Download, Eye } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Printer, X, Download, Eye, EyeOff } from 'lucide-react';
 import JsBarcode from 'jsbarcode';
 import html2canvas from 'html2canvas';
 import type { InventoryProduct } from '@/types/admin';
+
+// --- Fixed thermal label format (57 mm adhesive roll) -------------------------
+const LABEL = {
+  paperWidth: 57.5, // mm � real paper width
+  printWidth: 48,   // mm � printable content width
+  height: 30,       // mm � label height
+} as const;
+
+const PORTAL_ID = '__fv-thermal-labels__';
+const STYLE_ID  = '__fv-thermal-print-style__';
+
+// --- Types --------------------------------------------------------------------
 
 interface BarcodePrinterProps {
   products: InventoryProduct[];
   onClose: () => void;
 }
 
-interface LabelFormat {
-  title: string;
-  description: string;
-  width: number; // en mm
-  height: number; // en mm
-  paperWidth?: number; // ancho real del papel en mm
-  contentWidth?: number; // ancho imprimible en mm
-  columns: number;
-  rows: number;
-  marginTop: number;
-  marginLeft: number;
-  spacingX: number;
-  spacingY: number;
-  kind: 'sheet' | 'thermal';
-}
+// --- Single label -------------------------------------------------------------
 
-// Formatos predefinidos
-const FORMATS: Record<string, LabelFormat> = {
-  '4x6': {
-    title: '4 x 6 pulgadas',
-    description: 'Etiqueta grande para impresión estándar',
-    width: 101.6, // 4 pulgadas en mm
-    height: 152.4, // 6 pulgadas en mm
-    columns: 1,
-    rows: 1,
-    marginTop: 5,
-    marginLeft: 5,
-    spacingX: 0,
-    spacingY: 0,
-    kind: 'sheet'
-  },
-  'A4-4x2': {
-    title: 'A4 - 4 x 2',
-    description: '4 columnas por 2 filas',
-    width: 50,
-    height: 76.2,
-    columns: 4,
-    rows: 2,
-    marginTop: 10,
-    marginLeft: 5,
-    spacingX: 3,
-    spacingY: 3,
-    kind: 'sheet'
-  },
-  'A4-3x3': {
-    title: 'A4 - 3 x 3',
-    description: '3 columnas por 3 filas',
-    width: 65,
-    height: 60,
-    columns: 3,
-    rows: 3,
-    marginTop: 10,
-    marginLeft: 10,
-    spacingX: 3,
-    spacingY: 5,
-    kind: 'sheet'
-  },
-  '58x32.76': {
-    title: '58 x 32.76 mm',
-    description: 'Rollo térmico compacto',
-    width: 58,
-    height: 32.76,
-    paperWidth: 57.5,
-    contentWidth: 48,
-    columns: 1,
-    rows: 1,
-    marginTop: 0,
-    marginLeft: 0,
-    spacingX: 0,
-    spacingY: 0,
-    kind: 'thermal'
-  },
-  '58x29.7': {
-    title: '58 x 29.7 mm',
-    description: 'Rollo térmico corto',
-    width: 58,
-    height: 29.7,
-    paperWidth: 57.5,
-    contentWidth: 48,
-    columns: 1,
-    rows: 1,
-    marginTop: 0,
-    marginLeft: 0,
-    spacingX: 0,
-    spacingY: 0,
-    kind: 'thermal'
-  },
-  '58x42': {
-    title: '58 x 42 mm',
-    description: 'Rollo térmico amplio',
-    width: 58,
-    height: 42,
-    paperWidth: 57.5,
-    contentWidth: 48,
-    columns: 1,
-    rows: 1,
-    marginTop: 0,
-    marginLeft: 0,
-    spacingX: 0,
-    spacingY: 0,
-    kind: 'thermal'
-  },
-  'JK-58PL-50x30': {
-    title: 'JK-58PL 50 x 30 mm',
-    description: 'Rollo incluido, optimizado para 48 mm de impresión',
-    width: 50,
-    height: 30,
-    paperWidth: 57.5,
-    contentWidth: 48,
-    columns: 1,
-    rows: 1,
-    marginTop: 0,
-    marginLeft: 0,
-    spacingX: 0,
-    spacingY: 0,
-    kind: 'thermal'
-  }
-};
-
-const THERMAL_FORMATS = new Set<keyof typeof FORMATS>(['58x32.76', '58x29.7', '58x42', 'JK-58PL-50x30']);
-
-function BarcodeLabel({
-  product,
-  format
-}: {
-  product: InventoryProduct;
-  format: LabelFormat;
-}) {
-  const barcodeRef = useRef<SVGSVGElement>(null);
-  const isThermal = format.kind === 'thermal';
-  const contentWidth = format.contentWidth ?? format.width;
-  const isCompactThermal = format.height <= 30;
+function BarcodeLabel({ product }: { product: InventoryProduct }) {
+  const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
-    if (barcodeRef.current && product.barcode) {
-      try {
-        const barcodeHeight = isCompactThermal ? 24 : 22;
-        JsBarcode(barcodeRef.current, product.barcode, {
-          format: 'CODE128',
-          width: isThermal ? (isCompactThermal ? 1.55 : 1.35) : 2,
-          height: isThermal ? barcodeHeight : 40,
-          displayValue: !isThermal,
-          margin: isThermal ? 0 : 5,
-          fontSize: isThermal ? 11 : 12,
-          textMargin: isThermal ? 0 : 5
-        });
-      } catch (error) {
-        console.error('Error generating barcode:', error);
-      }
+    if (!svgRef.current || !product.barcode) return;
+    try {
+      JsBarcode(svgRef.current, product.barcode, {
+        format: 'CODE128',
+        width: 1.55,
+        height: 24,
+        displayValue: false,
+        margin: 0,
+      });
+    } catch (err) {
+      console.error('JsBarcode error:', err);
     }
-  }, [product.barcode, format, isThermal]);
+  }, [product.barcode]);
 
   return (
     <div
       style={{
-        width: `${contentWidth}mm`,
-        height: `${format.height}mm`,
-        pageBreakInside: 'avoid',
-        breakInside: 'avoid',
+        width: `${LABEL.printWidth}mm`,
+        height: `${LABEL.height}mm`,
         backgroundColor: '#ffffff',
-        border: isThermal ? 'none' : '1px solid #d1d5db',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: isThermal ? 'flex-start' : 'center',
-        padding: isThermal ? '0.4mm 0.7mm 0.4mm' : '2mm',
+        justifyContent: 'flex-start',
+        padding: '0.4mm 0.7mm',
         overflow: 'hidden',
+        fontFamily: 'Arial, sans-serif',
         color: '#111827',
-        fontFamily: 'Arial, sans-serif'
+        boxSizing: 'border-box',
       }}
     >
-      {/* Nombre del producto */}
-      <div style={{ textAlign: 'center', marginBottom: '0.3mm', fontSize: isThermal ? '8px' : '8px', fontWeight: 'bold', lineHeight: '1', width: '100%' }}>
-        <p
-          style={{
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            maxWidth: '100%'
-          }}
-        >
-          {product.name}
-        </p>
+      <div style={{ fontSize: '8px', fontWeight: 'bold', textAlign: 'center', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '0.2mm' }}>
+        {product.name}
       </div>
-
-      {/* SKU */}
       {product.sku && (
-        <div style={{ fontSize: isThermal ? '6.5px' : '7px', marginBottom: '0.25mm' }}>
-          <span>SKU: {product.sku}</span>
-        </div>
+        <div style={{ fontSize: '6.5px', marginBottom: '0.2mm' }}>SKU: {product.sku}</div>
       )}
-
-      {/* Código de barras */}
-      <svg
-        ref={barcodeRef}
-        style={{
-          maxWidth: '100%',
-          height: 'auto',
-          margin: isThermal ? '0.1mm 0' : '2px 0'
-        }}
-      />
-
-      {/* Código visible debajo */}
-      <div style={{ fontSize: isThermal ? '6.8px' : '7px', fontFamily: 'monospace', marginTop: '0' }}>
-        {product.barcode}
-      </div>
-
-      {/* Precio */}
-      <div
-        style={{
-          fontSize: isThermal ? '7px' : '8px',
-          fontWeight: 'bold',
-          marginTop: '0.2mm',
-          borderTop: '1px solid #ccc',
-          paddingTop: '0.2mm'
-        }}
-      >
+      <svg ref={svgRef} style={{ maxWidth: '100%', height: 'auto', margin: '0.1mm 0' }} />
+      <div style={{ fontSize: '6.8px', fontFamily: 'monospace' }}>{product.barcode}</div>
+      <div style={{ fontSize: '7px', fontWeight: 'bold', marginTop: '0.2mm', borderTop: '1px solid #ccc', paddingTop: '0.2mm' }}>
         ${product.salePrice.toLocaleString('es-CO')}
       </div>
     </div>
   );
 }
 
+// --- Main component -----------------------------------------------------------
+
 export default function BarcodePrinter({ products, onClose }: BarcodePrinterProps) {
-  const [selectedProducts, setSelectedProducts] = useState<string[]>(
-    products.map(p => p.id)
-  );
-  const [selectedFormat, setSelectedFormat] = useState<keyof typeof FORMATS>('JK-58PL-50x30');
-  const [printQty, setPrintQty] = useState<Record<string, number>>(
+  const [selectedIds, setSelectedIds] = useState<string[]>(products.map(p => p.id));
+  const [qty, setQty] = useState<Record<string, number>>(
     Object.fromEntries(products.map(p => [p.id, 1]))
   );
   const [showPreview, setShowPreview] = useState(false);
-  const [printPending, setPrintPending] = useState(false);
-  const printRef = useRef<HTMLDivElement>(null);
+  const [portalReady, setPortalReady] = useState(false);
+  const previewRef = useRef<HTMLDivElement>(null);
 
-  const format = FORMATS[selectedFormat];
-  const isThermalFormat = THERMAL_FORMATS.has(selectedFormat);
-  const paperWidth = format.paperWidth ?? format.width;
-  const contentWidth = format.contentWidth ?? format.width;
-  const productsToprint = products.filter(
-    p => selectedProducts.includes(p.id) && p.barcode
-  );
+  useEffect(() => { setPortalReady(true); }, []);
 
-  const handleSelectAll = () => {
-    if (selectedProducts.length === products.length) {
-      setSelectedProducts([]);
-    } else {
-      setSelectedProducts(products.map(p => p.id));
-    }
-  };
+  const toPrint = products.filter(p => selectedIds.includes(p.id) && p.barcode);
 
-  // ── iframe-based print (avoids popup blockers) ────────────────────────────
-  useEffect(() => {
-    if (!printPending || !printRef.current) return;
-    setPrintPending(false);
+  const labelList = (keyPrefix: string) =>
+    toPrint.flatMap((product, i) =>
+      Array.from({ length: qty[product.id] || 1 }, (_, q) => (
+        <BarcodeLabel key={`${keyPrefix}-${i}-${q}`} product={product} />
+      ))
+    );
 
-    const labelsHtml = printRef.current.innerHTML;
-    const pageSize = isThermalFormat ? `${paperWidth}mm ${format.height}mm` : 'A4';
-    const containerStyle = [
-      `display:${isThermalFormat ? 'flex' : 'grid'}`,
-      isThermalFormat ? 'flex-direction:column' : '',
-      isThermalFormat ? '' : `grid-template-columns:repeat(${format.columns},${format.width}mm)`,
-      `gap:${format.spacingX}mm ${format.spacingY}mm`,
-      `padding:${format.marginTop}mm ${format.marginLeft}mm`,
-      isThermalFormat
-        ? `width:${paperWidth}mm;align-items:center`
-        : `width:${(format.columns * format.width) + (format.marginLeft * 2)}mm`,
-    ].filter(Boolean).join(';');
-
-    const html = `<!DOCTYPE html><html><head>
-      <meta charset="utf-8">
-      <title>Etiquetas</title>
-      <style>
-        *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:Arial,sans-serif}
-        @page{size:${pageSize};margin:0}
-        .pc{${containerStyle}}
-        .pc>div{page-break-inside:avoid;break-inside:avoid;${isThermalFormat ? 'page-break-after:always;break-after:page' : ''}}
-        .pc>div:last-child{page-break-after:auto;break-after:auto}
-        ${isThermalFormat ? '.pc>div{border:none!important;margin:0 auto}' : ''}
-        .pc svg{max-width:100%;height:auto}
-      </style>
-    </head><body>
-      <div class="pc">${labelsHtml}</div>
-    </body></html>`;
-
-    const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0';
-    document.body.appendChild(iframe);
-
-    const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
-    if (!doc) {
-      document.body.removeChild(iframe);
-      return;
-    }
-
-    doc.open();
-    doc.write(html);
-    doc.close();
-
-    const doPrint = () => {
-      try {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-      } catch (err) {
-        console.error('Error al imprimir:', err);
-      }
-      setTimeout(() => {
-        try { document.body.removeChild(iframe); } catch { /* already removed */ }
-      }, 2000);
-    };
-
-    if ((iframe.contentDocument?.readyState ?? '') === 'complete') {
-      doPrint();
-    } else {
-      iframe.onload = doPrint;
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [printPending]);
-
+  // -- Print using window.print() + @media print CSS ------------------------
   const handlePrint = () => {
-    setShowPreview(true);   // ensures printRef.current is populated
-    setPrintPending(true);  // triggers the useEffect after render
-  };
+    if (toPrint.length === 0) return;
 
-  const handleDownloadPDF = async () => {
-    if (!printRef.current) {
-      setShowPreview(true);
-      await new Promise(resolve => setTimeout(resolve, 100));
+    let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
+    if (!style) {
+      style = document.createElement('style');
+      style.id = STYLE_ID;
+      document.head.appendChild(style);
     }
 
-    if (!printRef.current) return;
+    style.textContent = `
+      @media print {
+        body > *:not(#${PORTAL_ID}) { display: none !important; }
+        #${PORTAL_ID} {
+          position: static !important;
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+        }
+        #${PORTAL_ID} > div {
+          page-break-after: always !important;
+          break-after: page !important;
+        }
+        #${PORTAL_ID} > div:last-child {
+          page-break-after: auto !important;
+          break-after: auto !important;
+        }
+        @page { size: ${LABEL.paperWidth}mm ${LABEL.height}mm; margin: 0; }
+      }
+    `;
 
+    window.print();
+    setTimeout(() => { document.getElementById(STYLE_ID)?.remove(); }, 1000);
+  };
+
+  // -- Download preview as PNG -----------------------------------------------
+  const handleDownloadPNG = async () => {
+    if (!previewRef.current) {
+      setShowPreview(true);
+      await new Promise(r => setTimeout(r, 250));
+    }
+    if (!previewRef.current) return;
     try {
-      const canvas = await html2canvas(printRef.current, {
-        scale: 2,
+      const canvas = await html2canvas(previewRef.current, {
+        scale: 3,
         useCORS: true,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
       });
-
-      const link = document.createElement('a');
-      link.href = canvas.toDataURL('image/png');
-      link.download = `etiquetas-codigos-${new Date().toISOString().split('T')[0]}.png`;
-      link.click();
-    } catch (error) {
-      console.error('Error downloading:', error);
-      alert('Error al descargar la imagen');
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = `etiquetas-${new Date().toISOString().split('T')[0]}.png`;
+      a.click();
+    } catch (err) {
+      console.error('Error al descargar PNG:', err);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-[2.5rem] bg-white">
-        {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#e6e9e8] bg-white p-8">
-          <h2 className="flex items-center gap-2 text-2xl font-extrabold text-[#012d1d]">
-            <Printer size={24} />
-            Imprimir Etiquetas de Código de Barras
-          </h2>
-          <button onClick={onClose} className="text-[#414844] transition-colors hover:text-[#012d1d]">
-            <X size={24} />
-          </button>
-        </div>
+    <>
+      {/* Portal: labels always rendered off-screen so JsBarcode is ready before print */}
+      {portalReady && createPortal(
+        <div
+          id={PORTAL_ID}
+          aria-hidden="true"
+          style={{
+            position: 'fixed',
+            top: '-9999px',
+            left: '-9999px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            pointerEvents: 'none',
+          }}
+        >
+          {labelList('portal')}
+        </div>,
+        document.body
+      )}
 
-        <div className="space-y-6 p-8">
-          {/* Opciones de impresión */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            {/* Selección de productos */}
-            <div className="space-y-3 rounded-[1.5rem] bg-[#f2f4f3] p-5">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-[#012d1d]">Productos</h3>
-                <button
-                  onClick={handleSelectAll}
-                  className="text-sm font-bold text-[#005236] transition-colors hover:text-[#003d2d]"
-                >
-                  {selectedProducts.length === products.length ? 'Deseleccionar todo' : 'Seleccionar todo'}
-                </button>
-              </div>
-              <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
-                {products.map(product => (
-                  <label key={product.id} className="flex cursor-pointer items-center gap-2 rounded-xl bg-white p-2 transition-colors hover:bg-[#e6e9e8]">
-                    <input
-                      type="checkbox"
-                      checked={selectedProducts.includes(product.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedProducts([...selectedProducts, product.id]);
-                        } else {
-                          setSelectedProducts(selectedProducts.filter(id => id !== product.id));
-                        }
-                      }}
-                      className="h-4 w-4 rounded border-[#c7cdc9] text-[#005236] focus:ring-[#005236]"
-                    />
-                    <span className="text-sm text-[#012d1d]">
-                      {product.name}
-                      {!product.barcode && (
-                        <span className="text-[#ba1a1a]"> (sin código)</span>
-                      )}
-                    </span>
-                  </label>
-                ))}
+      {/* Modal */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2.5rem] bg-white">
+
+          {/* Header */}
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#e6e9e8] bg-white px-8 py-6">
+            <h2 className="flex items-center gap-2 text-xl font-extrabold text-[#012d1d]">
+              <Printer size={22} />
+              Imprimir Etiquetas
+            </h2>
+            <button onClick={onClose} className="text-[#414844] transition-colors hover:text-[#012d1d]">
+              <X size={24} />
+            </button>
+          </div>
+
+          <div className="space-y-6 p-8">
+
+            {/* Thermal info badge */}
+            <div className="flex items-center gap-3 rounded-2xl border border-[#cce6d0] bg-[#e7f9ee] px-5 py-3">
+              <Printer size={18} className="shrink-0 text-[#005236]" />
+              <div>
+                <p className="text-sm font-bold text-[#005236]">Impresora t&eacute;rmica &mdash; papel adhesivo 57 mm</p>
+                <p className="text-xs text-[#414844]">Etiquetas de {LABEL.printWidth}&nbsp;mm &times; {LABEL.height}&nbsp;mm por etiqueta</p>
               </div>
             </div>
 
-            {/* Formato de etiqueta */}
-            <div className="space-y-3 rounded-[1.5rem] bg-[#f2f4f3] p-5">
-              <h3 className="font-bold text-[#012d1d]">Formato</h3>
-              <div className="space-y-2">
-                {Object.entries(FORMATS).map(([key, fmt]) => (
-                  <label key={key} className="flex cursor-pointer items-center gap-2 rounded-xl bg-white p-2 transition-colors hover:bg-[#e6e9e8]">
-                    <input
-                      type="radio"
-                      name="format"
-                      value={key}
-                      checked={selectedFormat === key}
-                      onChange={(e) => setSelectedFormat(e.target.value as keyof typeof FORMATS)}
-                      className="h-4 w-4 border-[#c7cdc9] text-[#012d1d] focus:ring-[#005236]"
-                    />
-                    <span className="text-sm text-[#012d1d]">
-                      {fmt.title}
-                      <span className="block text-xs text-[#414844]">
-                        {fmt.description} · {fmt.width}mm × {fmt.height}mm ({fmt.columns}×{fmt.rows})
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
 
-            {/* Cantidad */}
-            <div className="space-y-3 rounded-[1.5rem] bg-[#f2f4f3] p-5">
-              <h3 className="font-bold text-[#012d1d]">Cantidad por Producto</h3>
-              <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
-                {selectedProducts.map(productId => {
-                  const product = products.find(p => p.id === productId);
-                  if (!product || !product.barcode) return null;
-                  return (
-                    <div key={productId} className="flex items-center gap-2 rounded-xl bg-white p-2">
-                      <span className="flex-1 truncate text-sm text-[#012d1d]">{product.name}</span>
+              {/* Product selection */}
+              <div className="space-y-3 rounded-3xl bg-[#f2f4f3] p-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-[#012d1d]">Productos</h3>
+                  <button
+                    onClick={() =>
+                      setSelectedIds(selectedIds.length === products.length ? [] : products.map(p => p.id))
+                    }
+                    className="text-sm font-bold text-[#005236] transition-colors hover:text-[#003d2d]"
+                  >
+                    {selectedIds.length === products.length ? 'Deseleccionar todo' : 'Seleccionar todo'}
+                  </button>
+                </div>
+                <div className="max-h-60 space-y-1 overflow-y-auto pr-1">
+                  {products.map(product => (
+                    <label
+                      key={product.id}
+                      className="flex cursor-pointer items-center gap-2 rounded-xl bg-white px-3 py-2 transition-colors hover:bg-[#e6e9e8]"
+                    >
                       <input
-                        type="number"
-                        min="1"
-                        max="99"
-                        value={printQty[productId] || 1}
-                        onChange={(e) => setPrintQty({
-                          ...printQty,
-                          [productId]: parseInt(e.target.value) || 1
-                        })}
-                        className="w-14 rounded-lg border border-[#e6e9e8] px-2 py-1 text-sm text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
+                        type="checkbox"
+                        checked={selectedIds.includes(product.id)}
+                        onChange={e =>
+                          setSelectedIds(prev =>
+                            e.target.checked
+                              ? [...prev, product.id]
+                              : prev.filter(id => id !== product.id)
+                          )
+                        }
+                        className="h-4 w-4 rounded border-[#c7cdc9] text-[#005236] focus:ring-[#005236]"
                       />
-                    </div>
-                  );
-                })}
+                      <span className="text-sm text-[#012d1d]">
+                        {product.name}
+                        {!product.barcode && (
+                          <span className="ml-1 text-xs text-[#ba1a1a]">(sin c&oacute;digo)</span>
+                        )}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
-          </div>
 
-          {/* Botones de acción */}
-          <div className="flex flex-wrap gap-3 border-t border-[#e6e9e8] pt-4">
-            <button
-              onClick={() => setShowPreview(!showPreview)}
-              className="flex items-center gap-2 rounded-full border border-[#e6e9e8] bg-[#f2f4f3] px-4 py-2 font-bold text-[#414844] transition-colors hover:bg-[#e6e9e8]"
-            >
-              <Eye size={20} />
-              {showPreview ? 'Ocultar' : 'Vista previa'}
-            </button>
-            <div className="flex-1" />
-            <button
-              onClick={handleDownloadPDF}
-              disabled={productsToprint.length === 0}
-              className="flex items-center gap-2 rounded-full bg-[#3f51d7] px-5 py-2 font-bold text-white transition-colors hover:bg-[#3140b1] disabled:cursor-not-allowed disabled:bg-[#9da6e4]"
-            >
-              <Download size={20} />
-              Descargar PNG
-            </button>
-            <button
-              onClick={handlePrint}
-              disabled={productsToprint.length === 0}
-              className="flex items-center gap-2 rounded-full bg-[#009a63] px-5 py-2 font-bold text-white transition-colors hover:bg-[#007f52] disabled:cursor-not-allowed disabled:bg-[#9fd3bf]"
-            >
-              <Printer size={20} />
-              Imprimir
-            </button>
-          </div>
-
-          {/* Vista previa */}
-          {showPreview && (
-            <div className="space-y-4 border-t border-[#e6e9e8] pt-4">
-              <h3 className="mb-1 font-bold text-[#012d1d]">Vista Previa</h3>
-              <div
-                ref={printRef}
-                style={{
-                  overflow: 'auto',
-                  backgroundColor: '#f2f4f3',
-                  padding: '1rem',
-                  borderRadius: '1.25rem',
-                  color: '#111827',
-                  fontFamily: 'Arial, sans-serif',
-                  display: isThermalFormat ? 'flex' : 'grid',
-                  flexDirection: isThermalFormat ? 'column' : 'initial',
-                  alignItems: isThermalFormat ? 'center' : 'stretch',
-                  gridTemplateColumns: isThermalFormat ? undefined : `repeat(${format.columns}, ${contentWidth}mm)`,
-                  gap: `${format.spacingX}mm ${format.spacingY}mm`,
-                  width: isThermalFormat ? `${paperWidth}mm` : 'auto'
-                }}
-              >
-                {productsToprint.map((product, idx) =>
-                  Array.from({ length: printQty[product.id] || 1 }).map((_, qty) => (
-                    <BarcodeLabel
-                      key={`${idx}-${qty}`}
-                      product={product}
-                      format={format}
-                    />
-                  ))
+              {/* Quantities */}
+              <div className="space-y-3 rounded-3xl bg-[#f2f4f3] p-5">
+                <h3 className="font-bold text-[#012d1d]">Cantidad por Producto</h3>
+                {toPrint.length === 0 ? (
+                  <p className="py-2 text-sm text-[#414844]">Selecciona productos con c&oacute;digo de barras.</p>
+                ) : (
+                  <div className="max-h-60 space-y-1 overflow-y-auto pr-1">
+                    {toPrint.map(product => (
+                      <div key={product.id} className="flex items-center gap-3 rounded-xl bg-white px-3 py-2">
+                        <span className="flex-1 truncate text-sm text-[#012d1d]">{product.name}</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="99"
+                          value={qty[product.id] || 1}
+                          onChange={e =>
+                            setQty(prev => ({
+                              ...prev,
+                              [product.id]: Math.max(1, parseInt(e.target.value) || 1),
+                            }))
+                          }
+                          className="w-14 rounded-lg border border-[#e6e9e8] px-2 py-1 text-center text-sm text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]"
+                        />
+                        <span className="text-xs text-[#414844]">etiq.</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
-          )}
 
-          {/* Información */}
-          {!showPreview && (
-            <div className="rounded-[1rem] border border-[#b9c9e8] bg-[#e9effb] p-4 text-sm text-[#2d3da5]">
-              <p className="mb-2 font-bold">Informacion:</p>
-              <ul className="list-disc list-inside space-y-1">
-                <li>Selecciona los productos que deseas imprimir</li>
-                <li>Elige el formato de etiqueta según tu papel o rollo térmico</li>
-                <li>Especifica la cantidad de etiquetas por producto</li>
-                <li>Haz clic en Vista previa para ver cómo se vería antes de imprimir</li>
-              </ul>
+            {/* Action buttons */}
+            <div className="flex flex-wrap items-center gap-3 border-t border-[#e6e9e8] pt-5">
+              <button
+                onClick={() => setShowPreview(v => !v)}
+                className="flex items-center gap-2 rounded-full border border-[#e6e9e8] bg-[#f2f4f3] px-4 py-2 font-bold text-[#414844] transition-colors hover:bg-[#e6e9e8]"
+              >
+                {showPreview ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPreview ? 'Ocultar vista previa' : 'Vista previa'}
+              </button>
+              <div className="flex-1" />
+              <button
+                onClick={() => void handleDownloadPNG()}
+                disabled={toPrint.length === 0}
+                className="flex items-center gap-2 rounded-full bg-[#3f51d7] px-5 py-2 font-bold text-white transition-colors hover:bg-[#3140b1] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Download size={18} />
+                Descargar PNG
+              </button>
+              <button
+                onClick={handlePrint}
+                disabled={toPrint.length === 0}
+                className="flex items-center gap-2 rounded-full bg-[#009a63] px-5 py-2 font-bold text-white transition-colors hover:bg-[#007f52] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Printer size={18} />
+                Imprimir ({toPrint.reduce((s, p) => s + (qty[p.id] || 1), 0)} etiq.)
+              </button>
             </div>
-          )}
+
+            {/* Preview */}
+            {showPreview && (
+              <div className="border-t border-[#e6e9e8] pt-5">
+                <h3 className="mb-4 font-bold text-[#012d1d]">Vista Previa</h3>
+                <div
+                  ref={previewRef}
+                  className="flex flex-col items-center gap-2 overflow-auto rounded-2xl bg-[#f2f4f3] p-4"
+                >
+                  {toPrint.length === 0 ? (
+                    <p className="text-sm text-[#414844]">No hay productos seleccionados con c&oacute;digo de barras.</p>
+                  ) : (
+                    labelList('preview')
+                  )}
+                </div>
+              </div>
+            )}
+
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
