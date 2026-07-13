@@ -8,11 +8,11 @@ import html2canvas from 'html2canvas';
 import type { InventoryProduct } from '@/types/admin';
 
 // --- Fixed thermal label format (57 mm adhesive roll) -------------------------
-// landscape: browser sends 57.5×30 → printer prints as-is
-// portrait:  browser sends 30×57.5 → printer rotates 90° → result is correct 57.5×30 label
+// landscape: browser sends 57.5×30   → printer prints as-is (no driver rotation)
+// portrait:  browser sends 30×57.5  → printer rotates 90°  → result is 57.5×30 label
 const ORIENT = {
-  landscape: { pageW: 57.5, pageH: 30,   contentW: 54, contentH: 30   },
-  portrait:  { pageW: 30,   pageH: 57.5,  contentW: 28, contentH: 55   },
+  landscape: { pageW: 57.5, pageH: 30   },
+  portrait:  { pageW: 30,   pageH: 57.5 },
 } as const;
 
 type Orientation = keyof typeof ORIENT;
@@ -31,31 +31,31 @@ interface BarcodePrinterProps {
 
 function BarcodeLabelLandscape({ product }: { product: InventoryProduct }) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const d = ORIENT.landscape;
+  const { pageW, pageH } = ORIENT.landscape;
 
   useEffect(() => {
     if (!svgRef.current || !product.barcode) return;
     try {
       JsBarcode(svgRef.current, product.barcode, {
-        format: 'CODE128', width: 2, height: 26, displayValue: false, margin: 0,
+        format: 'CODE128', width: 2.2, height: 28, displayValue: false, margin: 0,
       });
     } catch (err) { console.error('JsBarcode error:', err); }
   }, [product.barcode]);
 
   return (
-    <div style={{ width: `${d.contentW}mm`, height: `${d.contentH}mm`, backgroundColor: '#fff',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start',
-      padding: '0.5mm 0.8mm', overflow: 'hidden', fontFamily: 'Arial,sans-serif',
-      color: '#111', boxSizing: 'border-box' }}>
-      <div style={{ fontSize: '8px', fontWeight: 'bold', textAlign: 'center', width: '100%',
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '0.3mm' }}>
+    <div style={{ width: `${pageW}mm`, height: `${pageH}mm`, backgroundColor: '#fff',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      padding: '1mm 1.5mm', overflow: 'hidden', fontFamily: 'Arial,sans-serif',
+      color: '#111', boxSizing: 'border-box', gap: '0.4mm' }}>
+      <div style={{ fontSize: '9px', fontWeight: 'bold', textAlign: 'center', width: '100%',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {product.name}
       </div>
-      {product.sku && <div style={{ fontSize: '6.5px', marginBottom: '0.3mm' }}>SKU: {product.sku}</div>}
-      <svg ref={svgRef} style={{ maxWidth: '100%', height: 'auto' }} />
-      <div style={{ fontSize: '6.8px', fontFamily: 'monospace' }}>{product.barcode}</div>
-      <div style={{ fontSize: '7px', fontWeight: 'bold', marginTop: '0.3mm',
-        borderTop: '1px solid #ccc', paddingTop: '0.2mm' }}>
+      {product.sku && <div style={{ fontSize: '7px' }}>SKU: {product.sku}</div>}
+      <svg ref={svgRef} style={{ width: '100%', maxWidth: '100%', height: 'auto', display: 'block' }} />
+      <div style={{ fontSize: '7px', fontFamily: 'monospace' }}>{product.barcode}</div>
+      <div style={{ fontSize: '8px', fontWeight: 'bold', borderTop: '1px solid #ccc',
+        paddingTop: '0.3mm', width: '100%', textAlign: 'center' }}>
         ${product.salePrice.toLocaleString('es-CO')}
       </div>
     </div>
@@ -66,30 +66,30 @@ function BarcodeLabelLandscape({ product }: { product: InventoryProduct }) {
 
 function BarcodeLabelPortrait({ product }: { product: InventoryProduct }) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const d = ORIENT.portrait;
+  const { pageW, pageH } = ORIENT.portrait;
 
   useEffect(() => {
     if (!svgRef.current || !product.barcode) return;
     try {
       JsBarcode(svgRef.current, product.barcode, {
-        format: 'CODE128', width: 1.5, height: 20, displayValue: false, margin: 0,
+        format: 'CODE128', width: 1.6, height: 22, displayValue: false, margin: 0,
       });
     } catch (err) { console.error('JsBarcode error:', err); }
   }, [product.barcode]);
 
   return (
-    <div style={{ width: `${d.contentW}mm`, height: `${d.contentH}mm`, backgroundColor: '#fff',
+    <div style={{ width: `${pageW}mm`, height: `${pageH}mm`, backgroundColor: '#fff',
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      padding: '1mm', overflow: 'hidden', fontFamily: 'Arial,sans-serif',
-      color: '#111', boxSizing: 'border-box', gap: '0.5mm' }}>
-      <div style={{ fontSize: '7.5px', fontWeight: 'bold', textAlign: 'center', width: '100%',
+      padding: '1.5mm 1mm', overflow: 'hidden', fontFamily: 'Arial,sans-serif',
+      color: '#111', boxSizing: 'border-box', gap: '0.6mm' }}>
+      <div style={{ fontSize: '8px', fontWeight: 'bold', textAlign: 'center', width: '100%',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {product.name}
       </div>
-      {product.sku && <div style={{ fontSize: '6px' }}>SKU: {product.sku}</div>}
-      <svg ref={svgRef} style={{ maxWidth: '100%', height: 'auto' }} />
-      <div style={{ fontSize: '6px', fontFamily: 'monospace' }}>{product.barcode}</div>
-      <div style={{ fontSize: '7px', fontWeight: 'bold', borderTop: '1px solid #ccc',
+      {product.sku && <div style={{ fontSize: '6.5px' }}>SKU: {product.sku}</div>}
+      <svg ref={svgRef} style={{ width: '100%', maxWidth: '100%', height: 'auto', display: 'block' }} />
+      <div style={{ fontSize: '6.5px', fontFamily: 'monospace' }}>{product.barcode}</div>
+      <div style={{ fontSize: '7.5px', fontWeight: 'bold', borderTop: '1px solid #ccc',
         paddingTop: '0.5mm', width: '100%', textAlign: 'center' }}>
         ${product.salePrice.toLocaleString('es-CO')}
       </div>
@@ -118,7 +118,6 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
   useEffect(() => { setPortalReady(true); }, []);
 
   const toPrint = products.filter(p => selectedIds.includes(p.id) && p.barcode);
-  const orient = ORIENT[orientation];
 
   const labelList = (keyPrefix: string) =>
     toPrint.flatMap((product, i) =>
@@ -127,41 +126,44 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
       ))
     );
 
-  // -- Print using window.print() + @media print CSS ------------------------
+  // -- Print via Blob URL (clean standalone doc → @page size is always respected) --
   const handlePrint = () => {
-    if (toPrint.length === 0) return;
+    const portal = document.getElementById(PORTAL_ID);
+    if (!portal || toPrint.length === 0) return;
 
-    let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
-    if (!style) {
-      style = document.createElement('style');
-      style.id = STYLE_ID;
-      document.head.appendChild(style);
+    const { pageW, pageH } = ORIENT[orientation];
+
+    // Serialize pre-rendered labels (JsBarcode SVGs already drawn inside the portal)
+    const labelsHtml = portal.innerHTML;
+
+    const doc = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Etiquetas</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Arial,sans-serif;background:#fff}
+@page{size:${pageW}mm ${pageH}mm;margin:0}
+body>div{width:${pageW}mm;height:${pageH}mm;page-break-after:always;break-after:page;overflow:hidden}
+body>div:last-child{page-break-after:auto;break-after:auto}
+svg{display:block;width:100%;height:auto}
+</style>
+</head>
+<body>${labelsHtml}</body>
+</html>`;
+
+    const blob = new Blob([doc], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank', 'noopener');
+    if (!win) {
+      URL.revokeObjectURL(url);
+      return;
     }
-
-    style.textContent = `
-      @media print {
-        body > *:not(#${PORTAL_ID}) { display: none !important; }
-        #${PORTAL_ID} {
-          position: static !important;
-          display: flex !important;
-          flex-direction: column !important;
-          align-items: center !important;
-        }
-        #${PORTAL_ID} > div {
-          page-break-after: always !important;
-          break-after: page !important;
-        }
-        #${PORTAL_ID} > div:last-child {
-          page-break-after: auto !important;
-          break-after: auto !important;
-        }
-        /* size MUST be set so the browser doesn't default to A4 and rotate content */
-        @page { size: ${orient.pageW}mm ${orient.pageH}mm; margin: 0; }
-      }
-    `;
-
-    window.print();
-    setTimeout(() => { document.getElementById(STYLE_ID)?.remove(); }, 1000);
+    win.addEventListener('load', () => {
+      setTimeout(() => { win.focus(); win.print(); }, 200);
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    });
   };
 
   // -- Download preview as PNG -----------------------------------------------
@@ -201,7 +203,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
             flexDirection: 'column',
             alignItems: 'center',
             pointerEvents: 'none',
-            width: `${orient.pageW}mm`,
+            width: `${ORIENT[orientation].pageW}mm`,
           }}
         >
           {labelList('portal')}
