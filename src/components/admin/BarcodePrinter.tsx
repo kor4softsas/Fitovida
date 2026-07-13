@@ -8,11 +8,14 @@ import html2canvas from 'html2canvas';
 import type { InventoryProduct } from '@/types/admin';
 
 // --- Fixed thermal label format (57 mm adhesive roll) -------------------------
-const LABEL = {
-  paperWidth: 57.5, // mm — real paper width
-  printWidth: 54,   // mm — printable content width (leaves ~1.5 mm margin each side)
-  height: 30,       // mm — label height (feed direction)
+// landscape: browser sends 57.5×30 → printer prints as-is
+// portrait:  browser sends 30×57.5 → printer rotates 90° → result is correct 57.5×30 label
+const ORIENT = {
+  landscape: { pageW: 57.5, pageH: 30,   contentW: 54, contentH: 30   },
+  portrait:  { pageW: 30,   pageH: 57.5,  contentW: 28, contentH: 55   },
 } as const;
+
+type Orientation = keyof typeof ORIENT;
 
 const PORTAL_ID = '__fv-thermal-labels__';
 const STYLE_ID  = '__fv-thermal-print-style__';
@@ -24,56 +27,80 @@ interface BarcodePrinterProps {
   onClose: () => void;
 }
 
-// --- Single label -------------------------------------------------------------
+// --- Single label (landscape) -------------------------------------------------
 
-function BarcodeLabel({ product }: { product: InventoryProduct }) {
+function BarcodeLabelLandscape({ product }: { product: InventoryProduct }) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const d = ORIENT.landscape;
 
   useEffect(() => {
     if (!svgRef.current || !product.barcode) return;
     try {
       JsBarcode(svgRef.current, product.barcode, {
-        format: 'CODE128',
-        width: 2,
-        height: 26,
-        displayValue: false,
-        margin: 0,
+        format: 'CODE128', width: 2, height: 26, displayValue: false, margin: 0,
       });
-    } catch (err) {
-      console.error('JsBarcode error:', err);
-    }
+    } catch (err) { console.error('JsBarcode error:', err); }
   }, [product.barcode]);
 
   return (
-    <div
-      style={{
-        width: `${LABEL.printWidth}mm`,
-        height: `${LABEL.height}mm`,
-        backgroundColor: '#ffffff',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'flex-start',
-        padding: '0.4mm 0.7mm',
-        overflow: 'hidden',
-        fontFamily: 'Arial, sans-serif',
-        color: '#111827',
-        boxSizing: 'border-box',
-      }}
-    >
-      <div style={{ fontSize: '8px', fontWeight: 'bold', textAlign: 'center', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '0.2mm' }}>
+    <div style={{ width: `${d.contentW}mm`, height: `${d.contentH}mm`, backgroundColor: '#fff',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start',
+      padding: '0.5mm 0.8mm', overflow: 'hidden', fontFamily: 'Arial,sans-serif',
+      color: '#111', boxSizing: 'border-box' }}>
+      <div style={{ fontSize: '8px', fontWeight: 'bold', textAlign: 'center', width: '100%',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '0.3mm' }}>
         {product.name}
       </div>
-      {product.sku && (
-        <div style={{ fontSize: '6.5px', marginBottom: '0.2mm' }}>SKU: {product.sku}</div>
-      )}
-      <svg ref={svgRef} style={{ maxWidth: '100%', height: 'auto', margin: '0.1mm 0' }} />
+      {product.sku && <div style={{ fontSize: '6.5px', marginBottom: '0.3mm' }}>SKU: {product.sku}</div>}
+      <svg ref={svgRef} style={{ maxWidth: '100%', height: 'auto' }} />
       <div style={{ fontSize: '6.8px', fontFamily: 'monospace' }}>{product.barcode}</div>
-      <div style={{ fontSize: '7px', fontWeight: 'bold', marginTop: '0.2mm', borderTop: '1px solid #ccc', paddingTop: '0.2mm' }}>
+      <div style={{ fontSize: '7px', fontWeight: 'bold', marginTop: '0.3mm',
+        borderTop: '1px solid #ccc', paddingTop: '0.2mm' }}>
         ${product.salePrice.toLocaleString('es-CO')}
       </div>
     </div>
   );
+}
+
+// --- Single label (portrait – for drivers that rotate 90°) -------------------
+
+function BarcodeLabelPortrait({ product }: { product: InventoryProduct }) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const d = ORIENT.portrait;
+
+  useEffect(() => {
+    if (!svgRef.current || !product.barcode) return;
+    try {
+      JsBarcode(svgRef.current, product.barcode, {
+        format: 'CODE128', width: 1.5, height: 20, displayValue: false, margin: 0,
+      });
+    } catch (err) { console.error('JsBarcode error:', err); }
+  }, [product.barcode]);
+
+  return (
+    <div style={{ width: `${d.contentW}mm`, height: `${d.contentH}mm`, backgroundColor: '#fff',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      padding: '1mm', overflow: 'hidden', fontFamily: 'Arial,sans-serif',
+      color: '#111', boxSizing: 'border-box', gap: '0.5mm' }}>
+      <div style={{ fontSize: '7.5px', fontWeight: 'bold', textAlign: 'center', width: '100%',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {product.name}
+      </div>
+      {product.sku && <div style={{ fontSize: '6px' }}>SKU: {product.sku}</div>}
+      <svg ref={svgRef} style={{ maxWidth: '100%', height: 'auto' }} />
+      <div style={{ fontSize: '6px', fontFamily: 'monospace' }}>{product.barcode}</div>
+      <div style={{ fontSize: '7px', fontWeight: 'bold', borderTop: '1px solid #ccc',
+        paddingTop: '0.5mm', width: '100%', textAlign: 'center' }}>
+        ${product.salePrice.toLocaleString('es-CO')}
+      </div>
+    </div>
+  );
+}
+
+function BarcodeLabel({ product, orientation }: { product: InventoryProduct; orientation: Orientation }) {
+  return orientation === 'portrait'
+    ? <BarcodeLabelPortrait product={product} />
+    : <BarcodeLabelLandscape product={product} />;
 }
 
 // --- Main component -----------------------------------------------------------
@@ -85,16 +112,18 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
   );
   const [showPreview, setShowPreview] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
+  const [orientation, setOrientation] = useState<Orientation>('portrait'); // portrait = fix for 90° driver rotation
   const previewRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setPortalReady(true); }, []);
 
   const toPrint = products.filter(p => selectedIds.includes(p.id) && p.barcode);
+  const orient = ORIENT[orientation];
 
   const labelList = (keyPrefix: string) =>
     toPrint.flatMap((product, i) =>
       Array.from({ length: qty[product.id] || 1 }, (_, q) => (
-        <BarcodeLabel key={`${keyPrefix}-${i}-${q}`} product={product} />
+        <BarcodeLabel key={`${keyPrefix}-${i}-${q}`} product={product} orientation={orientation} />
       ))
     );
 
@@ -127,7 +156,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
           break-after: auto !important;
         }
         /* size MUST be set so the browser doesn't default to A4 and rotate content */
-        @page { size: ${LABEL.paperWidth}mm ${LABEL.height}mm; margin: 0; }
+        @page { size: ${orient.pageW}mm ${orient.pageH}mm; margin: 0; }
       }
     `;
 
@@ -172,6 +201,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
             flexDirection: 'column',
             alignItems: 'center',
             pointerEvents: 'none',
+            width: `${orient.pageW}mm`,
           }}
         >
           {labelList('portal')}
@@ -199,9 +229,34 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
             {/* Thermal info badge */}
             <div className="flex items-center gap-3 rounded-2xl border border-[#cce6d0] bg-[#e7f9ee] px-5 py-3">
               <Printer size={18} className="shrink-0 text-[#005236]" />
-              <div>
+              <div className="flex-1">
                 <p className="text-sm font-bold text-[#005236]">Impresora t&eacute;rmica &mdash; papel adhesivo 57 mm</p>
-                <p className="text-xs text-[#414844]">Etiquetas de {LABEL.printWidth}&nbsp;mm &times; {LABEL.height}&nbsp;mm &mdash; Si el preview del navegador tarda, haz clic en <strong>Imprimir</strong> directamente sin esperar.</p>
+                <p className="text-xs text-[#414844]">Si el preview del navegador tarda, haz clic en <strong>Imprimir</strong> directamente sin esperar.</p>
+              </div>
+              {/* Orientation toggle */}
+              <div className="ml-auto flex flex-col items-end gap-1">
+                <span className="text-xs font-bold text-[#414844]">Orientaci&oacute;n de impresi&oacute;n</span>
+                <div className="flex rounded-full border border-[#cce6d0] bg-white p-0.5">
+                  <button
+                    onClick={() => setOrientation('landscape')}
+                    className={`rounded-full px-3 py-1 text-xs font-bold transition-colors ${
+                      orientation === 'landscape' ? 'bg-[#005236] text-white' : 'text-[#414844] hover:bg-[#f2f4f3]'
+                    }`}
+                  >
+                    Horizontal
+                  </button>
+                  <button
+                    onClick={() => setOrientation('portrait')}
+                    className={`rounded-full px-3 py-1 text-xs font-bold transition-colors ${
+                      orientation === 'portrait' ? 'bg-[#005236] text-white' : 'text-[#414844] hover:bg-[#f2f4f3]'
+                    }`}
+                  >
+                    Vertical ✓
+                  </button>
+                </div>
+                <span className="text-xs text-[#414844]">
+                  {orientation === 'portrait' ? 'Corrige rotación del driver térmico' : 'Impresión directa sin rotación'}
+                </span>
               </div>
             </div>
 
