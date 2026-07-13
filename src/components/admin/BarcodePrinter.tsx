@@ -9,9 +9,9 @@ import type { InventoryProduct } from '@/types/admin';
 
 // --- Fixed thermal label format (57 mm adhesive roll) -------------------------
 const LABEL = {
-  paperWidth: 57.5, // mm — real paper width
-  printWidth: 48,   // mm — printable content width
-  height: 30,       // mm — label height
+  paperWidth: 57.5, // mm â€” real paper width
+  printWidth: 54,   // mm â€” printable content width (leaves ~1.5 mm margin each side)
+  height: 30,       // mm â€” label height (feed direction)
 } as const;
 
 const PORTAL_ID = '__fv-thermal-labels__';
@@ -34,8 +34,8 @@ function BarcodeLabel({ product }: { product: InventoryProduct }) {
     try {
       JsBarcode(svgRef.current, product.barcode, {
         format: 'CODE128',
-        width: 1.55,
-        height: 24,
+        width: 2,
+        height: 26,
         displayValue: false,
         margin: 0,
       });
@@ -126,6 +126,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
           page-break-after: auto !important;
           break-after: auto !important;
         }
+        /* size MUST be set so the browser doesn't default to A4 and rotate content */
         @page { size: ${LABEL.paperWidth}mm ${LABEL.height}mm; margin: 0; }
       }
     `;
@@ -200,7 +201,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
               <Printer size={18} className="shrink-0 text-[#005236]" />
               <div>
                 <p className="text-sm font-bold text-[#005236]">Impresora t&eacute;rmica &mdash; papel adhesivo 57 mm</p>
-                <p className="text-xs text-[#414844]">Etiquetas de {LABEL.printWidth}&nbsp;mm &times; {LABEL.height}&nbsp;mm por etiqueta</p>
+                <p className="text-xs text-[#414844]">Etiquetas de {LABEL.printWidth}&nbsp;mm &times; {LABEL.height}&nbsp;mm &mdash; Si el preview del navegador tarda, haz clic en <strong>Imprimir</strong> directamente sin esperar.</p>
               </div>
             </div>
 
