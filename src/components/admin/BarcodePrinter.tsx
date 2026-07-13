@@ -155,15 +155,28 @@ svg{display:block;width:100%;height:auto}
 
     const blob = new Blob([doc], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    const win = window.open(url, '_blank', 'noopener');
+    const win = window.open(url, '_blank');
     if (!win) {
       URL.revokeObjectURL(url);
       return;
     }
-    win.addEventListener('load', () => {
-      setTimeout(() => { win.focus(); win.print(); }, 200);
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    });
+    // Blob URLs load near-instantly; poll readyState then trigger print
+    const tryPrint = () => {
+      try {
+        win.focus();
+        win.print();
+      } catch {
+        // If cross-origin guard fires (shouldn't for blob), silently ignore
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    };
+    const poll = setInterval(() => {
+      if (win.closed) { clearInterval(poll); URL.revokeObjectURL(url); return; }
+      if (win.document?.readyState === 'complete') {
+        clearInterval(poll);
+        setTimeout(tryPrint, 150);
+      }
+    }, 50);
   };
 
   // -- Download preview as PNG -----------------------------------------------
