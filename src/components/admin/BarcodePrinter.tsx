@@ -13,7 +13,7 @@ import type { InventoryProduct } from '@/types/admin';
 // portrait:  send 30×57.5mm → for printers that rotate 90° before printing
 const ORIENT = {
   landscape: { pageW: 56, pageH: 30   }, // POS-58: 56mm printable of 58mm roll
-  portrait:  { pageW: 30, pageH: 57.5 }, // for drivers that rotate content
+  portrait:  { pageW: 30, pageH: 58   }, // driver rotates 90° → physical 58×30mm
 } as const;
 
 type Orientation = keyof typeof ORIENT;
@@ -80,8 +80,8 @@ function BarcodeLabelPortrait({ product }: { product: InventoryProduct }) {
   return (
     <div style={{ width: `${pageW}mm`, height: `${pageH}mm`, backgroundColor: '#fff',
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      padding: '1.5mm 1mm', overflow: 'hidden', fontFamily: 'Arial,sans-serif',
-      color: '#111', boxSizing: 'border-box', gap: '0.6mm' }}>
+      padding: '1mm', overflow: 'hidden', fontFamily: 'Arial,sans-serif',
+      color: '#111', boxSizing: 'border-box', gap: '0.5mm' }}>
       <div style={{ fontSize: '8px', fontWeight: 'bold', textAlign: 'center', width: '100%',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {product.name}
@@ -147,6 +147,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
 <title>Etiquetas</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
+html,body{width:${pageW}mm;height:${pageH}mm;overflow:hidden}
 body{font-family:Arial,sans-serif;background:#fff}
 @page{size:${pageW}mm ${pageH}mm;margin:0}
 body>div{width:${pageW}mm;height:${pageH}mm;page-break-after:always;break-after:page;overflow:hidden}
