@@ -7,18 +7,18 @@ import JsBarcode from 'jsbarcode';
 import html2canvas from 'html2canvas';
 import type { InventoryProduct } from '@/types/admin';
 
-// --- Fixed thermal label format (57 mm adhesive roll) -------------------------
-// landscape: browser sends 57.5×30   → printer prints as-is (no driver rotation)
-// portrait:  browser sends 30×57.5  → printer rotates 90°  → result is 57.5×30 label
+// --- POS-58 thermal receipt printer (58mm continuous roll) -------------------
+// landscape: send 56×30 mm  → printer prints directly on 58mm roll (no rotation)
+//            content fills the printable width, 30mm feeds per label
+// portrait:  send 30×57.5mm → for printers that rotate 90° before printing
 const ORIENT = {
-  landscape: { pageW: 57.5, pageH: 30   },
-  portrait:  { pageW: 30,   pageH: 57.5 },
+  landscape: { pageW: 56, pageH: 30   }, // POS-58: 56mm printable of 58mm roll
+  portrait:  { pageW: 30, pageH: 57.5 }, // for drivers that rotate content
 } as const;
 
 type Orientation = keyof typeof ORIENT;
 
 const PORTAL_ID = '__fv-thermal-labels__';
-const STYLE_ID  = '__fv-thermal-print-style__';
 
 // --- Types --------------------------------------------------------------------
 
@@ -72,29 +72,25 @@ function BarcodeLabelPortrait({ product }: { product: InventoryProduct }) {
     if (!svgRef.current || !product.barcode) return;
     try {
       JsBarcode(svgRef.current, product.barcode, {
-        format: 'CODE128', width: 2, height: 30, displayValue: false, margin: 0,
+        format: 'CODE128', width: 1.6, height: 22, displayValue: false, margin: 0,
       });
     } catch (err) { console.error('JsBarcode error:', err); }
   }, [product.barcode]);
 
   return (
     <div style={{ width: `${pageW}mm`, height: `${pageH}mm`, backgroundColor: '#fff',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-evenly',
-      padding: '2mm 1.5mm', overflow: 'hidden', fontFamily: 'Arial,sans-serif',
-      color: '#111', boxSizing: 'border-box' }}>
-      <div style={{ fontSize: '10px', fontWeight: 'bold', textAlign: 'center', width: '100%',
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: '1.2' }}>
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      padding: '1.5mm 1mm', overflow: 'hidden', fontFamily: 'Arial,sans-serif',
+      color: '#111', boxSizing: 'border-box', gap: '0.6mm' }}>
+      <div style={{ fontSize: '8px', fontWeight: 'bold', textAlign: 'center', width: '100%',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {product.name}
       </div>
-      {product.sku && (
-        <div style={{ fontSize: '8px', textAlign: 'center' }}>SKU: {product.sku}</div>
-      )}
+      {product.sku && <div style={{ fontSize: '6.5px' }}>SKU: {product.sku}</div>}
       <svg ref={svgRef} style={{ width: '100%', maxWidth: '100%', height: 'auto', display: 'block' }} />
-      <div style={{ fontSize: '8px', fontFamily: 'monospace', textAlign: 'center', letterSpacing: '0.5px' }}>
-        {product.barcode}
-      </div>
-      <div style={{ fontSize: '9px', fontWeight: 'bold', borderTop: '1px solid #bbb',
-        paddingTop: '1mm', width: '100%', textAlign: 'center' }}>
+      <div style={{ fontSize: '6.5px', fontFamily: 'monospace' }}>{product.barcode}</div>
+      <div style={{ fontSize: '7.5px', fontWeight: 'bold', borderTop: '1px solid #ccc',
+        paddingTop: '0.5mm', width: '100%', textAlign: 'center' }}>
         ${product.salePrice.toLocaleString('es-CO')}
       </div>
     </div>
@@ -116,10 +112,14 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
   );
   const [showPreview, setShowPreview] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
-  const [orientation, setOrientation] = useState<Orientation>('portrait'); // portrait = fix for 90° driver rotation
+  const [orientation, setOrientation] = useState<Orientation>('landscape'); // POS-58 prints directly, no rotation needed
   const previewRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setPortalReady(true); }, []);
+  // Delay portal to client-side only
+  useEffect(() => {
+    const id = setTimeout(() => setPortalReady(true), 0);
+    return () => clearTimeout(id);
+  }, []);
 
   const toPrint = products.filter(p => selectedIds.includes(p.id) && p.barcode);
 
@@ -147,17 +147,10 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
 <title>Etiquetas</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-/* Screen: center each label on a gray background so it's easy to review */
-html,body{font-family:Arial,sans-serif;background:#d0d0d0}
-body{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:8mm;gap:6mm}
-body>div{background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.25)}
-/* Print: strip all screen chrome, correct page size, no margins */
-@media print{
-  html,body{background:#fff;padding:0;gap:0;display:block}
-  body>div{box-shadow:none;page-break-after:always;break-after:page}
-  body>div:last-child{page-break-after:auto;break-after:auto}
-  @page{size:${pageW}mm ${pageH}mm;margin:0}
-}
+body{font-family:Arial,sans-serif;background:#fff}
+@page{size:${pageW}mm ${pageH}mm;margin:0}
+body>div{width:${pageW}mm;height:${pageH}mm;page-break-after:always;break-after:page;overflow:hidden}
+body>div:last-child{page-break-after:auto;break-after:auto}
 svg{display:block;width:100%;height:auto}
 </style>
 </head>
@@ -256,12 +249,12 @@ svg{display:block;width:100%;height:auto}
             <div className="flex items-center gap-3 rounded-2xl border border-[#cce6d0] bg-[#e7f9ee] px-5 py-3">
               <Printer size={18} className="shrink-0 text-[#005236]" />
               <div className="flex-1">
-                <p className="text-sm font-bold text-[#005236]">Impresora t&eacute;rmica &mdash; papel adhesivo 57 mm</p>
-                <p className="text-xs text-[#414844]">Si el preview del navegador tarda, haz clic en <strong>Imprimir</strong> directamente sin esperar.</p>
+                <p className="text-sm font-bold text-[#005236]">POS-58 &mdash; rollo continuo 58 mm</p>
+                <p className="text-xs text-[#414844]">Usar modo <strong>Horizontal</strong>. Si el contenido sale girado, cambia a Vertical.</p>
               </div>
               {/* Orientation toggle */}
               <div className="ml-auto flex flex-col items-end gap-1">
-                <span className="text-xs font-bold text-[#414844]">Orientaci&oacute;n de impresi&oacute;n</span>
+                <span className="text-xs font-bold text-[#414844]">Modo de impresi&oacute;n</span>
                 <div className="flex rounded-full border border-[#cce6d0] bg-white p-0.5">
                   <button
                     onClick={() => setOrientation('landscape')}
@@ -269,7 +262,7 @@ svg{display:block;width:100%;height:auto}
                       orientation === 'landscape' ? 'bg-[#005236] text-white' : 'text-[#414844] hover:bg-[#f2f4f3]'
                     }`}
                   >
-                    Horizontal
+                    Horizontal ✓
                   </button>
                   <button
                     onClick={() => setOrientation('portrait')}
@@ -277,11 +270,11 @@ svg{display:block;width:100%;height:auto}
                       orientation === 'portrait' ? 'bg-[#005236] text-white' : 'text-[#414844] hover:bg-[#f2f4f3]'
                     }`}
                   >
-                    Vertical ✓
+                    Vertical
                   </button>
                 </div>
                 <span className="text-xs text-[#414844]">
-                  {orientation === 'portrait' ? 'Corrige rotación del driver térmico' : 'Impresión directa sin rotación'}
+                  {orientation === 'landscape' ? 'POS-58: impresión directa sin rotación' : 'Para drivers que rotan 90°'}
                 </span>
               </div>
             </div>
