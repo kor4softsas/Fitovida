@@ -37,26 +37,59 @@ function BarcodeLabelLandscape({ product }: { product: InventoryProduct }) {
     if (!svgRef.current || !product.barcode) return;
     try {
       JsBarcode(svgRef.current, product.barcode, {
-        format: 'CODE128', width: 2.2, height: 28, displayValue: false, margin: 0,
+        format: 'CODE128',
+        width: 2,
+        height: 55,           // tall bars to fill most of the 30mm label height
+        displayValue: false,
+        margin: 0,
       });
     } catch (err) { console.error('JsBarcode error:', err); }
   }, [product.barcode]);
 
   return (
-    <div style={{ width: `${pageW}mm`, height: `${pageH}mm`, backgroundColor: '#fff',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      padding: '1mm 1.5mm', overflow: 'hidden', fontFamily: 'Arial,sans-serif',
-      color: '#111', boxSizing: 'border-box', gap: '0.4mm' }}>
-      <div style={{ fontSize: '9px', fontWeight: 'bold', textAlign: 'center', width: '100%',
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {product.name}
+    <div style={{
+      width: `${pageW}mm`,
+      height: `${pageH}mm`,
+      backgroundColor: '#fff',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '1mm',
+      overflow: 'hidden',
+      fontFamily: 'Arial,sans-serif',
+      color: '#111',
+      boxSizing: 'border-box',
+      gap: '0.5mm',
+    }}>
+      {/* Barcode fills most of the label */}
+      <svg ref={svgRef} style={{ width: '100%', height: 'auto', display: 'block', flexShrink: 0 }} />
+      {/* Name + price on one line below the barcode */}
+      <div style={{
+        width: '100%',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        gap: '2mm',
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          fontSize: '7px',
+          fontWeight: 'bold',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          flex: 1,
+        }}>
+          {product.name}
+        </div>
+        <div style={{ fontSize: '7px', fontWeight: 'bold', whiteSpace: 'nowrap', flexShrink: 0 }}>
+          ${product.salePrice.toLocaleString('es-CO')}
+        </div>
       </div>
-      {product.sku && <div style={{ fontSize: '7px' }}>SKU: {product.sku}</div>}
-      <svg ref={svgRef} style={{ width: '100%', maxWidth: '100%', height: 'auto', display: 'block' }} />
-      <div style={{ fontSize: '7px', fontFamily: 'monospace' }}>{product.barcode}</div>
-      <div style={{ fontSize: '8px', fontWeight: 'bold', borderTop: '1px solid #ccc',
-        paddingTop: '0.3mm', width: '100%', textAlign: 'center' }}>
-        ${product.salePrice.toLocaleString('es-CO')}
+      {/* Barcode number */}
+      <div style={{ fontSize: '6px', fontFamily: 'monospace', textAlign: 'center', width: '100%' }}>
+        {product.barcode}
       </div>
     </div>
   );
@@ -130,57 +163,50 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
       ))
     );
 
-  // -- Print via Blob URL (clean standalone doc → @page size is always respected) --
+  // -- Print: copy portal HTML to a normal body div, then window.print() ------
   const handlePrint = () => {
+    if (toPrint.length === 0) return;
+
     const portal = document.getElementById(PORTAL_ID);
-    if (!portal || toPrint.length === 0) return;
+    if (!portal) return;
 
     const { pageW, pageH } = ORIENT[orientation];
+    const PRINT_DIV = '__fv-print-area__';
+    const PRINT_CSS  = '__fv-print-css__';
 
-    // Serialize pre-rendered labels (JsBarcode SVGs already drawn inside the portal)
-    const labelsHtml = portal.innerHTML;
+    // Remove stale elements
+    document.getElementById(PRINT_DIV)?.remove();
+    document.getElementById(PRINT_CSS)?.remove();
 
-    const doc = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Etiquetas</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Arial,sans-serif;background:#fff}
-@page{size:${pageW}mm ${pageH}mm;margin:0}
-body>div{width:${pageW}mm;height:${pageH}mm;page-break-after:always;break-after:page;overflow:hidden}
-body>div:last-child{page-break-after:auto;break-after:auto}
-svg{display:block;width:100%;height:auto}
-</style>
-</head>
-<body>${labelsHtml}</body>
-</html>`;
+    // Create a normal (non-fixed) div in the body with the pre-rendered labels
+    const div = document.createElement('div');
+    div.id = PRINT_DIV;
+    div.innerHTML = portal.innerHTML;
+    document.body.appendChild(div);
 
-    const blob = new Blob([doc], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const win = window.open(url, '_blank');
-    if (!win) {
-      URL.revokeObjectURL(url);
-      return;
-    }
-    // Blob URLs load near-instantly; poll readyState then trigger print
-    const tryPrint = () => {
-      try {
-        win.focus();
-        win.print();
-      } catch {
-        // If cross-origin guard fires (shouldn't for blob), silently ignore
+    const style = document.createElement('style');
+    style.id = PRINT_CSS;
+    style.textContent = `
+      /* Hide on screen */
+      #${PRINT_DIV} { display: none; }
+      @media print {
+        /* Show only labels */
+        body > *:not(#${PRINT_DIV}) { display: none !important; }
+        #${PRINT_DIV} { display: block !important; margin: 0; padding: 0; }
+        #${PRINT_DIV} > div { page-break-after: always; break-after: page; }
+        #${PRINT_DIV} > div:last-child { page-break-after: auto; break-after: auto; }
+        svg { display: block !important; width: 100% !important; height: auto !important; }
+        @page { size: ${pageW}mm ${pageH}mm; margin: 0; }
       }
-      setTimeout(() => URL.revokeObjectURL(url), 30_000);
-    };
-    const poll = setInterval(() => {
-      if (win.closed) { clearInterval(poll); URL.revokeObjectURL(url); return; }
-      if (win.document?.readyState === 'complete') {
-        clearInterval(poll);
-        setTimeout(tryPrint, 150);
-      }
-    }, 50);
+    `;
+    document.head.appendChild(style);
+
+    window.print();
+
+    setTimeout(() => {
+      document.getElementById(PRINT_DIV)?.remove();
+      document.getElementById(PRINT_CSS)?.remove();
+    }, 1000);
   };
 
   // -- Download preview as PNG -----------------------------------------------
