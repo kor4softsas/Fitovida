@@ -72,26 +72,53 @@ function BarcodeLabelPortrait({ product }: { product: InventoryProduct }) {
     if (!svgRef.current || !product.barcode) return;
     try {
       JsBarcode(svgRef.current, product.barcode, {
-        format: 'CODE128', width: 1.6, height: 22, displayValue: false, margin: 0,
+        format: 'CODE128', width: 1.8, height: 24, displayValue: false, margin: 0,
       });
     } catch (err) { console.error('JsBarcode error:', err); }
   }, [product.barcode]);
 
+  // Outer div fills the full page (30mm × 57.5mm).
+  // Inner wrapper uses absolute centering (position:absolute + translate) which
+  // works reliably in any renderer — unlike flex justify-content which can
+  // misbehave when mm units don't resolve to the expected px in off-screen or
+  // blob-URL contexts.
   return (
-    <div style={{ width: `${pageW}mm`, height: `${pageH}mm`, backgroundColor: '#fff',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      padding: '1.5mm 1mm', overflow: 'hidden', fontFamily: 'Arial,sans-serif',
-      color: '#111', boxSizing: 'border-box', gap: '0.6mm' }}>
-      <div style={{ fontSize: '8px', fontWeight: 'bold', textAlign: 'center', width: '100%',
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {product.name}
-      </div>
-      {product.sku && <div style={{ fontSize: '6.5px' }}>SKU: {product.sku}</div>}
-      <svg ref={svgRef} style={{ width: '100%', maxWidth: '100%', height: 'auto', display: 'block' }} />
-      <div style={{ fontSize: '6.5px', fontFamily: 'monospace' }}>{product.barcode}</div>
-      <div style={{ fontSize: '7.5px', fontWeight: 'bold', borderTop: '1px solid #ccc',
-        paddingTop: '0.5mm', width: '100%', textAlign: 'center' }}>
-        ${product.salePrice.toLocaleString('es-CO')}
+    <div style={{
+      position: 'relative',
+      width: `${pageW}mm`,
+      height: `${pageH}mm`,
+      backgroundColor: '#fff',
+      overflow: 'hidden',
+      fontFamily: 'Arial,sans-serif',
+      color: '#111',
+      boxSizing: 'border-box',
+    }}>
+      <div style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: `${pageW - 2}mm`,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '0.8mm',
+      }}>
+        <div style={{ fontSize: '8px', fontWeight: 'bold', textAlign: 'center', width: '100%',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {product.name}
+        </div>
+        {product.sku && (
+          <div style={{ fontSize: '6.5px', textAlign: 'center' }}>SKU: {product.sku}</div>
+        )}
+        <svg ref={svgRef} style={{ width: '100%', height: 'auto', display: 'block' }} />
+        <div style={{ fontSize: '6.5px', fontFamily: 'monospace', textAlign: 'center' }}>
+          {product.barcode}
+        </div>
+        <div style={{ fontSize: '7.5px', fontWeight: 'bold', borderTop: '1px solid #ccc',
+          paddingTop: '0.5mm', width: '100%', textAlign: 'center' }}>
+          ${product.salePrice.toLocaleString('es-CO')}
+        </div>
       </div>
     </div>
   );
