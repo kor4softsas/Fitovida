@@ -60,8 +60,9 @@ export async function POST(request: NextRequest) {
   let connection: Awaited<ReturnType<typeof pool.getConnection>> | null = null;
 
   try {
-    const body = await request.json() as { products?: unknown };
+    const body = await request.json() as { products?: unknown; mode?: string };
     const products = body?.products;
+    const mode = body?.mode === 'replace' ? 'replace' : 'add';
 
     if (!Array.isArray(products) || products.length === 0) {
       return NextResponse.json(
@@ -70,9 +71,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (products.length > 500) {
+    if (products.length > 2000) {
       return NextResponse.json(
-        { error: 'El límite por importación es de 500 productos.' },
+        { error: 'El límite por importación es de 2000 productos.' },
         { status: 400 }
       );
     }
@@ -90,6 +91,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── Replace mode: wipe existing inventory first ────────────────────────
+    if (mode === 'replace') {
+      await connection.beginTransaction();
+      try {
+        // Must delete in FK-safe order:
+        // inventory_movements and inventory_lots reference products(id) without CASCADE
+        // inventory_products references products(id) WITH CASCADE (but we delete it first anyway)
+        await connection.execute('DELETE FROM inventory_movements');
+        await connection.execute('DELETE FROM inventory_lots');
+        await connection.execute('DELETE FROM inventory_products');
+        await connection.execute('DELETE FROM products');
+        await connection.commit();
+      } catch (err) {
+        await connection.rollback();
+        throw err;
+      }
+    }
+
     let imported = 0;
     let failed = 0;
     const errors: RowError[] = [];
@@ -98,12 +117,11 @@ export async function POST(request: NextRequest) {
       const rowNumber = i + 2; // row 1 = headers
       const item = products[i] as ImportProductPayload;
 
-      // ── Validate required fields ──────────────────────────────────────────
+      // ── Validate / fallback required fields ──────────────────────────────
       const rowErrors: string[] = [];
-      if (!item.name?.trim()) rowErrors.push('El nombre es obligatorio.');
-      if (!item.category?.trim()) rowErrors.push('La categoría es obligatoria.');
-      const expirationDate = normalizeExpirationDate(item.expirationDate);
-      if (!expirationDate) rowErrors.push('Fecha de vencimiento inválida (usa YYYY-MM-DD).');
+      const productName = item.name?.trim() || `Producto fila ${rowNumber}`;
+      const productCategory = item.category?.trim() || 'Sin categoría';
+      const expirationDate = normalizeExpirationDate(item.expirationDate) ?? '2099-12-31';
 
       if (rowErrors.length > 0) {
         errors.push({ row: rowNumber, name: item.name ?? '', error: rowErrors.join(' ') });
@@ -130,10 +148,10 @@ export async function POST(request: NextRequest) {
             created_at, updated_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
           [
-            item.name.trim(),
+            productName,
             item.description?.trim() ?? '',
             item.salePrice ?? 0,
-            item.category.trim(),
+            productCategory,
             item.currentStock ?? 0,
             item.image ?? '',
             hasInvima,

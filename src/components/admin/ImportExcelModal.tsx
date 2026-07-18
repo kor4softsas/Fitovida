@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { X, Upload, FileSpreadsheet, Download, AlertTriangle, CheckCircle, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -43,45 +43,124 @@ interface ImportExcelModalProps {
 // ─── Column mapping (Spanish and English headers) ────────────────────────────
 
 const COLUMN_MAP: Record<string, keyof Omit<ParsedProduct, '_rowIndex' | '_errors' | '_warnings'>> = {
+  // ─ Nombre del producto ───────────────────────────────────────────────────
   nombre: 'name',
+  nombre_producto: 'name',
   name: 'name',
+  producto: 'name',
+  articulo: 'name',
+  item: 'name',
+  product_name: 'name',
+
+  // ─ Descripción ──────────────────────────────────────────────────────────
   descripcion: 'description',
+  descripcion_larga: 'description',
   description: 'description',
+  detalle: 'description',
+
+  // ─ Categoría ────────────────────────────────────────────────────────────
   categoria: 'category',
   category: 'category',
+  familia: 'category',
+  grupo: 'category',
+  linea: 'category',
+  tipo: 'category',
+
+  // ─ Precio de venta ───────────────────────────────────────────────────────
   precio_venta: 'salePrice',
   precio: 'salePrice',
+  precio_unitario: 'salePrice',
+  valor: 'salePrice',
+  valor_unitario: 'salePrice',
   price: 'salePrice',
   sale_price: 'salePrice',
+  pvp: 'salePrice',
+
+  // ─ Costo unitario ────────────────────────────────────────────────────────
   costo_unidad: 'unitCost',
+  costo_unitario: 'unitCost',
   costo: 'unitCost',
+  costo_compra: 'unitCost',
+  precio_costo: 'unitCost',
+  precio_compra: 'unitCost',
   unit_cost: 'unitCost',
+  costo_de_compra: 'unitCost',
+
+  // ─ Stock / existencias ───────────────────────────────────────────────────
   stock_actual: 'currentStock',
   stock: 'currentStock',
+  existencias: 'currentStock',
+  existencia: 'currentStock',
+  cantidad: 'currentStock',
+  stock_disponible: 'currentStock',
   current_stock: 'currentStock',
+
+  // ─ Stock mínimo / máximo ─────────────────────────────────────────────────
   stock_minimo: 'minStock',
+  stock_min: 'minStock',
+  minimo: 'minStock',
   min_stock: 'minStock',
   stock_maximo: 'maxStock',
+  stock_max: 'maxStock',
+  maximo: 'maxStock',
   max_stock: 'maxStock',
+
+  // ─ SKU ───────────────────────────────────────────────────────────────────
   sku: 'sku',
+  codigo_sku: 'sku',
+  referencia: 'sku',
+  ref: 'sku',
+  codigo_producto: 'sku',
+  cod_producto: 'sku',
+
+  // ─ Código de barras ──────────────────────────────────────────────────────
   codigo_barras: 'barcode',
+  cod_barras: 'barcode',
   barcode: 'barcode',
+  ean: 'barcode',
+  ean13: 'barcode',
+  upc: 'barcode',
+  codigo_de_barras: 'barcode',
+
+  // ─ Proveedor ─────────────────────────────────────────────────────────────
   proveedor: 'supplier',
   supplier: 'supplier',
+  distribuidor: 'supplier',
+  laboratorio: 'supplier',
+  fabricante: 'supplier',
+  marca: 'supplier',
+
+  // ─ IVA ───────────────────────────────────────────────────────────────────
   tasa_iva: 'taxRate',
   iva: 'taxRate',
   tax_rate: 'taxRate',
+  impuesto: 'taxRate',
+  tasa_impuesto: 'taxRate',
+
+  // ─ Estado ────────────────────────────────────────────────────────────────
   estado: 'status',
   status: 'status',
+  estado_producto: 'status',
+
+  // ─ INVIMA ────────────────────────────────────────────────────────────────
   tiene_invima: 'hasInvima',
   has_invima: 'hasInvima',
   invima: 'hasInvima',
+  registro_invima: 'invimaRegistryNumber',
   numero_invima: 'invimaRegistryNumber',
+  numero_invima_: 'invimaRegistryNumber',
   invima_registry: 'invimaRegistryNumber',
   invima_registry_number: 'invimaRegistryNumber',
+  cod_invima: 'invimaRegistryNumber',
+
+  // ─ Fecha de vencimiento ──────────────────────────────────────────────────
   fecha_vencimiento: 'expirationDate',
-  expiration_date: 'expirationDate',
   vencimiento: 'expirationDate',
+  fecha_expiracion: 'expirationDate',
+  expiration_date: 'expirationDate',
+  expiry: 'expirationDate',
+  expiry_date: 'expirationDate',
+  fecha_ven: 'expirationDate',
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -90,9 +169,11 @@ function normalizeHeader(header: string): string {
   return header
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, '_')
-    .trim();
+    .replace(/[\u0300-\u036f]/g, '')  // strip accent marks
+    .replace(/[^a-z0-9\s]/g, '_')     // non-alphanumeric → underscore
+    .replace(/\s+/g, '_')             // spaces → underscore
+    .replace(/_+/g, '_')              // collapse multiple underscores
+    .replace(/^_|_$/g, '');           // trim leading / trailing underscores
 }
 
 function toNumber(value: unknown, fallback = 0): number {
@@ -159,8 +240,15 @@ function parseSheet(worksheet: XLSX.WorkSheet): ParsedProduct[] {
 
   if (raw.length === 0) return [];
 
+  // Filter out completely empty rows (all values are empty string, null or undefined)
+  const nonEmptyRaw = raw.filter(row =>
+    Object.values(row).some(v => v !== '' && v !== null && v !== undefined)
+  );
+
+  if (nonEmptyRaw.length === 0) return [];
+
   // Build header index
-  const firstRow = raw[0];
+  const firstRow = nonEmptyRaw[0];
   const headerMapping: Record<string, keyof Omit<ParsedProduct, '_rowIndex' | '_errors' | '_warnings'>> = {};
   for (const key of Object.keys(firstRow)) {
     const normalized = normalizeHeader(key);
@@ -170,7 +258,7 @@ function parseSheet(worksheet: XLSX.WorkSheet): ParsedProduct[] {
     }
   }
 
-  return raw.map((row, idx): ParsedProduct => {
+  return nonEmptyRaw.map((row, idx): ParsedProduct => {
     const product: Partial<ParsedProduct> & { _rowIndex: number; _errors: string[]; _warnings: string[] } = {
       _rowIndex: idx + 2, // row 1 = headers, so first data row = 2
       _errors: [],
@@ -217,7 +305,9 @@ function parseSheet(worksheet: XLSX.WorkSheet): ParsedProduct[] {
           break;
         case 'taxRate': {
           const validRates = [0, 5, 19];
-          const rate = toNumber(rawValue, 19);
+          let rate = toNumber(rawValue, 19);
+          // Handle decimal format: 0.19 → 19, 0.05 → 5, 0.0 → 0
+          if (rate > 0 && rate < 1) rate = Math.round(rate * 100);
           product.taxRate = validRates.includes(rate) ? rate : 19;
           if (!validRates.includes(rate)) {
             product._warnings.push(`Tasa IVA "${rawValue}" no es válida (0, 5 ó 19). Se usará 19%.`);
@@ -239,10 +329,19 @@ function parseSheet(worksheet: XLSX.WorkSheet): ParsedProduct[] {
       }
     }
 
-    // Defaults for missing fields
-    if (!product.name) product._errors.push('El nombre del producto es obligatorio.');
-    if (!product.category) product._errors.push('La categoría es obligatoria.');
-    if (!product.expirationDate) product._errors.push('La fecha de vencimiento es obligatoria y debe tener formato YYYY-MM-DD, DD/MM/YYYY o ser una fecha de Excel válida.');
+    // Apply fallbacks and warnings instead of blocking errors
+    if (!product.name) {
+      product.name = `Producto fila ${idx + 2}`;
+      product._warnings.push('Sin nombre — se usó un nombre provisional. Edita el producto después de importar.');
+    }
+    if (!product.category) {
+      product.category = 'Sin categoría';
+      product._warnings.push('Sin categoría — asignada como "Sin categoría". Edita el producto después de importar.');
+    }
+    if (!product.expirationDate) {
+      product.expirationDate = '2099-12-31';
+      product._warnings.push('Sin fecha de vencimiento — se asignó 2099-12-31 como marcador provisional.');
+    }
 
     return {
       name: product.name ?? '',
@@ -330,9 +429,13 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [importMode, setImportMode] = useState<'add' | 'replace'>('add');
+  const [replaceConfirmed, setReplaceConfirmed] = useState(false);
 
   const validProducts = parsedProducts.filter(p => p._errors.length === 0);
+  // All non-empty rows are valid now (errors only for structural parse issues)
   const invalidProducts = parsedProducts.filter(p => p._errors.length > 0);
+  const warnProducts   = parsedProducts.filter(p => p._errors.length === 0 && p._warnings.length > 0);
 
   const processFile = useCallback((file: File) => {
     if (!file.name.match(/\.(xlsx|xls|csv)$/i)) {
@@ -411,7 +514,7 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
       const res = await fetch('/api/admin/inventory/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ products: payload }),
+        body: JSON.stringify({ products: payload, mode: importMode }),
       });
 
       const result = await res.json() as ImportResult & { error?: string };
@@ -479,6 +582,58 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
             </button>
           </div>
 
+          {/* Import mode selector */}
+          <div className="space-y-2">
+            <p className="text-sm font-bold text-[#012d1d]">Modo de importación</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => { setImportMode('add'); setReplaceConfirmed(false); }}
+                className={`rounded-2xl border-2 px-5 py-4 text-left transition-colors ${
+                  importMode === 'add'
+                    ? 'border-[#005236] bg-[#e7f9ee]'
+                    : 'border-[#e6e9e8] bg-[#f2f4f3] hover:border-[#cce6d0]'
+                }`}
+              >
+                <p className={`font-bold ${ importMode === 'add' ? 'text-[#005236]' : 'text-[#012d1d]' }`}>
+                  ➕ Agregar al inventario
+                </p>
+                <p className="mt-1 text-xs text-[#414844]">Los nuevos productos se suman al inventario existente sin borrar nada.</p>
+              </button>
+              <button
+                onClick={() => { setImportMode('replace'); setReplaceConfirmed(false); }}
+                className={`rounded-2xl border-2 px-5 py-4 text-left transition-colors ${
+                  importMode === 'replace'
+                    ? 'border-[#ba1a1a] bg-[#fff4f4]'
+                    : 'border-[#e6e9e8] bg-[#f2f4f3] hover:border-[#f5c6c6]'
+                }`}
+              >
+                <p className={`font-bold ${ importMode === 'replace' ? 'text-[#ba1a1a]' : 'text-[#012d1d]' }`}>
+                  🗑️ Reemplazar inventario
+                </p>
+                <p className="mt-1 text-xs text-[#414844]">Elimina TODOS los productos actuales y los reemplaza con los del Excel.</p>
+              </button>
+            </div>
+
+            {importMode === 'replace' && (
+              <div className="rounded-2xl border border-[#ba1a1a] bg-[#ffdad6] px-5 py-4">
+                <p className="text-sm font-bold text-[#93000a]">
+                  ⚠️ Advertencia: esta acción eliminará permanentemente todo el inventario actual antes de importar.
+                </p>
+                <label className="mt-3 flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={replaceConfirmed}
+                    onChange={e => setReplaceConfirmed(e.target.checked)}
+                    className="h-4 w-4 rounded border-[#ba1a1a] text-[#ba1a1a] focus:ring-[#ba1a1a]"
+                  />
+                  <span className="text-sm font-semibold text-[#93000a]">
+                    Entiendo que se borrará el inventario actual y no se puede deshacer
+                  </span>
+                </label>
+              </div>
+            )}
+          </div>
+
           {/* Drop zone */}
           {parsedProducts.length === 0 && !importResult && (
             <div
@@ -515,7 +670,9 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
                 <div>
                   <p className="font-bold text-[#012d1d]">{fileName}</p>
                   <p className="text-sm text-[#414844]">
-                    {parsedProducts.length} fila(s) detectada(s) — {validProducts.length} válida(s), {invalidProducts.length} con errores
+                    {parsedProducts.length} producto(s) detectado(s)
+                    {warnProducts.length > 0 && ` — ${warnProducts.length} con campos incompletos (se importar\u00e1n con valores provisionales)`}
+                    {invalidProducts.length > 0 && ` — ${invalidProducts.length} omitido(s) por error`}
                   </p>
                 </div>
               </div>
@@ -589,7 +746,7 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
                     </thead>
                     <tbody className="divide-y divide-[#e6e9e8] bg-white">
                       {parsedProducts.map((p) => (
-                        <>
+                        <React.Fragment key={p._rowIndex}>
                           <tr
                             key={p._rowIndex}
                             onClick={() => (p._errors.length > 0 || p._warnings.length > 0) && toggleRow(p._rowIndex)}
@@ -636,7 +793,7 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
                             </td>
                           </tr>
                           {expandedRows.has(p._rowIndex) && (p._errors.length > 0 || p._warnings.length > 0) && (
-                            <tr key={`${p._rowIndex}-detail`} className="bg-[#fffbf4]">
+                            <tr className="bg-[#fffbf4]">
                               <td colSpan={7} className="px-6 py-3">
                                 {p._errors.map((err, i) => (
                                   <p key={`e${i}`} className="text-xs font-semibold text-[#ba1a1a]">✗ {err}</p>
@@ -647,7 +804,7 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
                               </td>
                             </tr>
                           )}
-                        </>
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
@@ -684,7 +841,7 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
               </button>
               <button
                 onClick={() => void handleImport()}
-                disabled={importing || validProducts.length === 0}
+                disabled={importing || validProducts.length === 0 || (importMode === 'replace' && !replaceConfirmed)}
                 className="flex items-center gap-2 rounded-full bg-[#012d1d] px-6 py-2 font-bold text-white transition-colors hover:bg-[#005236] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {importing ? (

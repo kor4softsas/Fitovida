@@ -72,25 +72,29 @@ function BarcodeLabelPortrait({ product }: { product: InventoryProduct }) {
     if (!svgRef.current || !product.barcode) return;
     try {
       JsBarcode(svgRef.current, product.barcode, {
-        format: 'CODE128', width: 1.6, height: 22, displayValue: false, margin: 0,
+        format: 'CODE128', width: 2, height: 30, displayValue: false, margin: 0,
       });
     } catch (err) { console.error('JsBarcode error:', err); }
   }, [product.barcode]);
 
   return (
     <div style={{ width: `${pageW}mm`, height: `${pageH}mm`, backgroundColor: '#fff',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      padding: '1.5mm 1mm', overflow: 'hidden', fontFamily: 'Arial,sans-serif',
-      color: '#111', boxSizing: 'border-box', gap: '0.6mm' }}>
-      <div style={{ fontSize: '8px', fontWeight: 'bold', textAlign: 'center', width: '100%',
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-evenly',
+      padding: '2mm 1.5mm', overflow: 'hidden', fontFamily: 'Arial,sans-serif',
+      color: '#111', boxSizing: 'border-box' }}>
+      <div style={{ fontSize: '10px', fontWeight: 'bold', textAlign: 'center', width: '100%',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: '1.2' }}>
         {product.name}
       </div>
-      {product.sku && <div style={{ fontSize: '6.5px' }}>SKU: {product.sku}</div>}
+      {product.sku && (
+        <div style={{ fontSize: '8px', textAlign: 'center' }}>SKU: {product.sku}</div>
+      )}
       <svg ref={svgRef} style={{ width: '100%', maxWidth: '100%', height: 'auto', display: 'block' }} />
-      <div style={{ fontSize: '6.5px', fontFamily: 'monospace' }}>{product.barcode}</div>
-      <div style={{ fontSize: '7.5px', fontWeight: 'bold', borderTop: '1px solid #ccc',
-        paddingTop: '0.5mm', width: '100%', textAlign: 'center' }}>
+      <div style={{ fontSize: '8px', fontFamily: 'monospace', textAlign: 'center', letterSpacing: '0.5px' }}>
+        {product.barcode}
+      </div>
+      <div style={{ fontSize: '9px', fontWeight: 'bold', borderTop: '1px solid #bbb',
+        paddingTop: '1mm', width: '100%', textAlign: 'center' }}>
         ${product.salePrice.toLocaleString('es-CO')}
       </div>
     </div>
@@ -143,10 +147,17 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
 <title>Etiquetas</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Arial,sans-serif;background:#fff}
-@page{size:${pageW}mm ${pageH}mm;margin:0}
-body>div{width:${pageW}mm;height:${pageH}mm;page-break-after:always;break-after:page;overflow:hidden}
-body>div:last-child{page-break-after:auto;break-after:auto}
+/* Screen: center each label on a gray background so it's easy to review */
+html,body{font-family:Arial,sans-serif;background:#d0d0d0}
+body{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:8mm;gap:6mm}
+body>div{background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+/* Print: strip all screen chrome, correct page size, no margins */
+@media print{
+  html,body{background:#fff;padding:0;gap:0;display:block}
+  body>div{box-shadow:none;page-break-after:always;break-after:page}
+  body>div:last-child{page-break-after:auto;break-after:auto}
+  @page{size:${pageW}mm ${pageH}mm;margin:0}
+}
 svg{display:block;width:100%;height:auto}
 </style>
 </head>
