@@ -14,7 +14,6 @@ const SCREEN_MM = 5;  // px per mm used only for the on-screen preview
 // Default die-cut label size (Juxin P20A in JK-58PL label mode): 40mm × 30mm
 const DEFAULT_W = 40;
 const DEFAULT_H = 30;
-const DEFAULT_MARGIN_X = 3; // horizontal safe margin (mm) so nothing gets cut at the sides
 
 // --- Types --------------------------------------------------------------------
 
@@ -36,8 +35,7 @@ function fitText(ctx: CanvasRenderingContext2D, text: string, maxW: number): str
 }
 
 // Draw ONE label (name + barcode + number + price), centred, filling the label.
-// marginXmm = safe horizontal inset so nothing touches the left/right edges.
-function composeLabel(product: InventoryProduct, wMm: number, hMm: number, marginXmm: number): HTMLCanvasElement {
+function composeLabel(product: InventoryProduct, wMm: number, hMm: number): HTMLCanvasElement {
   const S = PX_PER_MM;
   const W = Math.round(wMm * S);
   const H = Math.round(hMm * S);
@@ -53,9 +51,8 @@ function composeLabel(product: InventoryProduct, wMm: number, hMm: number, margi
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
 
-  const padX = Math.round(marginXmm * S);      // horizontal safe margin
-  const padY = Math.round(1 * S);              // vertical margin
-  const innerW = W - padX * 2;
+  const pad = Math.round(1 * S);
+  const innerW = W - pad * 2;
 
   const nameSize  = Math.max(10, Math.round(0.078 * H));
   const numSize   = Math.max(9,  Math.round(0.065 * H));
@@ -63,23 +60,23 @@ function composeLabel(product: InventoryProduct, wMm: number, hMm: number, margi
 
   // Name (top, bold)
   ctx.font = `bold ${nameSize}px Arial, sans-serif`;
-  const nameBaseline = padY + nameSize;
+  const nameBaseline = pad + nameSize;
   ctx.fillText(fitText(ctx, product.name, innerW), W / 2, nameBaseline);
 
   // Reserve space for number + price at the bottom.
   const gap = Math.round(0.3 * S);
-  const bottomReserve = padY + priceSize + gap + numSize + gap;
+  const bottomReserve = pad + priceSize + gap + numSize + gap;
   const barTop = nameBaseline + gap;
   const barH = Math.max(Math.round(0.3 * H), H - barTop - bottomReserve);
 
-  // Barcode → temp canvas, stretched to fill the safe width.
+  // Barcode → temp canvas, stretched to fill the label width.
   try {
     const bc = document.createElement('canvas');
     JsBarcode(bc, product.barcode!, {
       format: 'CODE128', width: 2, height: 100, displayValue: false,
       margin: 0, background: '#ffffff', lineColor: '#000000',
     });
-    ctx.drawImage(bc, padX, barTop, innerW, barH);
+    ctx.drawImage(bc, pad, barTop, innerW, barH);
   } catch (err) {
     console.error('JsBarcode error:', err);
     ctx.font = `${numSize}px monospace`;
@@ -92,13 +89,13 @@ function composeLabel(product: InventoryProduct, wMm: number, hMm: number, margi
 
   // Price (bottom, bold)
   ctx.font = `bold ${priceSize}px Arial, sans-serif`;
-  ctx.fillText(fitText(ctx, `$${product.salePrice.toLocaleString('es-CO')}`, innerW), W / 2, H - padY);
+  ctx.fillText(fitText(ctx, `$${product.salePrice.toLocaleString('es-CO')}`, innerW), W / 2, H - pad);
 
   return canvas;
 }
 
-function buildLabel(product: InventoryProduct, wMm: number, hMm: number, marginXmm: number): LabelPng {
-  return { png: composeLabel(product, wMm, hMm, marginXmm).toDataURL('image/png'), wMm, hMm };
+function buildLabel(product: InventoryProduct, wMm: number, hMm: number): LabelPng {
+  return { png: composeLabel(product, wMm, hMm).toDataURL('image/png'), wMm, hMm };
 }
 
 // --- PDF: one page per label, exactly the label size, image fills 100% -------
@@ -125,7 +122,6 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
   const [showPreview, setShowPreview] = useState(false);
   const [widthMm, setWidthMm] = useState(DEFAULT_W);
   const [heightMm, setHeightMm] = useState(DEFAULT_H);
-  const [marginXmm, setMarginXmm] = useState(DEFAULT_MARGIN_X);
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [previews, setPreviews] = useState<{ id: string; png: string }[]>([]);
 
@@ -135,9 +131,9 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
   // Preview: one label per selected product.
   useEffect(() => {
     if (!showPreview) return;
-    setPreviews(toPrint.map(p => ({ id: p.id, png: composeLabel(p, widthMm, heightMm, marginXmm).toDataURL('image/png') })));
+    setPreviews(toPrint.map(p => ({ id: p.id, png: composeLabel(p, widthMm, heightMm).toDataURL('image/png') })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showPreview, selectedIds, widthMm, heightMm, marginXmm]);
+  }, [showPreview, selectedIds, widthMm, heightMm]);
 
   // -- Generate PDF (one page per label), open it, auto-trigger print dialog --
   const handleGeneratePDF = useCallback(async () => {
@@ -147,7 +143,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
       const pages: LabelPng[] = [];
       for (const product of toPrint) {
         const count = qty[product.id] || 1;
-        for (let i = 0; i < count; i++) pages.push(buildLabel(product, widthMm, heightMm, marginXmm));
+        for (let i = 0; i < count; i++) pages.push(buildLabel(product, widthMm, heightMm));
       }
 
       const blob = await pdf(<LabelDoc pages={pages} />).toBlob();
@@ -171,7 +167,7 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
     } finally {
       setGeneratingPDF(false);
     }
-  }, [toPrint, qty, widthMm, heightMm, marginXmm]);
+  }, [toPrint, qty, widthMm, heightMm]);
 
   const numInput =
     'w-24 rounded-lg border border-[#cce6d0] px-3 py-1.5 text-center text-sm font-bold text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]';
@@ -211,12 +207,6 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
                   onChange={e => setHeightMm(Math.min(120, Math.max(10, parseInt(e.target.value) || DEFAULT_H)))}
                   className={numInput} />
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-bold text-[#005236]">Margen lateral (mm)</label>
-                <input type="number" min={0} max={15} step={0.5} value={marginXmm}
-                  onChange={e => setMarginXmm(Math.min(15, Math.max(0, parseFloat(e.target.value) || 0)))}
-                  className={numInput} />
-              </div>
             </div>
 
             <div className="rounded-xl bg-white/70 px-4 py-3 text-xs leading-relaxed text-[#414844]">
@@ -225,7 +215,6 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
                 <li>Preferencias → <strong>页面设置</strong> → <strong>新建纸张</strong>: crea un papel de <strong>{widthMm} × {heightMm} mm</strong> y selecciónalo.</li>
                 <li><strong>半色调</strong> (medios tonos): déjalo en <strong>无 / Ninguno</strong> (código nítido).</li>
                 <li>Si sale girado, usa <strong>旋转 (Rotación) 90°</strong>. Si sale desplazado, ajusta <strong>偏移 (Offset)</strong>.</li>
-                <li>Si se <strong>corta a los lados</strong>: sube el <strong>Margen lateral</strong> (aquí arriba), y/o centra con <strong>偏移 horizontal (水平)</strong> en el driver.</li>
               </ol>
               <p className="mt-2 font-bold text-[#005236]">Al imprimir el PDF (Chrome):</p>
               <ol className="ml-4 mt-1 list-decimal space-y-0.5">
