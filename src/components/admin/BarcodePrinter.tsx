@@ -2,10 +2,42 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Printer, X, Download, Eye, EyeOff } from 'lucide-react';
+import { Printer, X, Eye, EyeOff, FileDown, Loader2 } from 'lucide-react';
 import JsBarcode from 'jsbarcode';
-import html2canvas from 'html2canvas';
+import { Document, Page, Text, Image, pdf, StyleSheet } from '@react-pdf/renderer';
 import type { InventoryProduct } from '@/types/admin';
+
+// ── Label PDF dimensions (points: 1mm = 2.8346pt) ────────────────────────────
+const MM = 2.8346;
+const LW = Math.round(58 * MM);  // 164pt  label width
+const LH = Math.round(30 * MM);  // 85pt   label height
+
+const pdfStyles = StyleSheet.create({
+  page: { width: LW, height: LH, padding: 3, backgroundColor: '#ffffff',
+    flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between' },
+  name:   { fontSize: 7,   fontFamily: 'Helvetica-Bold', textAlign: 'center', width: '100%' },
+  barcode:{ width: '100%', flexGrow: 1, flexShrink: 1, marginVertical: 1, objectFit: 'contain' },
+  code:   { fontSize: 5.5, fontFamily: 'Courier',        textAlign: 'center' },
+  price:  { fontSize: 7,   fontFamily: 'Helvetica-Bold', textAlign: 'center', width: '100%' },
+});
+
+type PdfItem = { name: string; barcodePng: string; barcodeNum: string; price: string };
+
+function LabelDoc({ items }: { items: PdfItem[] }) {
+  return (
+    <Document>
+      {items.map((item, i) => (
+        <Page key={i} size={[LW, LH]} style={pdfStyles.page}>
+          <Text style={pdfStyles.name}>{item.name}</Text>
+          {/* eslint-disable-next-line jsx-a11y/alt-text */}
+          <Image src={item.barcodePng} style={pdfStyles.barcode} />
+          <Text style={pdfStyles.code}>{item.barcodeNum}</Text>
+          <Text style={pdfStyles.price}>{item.price}</Text>
+        </Page>
+      ))}
+    </Document>
+  );
+}
 
 // --- POS-58 thermal receipt printer (58mm continuous roll) -------------------
 // landscape: send 58×30 mm  → driver (Landscape orientation) prints directly
@@ -159,7 +191,8 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
   );
   const [showPreview, setShowPreview] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
-  const [orientation, setOrientation] = useState<Orientation>('landscape'); // POS-58 prints directly, no rotation needed
+  const [orientation, setOrientation] = useState<Orientation>('landscape');
+  const [generatingPDF, setGeneratingPDF] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
 
   // Delay portal to client-side only
@@ -177,7 +210,8 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
       ))
     );
 
-  // -- Print: copy portal HTML to a normal body div, then window.print() ------
+  // -- Print via window.print() (fallback) -----------------------------------
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handlePrint = () => {
     if (toPrint.length === 0) return;
 
@@ -229,25 +263,53 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
     }, 1000);
   };
 
-  // -- Download preview as PNG -----------------------------------------------
-  const handleDownloadPNG = async () => {
-    if (!previewRef.current) {
-      setShowPreview(true);
-      await new Promise(r => setTimeout(r, 250));
-    }
-    if (!previewRef.current) return;
+  // -- Generate PDF, open in new tab, auto-trigger print dialog ---------------
+  const handleGeneratePDF = async () => {
+    if (toPrint.length === 0) return;
+    setGeneratingPDF(true);
     try {
-      const canvas = await html2canvas(previewRef.current, {
-        scale: 3,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-      });
-      const a = document.createElement('a');
-      a.href = canvas.toDataURL('image/png');
-      a.download = `etiquetas-${new Date().toISOString().split('T')[0]}.png`;
-      a.click();
+      const items: PdfItem[] = [];
+      for (const product of toPrint) {
+        const count = qty[product.id] || 1;
+        for (let i = 0; i < count; i++) {
+          const canvas = document.createElement('canvas');
+          JsBarcode(canvas, product.barcode!, {
+            format: 'CODE128', width: 3, height: 120,
+            margin: 5, displayValue: false,
+            background: '#ffffff', lineColor: '#000000',
+          });
+          items.push({
+            name: product.name,
+            barcodePng: canvas.toDataURL('image/png'),
+            barcodeNum: product.barcode!,
+            price: `$${product.salePrice.toLocaleString('es-CO')}`,
+          });
+        }
+      }
+      const blob = await pdf(<LabelDoc items={items} />).toBlob();
+      const url  = URL.createObjectURL(blob);
+
+      // Open PDF in new tab — sync from click handler, never blocked by popup blocker
+      // Chrome's PDF viewer uses the embedded 58×30mm page dimensions automatically
+      const win = window.open(url, '_blank');
+      if (win) {
+        // Auto-trigger print dialog after PDF viewer finishes loading
+        setTimeout(() => {
+          try { win.focus(); win.print(); } catch { /* user presses Ctrl+P manually */ }
+          setTimeout(() => URL.revokeObjectURL(url), 30_000);
+        }, 1500);
+      } else {
+        // Fallback: download the PDF
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `etiquetas-${new Date().toISOString().split('T')[0]}.pdf`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
     } catch (err) {
-      console.error('Error al descargar PNG:', err);
+      console.error('Error al generar PDF:', err);
+    } finally {
+      setGeneratingPDF(false);
     }
   };
 
@@ -410,22 +472,19 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
                 {showPreview ? 'Ocultar vista previa' : 'Vista previa'}
               </button>
               <div className="flex-1" />
-              <button
-                onClick={() => void handleDownloadPNG()}
-                disabled={toPrint.length === 0}
-                className="flex items-center gap-2 rounded-full bg-[#3f51d7] px-5 py-2 font-bold text-white transition-colors hover:bg-[#3140b1] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Download size={18} />
-                Descargar PNG
-              </button>
-              <button
-                onClick={handlePrint}
-                disabled={toPrint.length === 0}
-                className="flex items-center gap-2 rounded-full bg-[#009a63] px-5 py-2 font-bold text-white transition-colors hover:bg-[#007f52] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Printer size={18} />
-                Imprimir ({toPrint.reduce((s, p) => s + (qty[p.id] || 1), 0)} etiq.)
-              </button>
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  onClick={() => void handleGeneratePDF()}
+                  disabled={generatingPDF || toPrint.length === 0}
+                  className="flex items-center gap-2 rounded-full bg-[#012d1d] px-5 py-2 font-bold text-white transition-colors hover:bg-[#005236] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {generatingPDF ? <Loader2 size={18} className="animate-spin" /> : <FileDown size={18} />}
+                  {generatingPDF ? 'Generando...' : `Imprimir etiquetas PDF (${toPrint.reduce((s, p) => s + (qty[p.id] || 1), 0)} etiq.)`}
+                </button>
+                <p className="text-xs text-[#414844]">
+                  Se abre una pesta&ntilde;a con el PDF y el di&aacute;logo de impresi&oacute;n. Si no aparece autom&aacute;ticamente, presiona <kbd className="rounded bg-[#e6e9e8] px-1 py-0.5 text-xs">Ctrl+P</kbd>
+                </p>
+              </div>
             </div>
 
             {/* Preview */}
