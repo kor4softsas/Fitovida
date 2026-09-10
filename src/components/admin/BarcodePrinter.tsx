@@ -173,8 +173,8 @@ export default function BarcodePrinter({ products, onClose }: BarcodePrinterProp
     'w-24 rounded-lg border border-[#cce6d0] px-3 py-1.5 text-center text-sm font-bold text-[#012d1d] focus:outline-none focus:ring-2 focus:ring-[#005236]';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2.5rem] bg-white">
+    <div className="fv-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="fv-modal-panel max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2.5rem] bg-white">
 
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#e6e9e8] bg-white px-8 py-6">

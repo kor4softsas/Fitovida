@@ -99,8 +99,8 @@ export function AdminFeedbackProvider({ children }: { children: React.ReactNode 
       </div>
 
       {confirmState.open && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[1.5rem] border border-[#e6e9e8] bg-white p-6 shadow-2xl">
+        <div className="fv-modal-backdrop fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="fv-modal-panel w-full max-w-md rounded-[1.5rem] border border-[#e6e9e8] bg-white p-6 shadow-2xl">
             <div className="mb-3 flex items-start gap-3">
               <div className="mt-0.5 rounded-full bg-amber-100 p-2 text-amber-800">
                 <TriangleAlert className="h-5 w-5" />

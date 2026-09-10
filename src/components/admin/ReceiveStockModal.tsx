@@ -111,8 +111,8 @@ export default function ReceiveStockModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-2xl rounded-2xl bg-white p-6">
+    <div className="fv-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="fv-modal-panel w-full max-w-2xl rounded-2xl bg-white p-6">
         <div className="flex items-center justify-between">
           <h3 className="text-xl font-bold">Ingreso de Mercancía</h3>
           <button onClick={onClose} className="rounded-full p-2 text-gray-700 hover:bg-gray-100">

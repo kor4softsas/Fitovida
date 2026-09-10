@@ -1,21 +1,43 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
+import {
+  Plus,
+  Search,
+  Filter,
   Download,
   Eye,
   Printer,
   X,
   User,
-  Package
+  Package,
+  RotateCcw
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { PDFDownloadLink, pdf } from '@react-pdf/renderer';
 import FacturaHTML from '@/components/admin/FacturaHTML';
 import type { Sale, SaleItem } from '@/types/admin';
 import { useAdminFeedback } from '@/components/admin/AdminFeedback';
+
+const STATUS_LABELS: Record<string, string> = {
+  completed: 'Completada',
+  pending: 'Pendiente',
+  cancelled: 'Cancelada',
+};
+
+const PAYMENT_LABELS: Record<string, string> = {
+  cash: 'Efectivo',
+  card: 'Tarjeta',
+  transfer: 'Transferencia',
+  pse: 'PSE',
+  wompi: 'Wompi',
+};
+
+// Fecha local en formato YYYY-MM-DD (para filtros y comparación cronológica por texto)
+const toYMD = (d: Date | string) => {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+};
 
 export default function VentasPage() {
   const [sales, setSales] = useState<Sale[]>([]);
@@ -27,6 +49,13 @@ export default function VentasPage() {
   // Modal HTML para impresión nativa en la misma página
   const [showFactura, setShowFactura] = useState(false);
   const [facturaSale, setFacturaSale] = useState<Sale | null>(null);
+  // Filtros
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterPayment, setFilterPayment] = useState('');
+  const [filterFrom, setFilterFrom] = useState('');
+  const [filterTo, setFilterTo] = useState('');
+  const [exporting, setExporting] = useState(false);
   const { pushMessage } = useAdminFeedback();
 
   const readErrorMessage = async (response: Response, fallback: string) => {
@@ -69,7 +98,7 @@ export default function VentasPage() {
       try {
         setLoading(true);
         const [salesRes, inventoryRes] = await Promise.all([
-          fetch('/api/admin/sales'),
+          fetch('/api/admin/sales?limit=10000'),
           fetch('/api/admin/inventory')
         ]);
         
@@ -148,11 +177,113 @@ export default function VentasPage() {
     return labels[method];
   };
 
-  const filteredSales = sales.filter(sale =>
-    sale.saleNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    sale.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    sale.customerDocument?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredSales = sales.filter(sale => {
+    const term = searchTerm.toLowerCase();
+    const matchesSearch =
+      !term ||
+      sale.saleNumber.toLowerCase().includes(term) ||
+      sale.customerName.toLowerCase().includes(term) ||
+      (sale.customerDocument?.toLowerCase().includes(term) ?? false);
+    if (!matchesSearch) return false;
+    if (filterStatus && sale.status !== filterStatus) return false;
+    if (filterPayment && sale.paymentMethod !== filterPayment) return false;
+    const ymd = toYMD(sale.date);
+    if (filterFrom && ymd < filterFrom) return false;
+    if (filterTo && ymd > filterTo) return false;
+    return true;
+  });
+
+  const activeFilterCount = [filterStatus, filterPayment, filterFrom, filterTo].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setFilterStatus('');
+    setFilterPayment('');
+    setFilterFrom('');
+    setFilterTo('');
+  };
+
+  // Exporta un consolidado a Excel basado en la estructura de la BD
+  // (admin_sales → hoja "Ventas", admin_sale_items → hoja "Detalle productos").
+  const handleExport = () => {
+    if (filteredSales.length === 0) {
+      pushMessage('No hay ventas para exportar con los filtros actuales.', 'warning');
+      return;
+    }
+    try {
+      setExporting(true);
+
+      // Hoja 1: resumen por venta
+      const resumen: Record<string, string | number>[] = filteredSales.map(s => ({
+        'Número': s.saleNumber,
+        'Fecha': toYMD(s.date),
+        'Cliente': s.customerName,
+        'Documento': s.customerDocument || '',
+        'Email': s.customerEmail || '',
+        'Teléfono': s.customerPhone || '',
+        'Subtotal': Number(s.subtotal || 0),
+        'IVA': Number(s.tax || 0),
+        'Descuento': Number(s.discount || 0),
+        'Total': Number(s.total || 0),
+        'Método de pago': PAYMENT_LABELS[s.paymentMethod] ?? s.paymentMethod,
+        'Estado': STATUS_LABELS[s.status] ?? s.status,
+        'Factura DIAN': s.invoiceNumber || '',
+        'N° productos': s.items?.length ?? 0,
+      }));
+
+      // Fila de totales
+      resumen.push({
+        'Número': '', 'Fecha': '', 'Cliente': 'TOTALES', 'Documento': '', 'Email': '', 'Teléfono': '',
+        'Subtotal': filteredSales.reduce((a, s) => a + Number(s.subtotal || 0), 0),
+        'IVA': filteredSales.reduce((a, s) => a + Number(s.tax || 0), 0),
+        'Descuento': filteredSales.reduce((a, s) => a + Number(s.discount || 0), 0),
+        'Total': filteredSales.reduce((a, s) => a + Number(s.total || 0), 0),
+        'Método de pago': '', 'Estado': '', 'Factura DIAN': '',
+        'N° productos': filteredSales.reduce((a, s) => a + (s.items?.length ?? 0), 0),
+      });
+
+      // Hoja 2: detalle por producto vendido
+      const detalle = filteredSales.flatMap(s =>
+        (s.items || []).map(it => ({
+          'Número venta': s.saleNumber,
+          'Fecha': toYMD(s.date),
+          'Cliente': s.customerName,
+          'Producto': it.productName,
+          'Cantidad': Number(it.quantity || 0),
+          'Precio unit.': Number(it.unitPrice || 0),
+          'Descuento': Number(it.discount || 0),
+          'IVA': Number(it.tax || 0),
+          'Subtotal': Number(it.subtotal || 0),
+          'Total': Number(it.total || 0),
+        }))
+      );
+
+      const wb = XLSX.utils.book_new();
+
+      const ws1 = XLSX.utils.json_to_sheet(resumen);
+      ws1['!cols'] = [
+        { wch: 12 }, { wch: 12 }, { wch: 24 }, { wch: 14 }, { wch: 24 }, { wch: 14 },
+        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 12 }, { wch: 14 }, { wch: 12 },
+      ];
+      XLSX.utils.book_append_sheet(wb, ws1, 'Ventas');
+
+      if (detalle.length > 0) {
+        const ws2 = XLSX.utils.json_to_sheet(detalle);
+        ws2['!cols'] = [
+          { wch: 12 }, { wch: 12 }, { wch: 24 }, { wch: 30 }, { wch: 10 },
+          { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 },
+        ];
+        XLSX.utils.book_append_sheet(wb, ws2, 'Detalle productos');
+      }
+
+      XLSX.writeFile(wb, `ventas-fitovida-${toYMD(new Date())}.xlsx`);
+      pushMessage(`Exportadas ${filteredSales.length} ventas a Excel.`, 'success');
+    } catch (error) {
+      console.error('Error al exportar Excel:', error);
+      pushMessage('Ocurrió un error al generar el Excel.', 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -192,15 +323,100 @@ export default function VentasPage() {
               className="w-full pl-12 pr-4 py-3 bg-white border-none rounded-full text-sm font-medium focus:ring-2 focus:ring-[#012d1d]/20 transition-all"
             />
           </div>
-          <button className="flex items-center justify-center gap-2 px-6 py-3 bg-white text-[#012d1d] font-bold text-sm rounded-full shadow-sm hover:bg-[#e1e3e2] transition-colors">
+          <button
+            onClick={() => setShowFilters(v => !v)}
+            className={`flex items-center justify-center gap-2 px-6 py-3 font-bold text-sm rounded-full shadow-sm transition-colors ${
+              showFilters || activeFilterCount > 0
+                ? 'bg-[#012d1d] text-white hover:bg-[#014028]'
+                : 'bg-white text-[#012d1d] hover:bg-[#e1e3e2]'
+            }`}
+          >
             <Filter size={20} />
             Filtros
+            {activeFilterCount > 0 && (
+              <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#a0f4c8] px-1.5 text-[11px] font-extrabold text-[#002113]">
+                {activeFilterCount}
+              </span>
+            )}
           </button>
-          <button className="flex items-center justify-center gap-2 px-6 py-3 bg-white text-[#012d1d] font-bold text-sm rounded-full shadow-sm hover:bg-[#e1e3e2] transition-colors">
+          <button
+            onClick={handleExport}
+            disabled={exporting || filteredSales.length === 0}
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-white text-[#012d1d] font-bold text-sm rounded-full shadow-sm hover:bg-[#e1e3e2] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            title="Exportar consolidado a Excel"
+          >
             <Download size={20} />
-            Exportar
+            {exporting ? 'Exportando...' : 'Exportar'}
           </button>
         </div>
+
+        {/* Panel de filtros */}
+        {showFilters && (
+          <div className="fv-modal-panel mt-6 grid grid-cols-1 gap-4 rounded-[1.5rem] bg-white p-6 shadow-sm md:grid-cols-4">
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-[#414844]">Desde</label>
+              <input
+                type="date"
+                value={filterFrom}
+                max={filterTo || undefined}
+                onChange={e => setFilterFrom(e.target.value)}
+                className="w-full rounded-2xl border-none bg-[#f2f4f3] px-4 py-3 text-sm font-medium text-[#012d1d] focus:ring-2 focus:ring-[#012d1d]/20"
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-[#414844]">Hasta</label>
+              <input
+                type="date"
+                value={filterTo}
+                min={filterFrom || undefined}
+                onChange={e => setFilterTo(e.target.value)}
+                className="w-full rounded-2xl border-none bg-[#f2f4f3] px-4 py-3 text-sm font-medium text-[#012d1d] focus:ring-2 focus:ring-[#012d1d]/20"
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-[#414844]">Estado</label>
+              <select
+                value={filterStatus}
+                onChange={e => setFilterStatus(e.target.value)}
+                className="w-full cursor-pointer rounded-2xl border-none bg-[#f2f4f3] px-4 py-3 text-sm font-medium text-[#012d1d] focus:ring-2 focus:ring-[#012d1d]/20"
+              >
+                <option value="">Todos</option>
+                <option value="completed">Completada</option>
+                <option value="pending">Pendiente</option>
+                <option value="cancelled">Cancelada</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-[#414844]">Método de pago</label>
+              <select
+                value={filterPayment}
+                onChange={e => setFilterPayment(e.target.value)}
+                className="w-full cursor-pointer rounded-2xl border-none bg-[#f2f4f3] px-4 py-3 text-sm font-medium text-[#012d1d] focus:ring-2 focus:ring-[#012d1d]/20"
+              >
+                <option value="">Todos</option>
+                <option value="cash">Efectivo</option>
+                <option value="card">Tarjeta</option>
+                <option value="transfer">Transferencia</option>
+                <option value="pse">PSE</option>
+                <option value="wompi">Wompi</option>
+              </select>
+            </div>
+
+            <div className="flex items-center justify-between md:col-span-4">
+              <span className="text-sm font-medium text-[#414844]">
+                {filteredSales.length} venta{filteredSales.length === 1 ? '' : 's'} coinciden
+              </span>
+              <button
+                onClick={clearFilters}
+                disabled={activeFilterCount === 0}
+                className="flex items-center gap-2 rounded-full bg-[#f2f4f3] px-4 py-2 text-sm font-bold text-[#414844] transition-colors hover:bg-[#e1e3e2] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RotateCcw size={16} />
+                Limpiar filtros
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sales Table */}
