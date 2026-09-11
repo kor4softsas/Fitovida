@@ -753,24 +753,36 @@ function NewSaleModal({
     }, 100);
   }, []);
 
-  const handleBarcodeSubmit = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const code = barcodeInput.trim();
-      if (!code) return;
+  // Filtra el grid en vivo por código o nombre del producto
+  const productQuery = barcodeInput.trim().toLowerCase();
+  const filteredProducts = productQuery
+    ? products.filter(p =>
+        (p.name?.toLowerCase().includes(productQuery) ?? false) ||
+        String(p.barcode ?? '').toLowerCase().includes(productQuery)
+      )
+    : products;
 
-      const product = products.find(p => p.barcode === code);
-      if (product) {
-        if (product.current_stock <= 0) {
-          pushMessage('Este producto no tiene stock disponible.', 'warning');
-        } else {
-          addItem(product.product_id);
-        }
-      } else {
-        pushMessage('Producto no encontrado en el inventario.', 'warning');
-      }
-      setBarcodeInput('');
+  const handleBarcodeSubmit = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const code = barcodeInput.trim();
+    if (!code) return;
+
+    // Prioriza coincidencia exacta de código (lector físico);
+    // si no hay, pero el grid quedó con un único resultado, agrega ese.
+    const exact = products.find(p => String(p.barcode ?? '') === code);
+    const target = exact ?? (filteredProducts.length === 1 ? filteredProducts[0] : null);
+
+    if (!target) {
+      pushMessage('Producto no encontrado. Revisa el código o el nombre.', 'warning');
+      return;
     }
+    if (target.current_stock <= 0) {
+      pushMessage('Este producto no tiene stock disponible.', 'warning');
+      return;
+    }
+    addItem(target.product_id);
+    setBarcodeInput('');
   };
 
   const addItem = (productId: string | number) => {
@@ -942,7 +954,7 @@ function NewSaleModal({
             
             {/* Buscador / Lector */}
             <div className="bg-[#f2f4f3] p-6 rounded-[1.5rem]">
-              <label className="block text-xs font-bold text-[#414844] uppercase tracking-wider mb-2">Escáner de Código de Barras (Presiona Enter)</label>
+              <label className="block text-xs font-bold text-[#414844] uppercase tracking-wider mb-2">Buscar por código o nombre (o escanea y presiona Enter)</label>
               <div className="relative">
                 <input
                   ref={barcodeInputRef}
@@ -950,7 +962,7 @@ function NewSaleModal({
                   value={barcodeInput}
                   onChange={(e) => setBarcodeInput(e.target.value)}
                   onKeyDown={handleBarcodeSubmit}
-                  placeholder="Escanea el código del producto aquí..."
+                  placeholder="Escanea, o escribe código o nombre del producto..."
                   className="w-full pl-12 pr-4 py-4 bg-white border-2 border-[#c1ecd4] rounded-2xl focus:ring-2 focus:ring-[#012d1d]/20 focus:border-[#a0f4c8] text-lg font-bold text-[#012d1d] shadow-sm transition-all"
                 />
                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#3f6653]">qr_code_scanner</span>
@@ -958,7 +970,14 @@ function NewSaleModal({
             </div>
 
             <div className="max-h-48 overflow-y-auto rounded-[1.5rem] p-4 bg-[#f2f4f3] flex gap-3 flex-wrap">
-              {products.map(product => (
+              {filteredProducts.length === 0 ? (
+                <p className="w-full py-6 text-center text-sm font-medium text-[#414844]">
+                  {productQuery
+                    ? `No se encontraron productos para “${barcodeInput.trim()}”.`
+                    : 'No hay productos en el inventario.'}
+                </p>
+              ) : (
+                filteredProducts.map(product => (
                 <button
                   key={`product-${product.product_id}`}
                   type="button"
@@ -977,7 +996,8 @@ function NewSaleModal({
                      </span>
                   </div>
                 </button>
-              ))}
+                ))
+              )}
             </div>
 
             {selectedItems.length > 0 && (
