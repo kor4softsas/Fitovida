@@ -18,6 +18,7 @@ type InventoryExportPDFProps = {
   generatedAt: Date;
   settings?: CompanySettings;
   logoDataUrl?: string | null;
+  locationName?: string | null;
 };
 
 const styles = StyleSheet.create({
@@ -185,7 +186,8 @@ export default function InventoryExportPDF({
   rows,
   generatedAt,
   settings,
-  logoDataUrl
+  logoDataUrl,
+  locationName
 }: InventoryExportPDFProps) {
   const totalProducts = rows.length;
   const totalStock = rows.reduce((sum, row) => sum + row.stock, 0);
@@ -216,6 +218,7 @@ export default function InventoryExportPDF({
 
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={styles.title}>Reporte de Inventario</Text>
+              {locationName && <Text style={styles.subtitle}>Local: {locationName}</Text>}
               <Text style={styles.subtitle}>{generatedAt.toLocaleString('es-CO')}</Text>
             </View>
           </View>

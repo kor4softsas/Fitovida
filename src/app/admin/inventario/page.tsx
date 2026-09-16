@@ -25,7 +25,9 @@ import ProductModalForm from '@/components/admin/ProductModalForm';
 import ReceiveStockModal from '@/components/admin/ReceiveStockModal';
 import BarcodePrinter from '@/components/admin/BarcodePrinter';
 import ImportExcelModal from '@/components/admin/ImportExcelModal';
+import LocationSelector from '@/components/admin/LocationSelector';
 import { useAdminFeedback } from '@/components/admin/AdminFeedback';
+import { getActiveLocations, getDefaultLocation, useLocations } from '@/lib/admin/location-store';
 
 type InventoryApiRow = {
   product_id: string | number;
@@ -47,6 +49,12 @@ type InventoryApiRow = {
   supplier?: string | null;
   barcode?: string | null;
   image?: string | null;
+  stock_by_location?: Array<{
+    location_id: number;
+    location_name: string;
+    location_code?: string | null;
+    current_stock: number;
+  }>;
 };
 
 type MovementApiRow = {
@@ -63,6 +71,8 @@ type MovementApiRow = {
   reference?: string;
   created_by: string;
   created_at: string;
+  location_id?: number | null;
+  location_name?: string | null;
 };
 
 type InventoryLotApiRow = {
@@ -92,6 +102,12 @@ function mapInventoryRowToProduct(p: InventoryApiRow): InventoryProduct {
     supplier: p.supplier || undefined,
     barcode: p.barcode || undefined,
     image: p.image || undefined,
+    stockByLocation: p.stock_by_location?.map((stock) => ({
+      locationId: Number(stock.location_id),
+      locationName: stock.location_name,
+      locationCode: stock.location_code || undefined,
+      stock: Number(stock.current_stock)
+    })),
     createdAt: new Date(),
     updatedAt: new Date()
   };
@@ -101,7 +117,10 @@ export default function InventarioPage() {
   const [products, setProducts] = useState<InventoryProduct[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [movementsLoading, setMovementsLoading] = useState(false);
+  const productsRequestRef = useRef(0);
+  const movementsRequestRef = useRef(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -124,6 +143,18 @@ export default function InventarioPage() {
   const barcodeLookupTimeoutRef = useRef<number | null>(null);
   const productRowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
   const { pushMessage, pushConfirm } = useAdminFeedback();
+
+  // Local activo: con uno seleccionado se ve y se mueve el stock de ese local;
+  // con "Todos los locales" se ve el total y el desglose por local.
+  const { locations, schemaReady: locationsReady, loaded: locationsLoaded, selectedLocationId } = useLocations();
+  const activeLocations = getActiveLocations(locations);
+  const defaultLocation = getDefaultLocation(locations);
+  const selectedLocation = locationsReady && typeof selectedLocationId === 'number'
+    ? locations.find((location) => location.id === selectedLocationId) || null
+    : null;
+  const inventoryLocationId = selectedLocation?.id ?? null;
+  // Local al que entra el stock nuevo cuando se está viendo "Todos los locales"
+  const targetLocation = selectedLocation ?? defaultLocation;
 
   const resolveProductByBarcode = useCallback(async (barcode: string) => {
     const normalized = barcode.trim().toLowerCase();
@@ -240,14 +271,17 @@ export default function InventarioPage() {
   }, []);
 
   const fetchMovements = useCallback(async () => {
+    const requestId = ++movementsRequestRef.current;
     setMovementsLoading(true);
     try {
-      const movementsRes = await fetch('/api/admin/inventory/movements?limit=50');
+      const locationParam = inventoryLocationId ? `&locationId=${inventoryLocationId}` : '';
+      const movementsRes = await fetch(`/api/admin/inventory/movements?limit=50${locationParam}`);
       if (!movementsRes.ok) {
         throw new Error('Error cargando movimientos');
       }
 
       const movementsData = await movementsRes.json();
+      if (requestId !== movementsRequestRef.current) return;
       const mappedMovements = ((movementsData.movements || []) as MovementApiRow[]).map((m) => ({
         id: m.id,
         productId: String(m.product_id),
@@ -260,6 +294,8 @@ export default function InventarioPage() {
         totalCost: m.total_cost,
         reason: m.reason,
         reference: m.reference,
+        locationId: m.location_id ?? undefined,
+        locationName: m.location_name ?? undefined,
         createdBy: m.created_by,
         createdAt: new Date(m.created_at)
       }));
@@ -268,9 +304,9 @@ export default function InventarioPage() {
     } catch (error) {
       console.error('Error cargando movimientos:', error);
     } finally {
-      setMovementsLoading(false);
+      if (requestId === movementsRequestRef.current) setMovementsLoading(false);
     }
-  }, []);
+  }, [inventoryLocationId]);
 
   const handleDelete = useCallback(async (ids: string[]) => {
     pushConfirm(
@@ -301,53 +337,35 @@ export default function InventarioPage() {
     );
   }, [pushConfirm, pushMessage, readErrorMessage]);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        
-        // Cargar productos
-        const productsRes = await fetch('/api/admin/inventory');
-        if (!productsRes.ok) throw new Error('Error cargando productos');
-        const productsData = await productsRes.json();
-        
-        // Mapear datos a formato esperado
-        const mappedProducts = ((productsData.products || []) as InventoryApiRow[]).map(mapInventoryRowToProduct);
-        
-        setProducts(mappedProducts);
-      } catch (error) {
-        console.error('Error cargando datos:', error);
-      } finally {
-        setLoading(false);
-      }
-
-      // Movimientos se cargan en segundo plano para no bloquear la vista inicial.
-      void fetchMovements();
-    };
-
-    void fetchData();
-  }, [fetchMovements]);
-
-  const refreshProducts = async () => {
+  const refreshProducts = useCallback(async () => {
+    const requestId = ++productsRequestRef.current;
+    setRefreshing(true);
     try {
-      setLoading(true);
-      const productsRes = await fetch('/api/admin/inventory');
+      const locationParam = inventoryLocationId ? `?locationId=${inventoryLocationId}` : '';
+      const productsRes = await fetch(`/api/admin/inventory${locationParam}`);
       if (!productsRes.ok) throw new Error('Error cargando productos');
       const productsData = await productsRes.json();
+      // Si el usuario cambió de local mientras tanto, se descarta esta respuesta
+      if (requestId !== productsRequestRef.current) return;
       const mappedProducts = ((productsData.products || []) as InventoryApiRow[]).map(mapInventoryRowToProduct);
       setProducts(mappedProducts);
     } catch (error) {
-      console.error('Error recargando productos:', error);
+      console.error('Error cargando productos:', error);
     } finally {
-      setLoading(false);
+      if (requestId === productsRequestRef.current) {
+        setRefreshing(false);
+        setLoading(false);
+      }
     }
-  };
+  }, [inventoryLocationId]);
 
+  // Se espera a tener los locales para no cargar dos veces (todos → local guardado).
+  // Movimientos se cargan en segundo plano para no bloquear la vista inicial.
   useEffect(() => {
-    if (view === 'movements' && movements.length === 0 && !movementsLoading) {
-      void fetchMovements();
-    }
-  }, [view, movements.length, movementsLoading, fetchMovements]);
+    if (!locationsLoaded) return;
+    void refreshProducts();
+    void fetchMovements();
+  }, [locationsLoaded, refreshProducts, fetchMovements]);
 
   useEffect(() => {
     setIsListening(view === 'products');
@@ -427,7 +445,9 @@ export default function InventarioPage() {
   const handleExportInventory = useCallback(async (format: 'json' | 'excel' | 'pdf' | 'sql') => {
     setExportingFormat(format);
     try {
-      const response = await fetch(`/api/admin/inventory/export/${format}`);
+      // El SQL es un respaldo completo del catálogo, por eso no se filtra por local
+      const locationParam = format !== 'sql' && inventoryLocationId ? `?locationId=${inventoryLocationId}` : '';
+      const response = await fetch(`/api/admin/inventory/export/${format}${locationParam}`);
       if (!response.ok) {
         const message = await readErrorMessage(response, 'Error al exportar inventario');
         throw new Error(message);
@@ -451,7 +471,7 @@ export default function InventarioPage() {
       setExportingFormat(null);
       setShowExportMenu(false);
     }
-  }, [pushMessage, readErrorMessage]);
+  }, [inventoryLocationId, pushMessage, readErrorMessage]);
 
   const getStockStatus = (product: InventoryProduct) => {
     if (product.currentStock === 0) {
@@ -565,7 +585,15 @@ export default function InventarioPage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="text-4xl font-extrabold tracking-tight text-[#012d1d]">Inventario</h2>
-          <p className="mt-1 font-medium text-[#414844]">Control de productos y movimientos</p>
+          <p className="mt-1 font-medium text-[#414844]">
+            Control de productos y movimientos
+            {locationsReady && (
+              <>
+                {' · '}
+                <span className="font-bold text-[#005236]">{selectedLocation ? selectedLocation.name : 'Todos los locales'}</span>
+              </>
+            )}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {selectedIds.length > 0 && (
@@ -708,29 +736,35 @@ export default function InventarioPage() {
         </div>
       </div>
 
-      {/* View Tabs */}
-      <div className="rounded-full border border-[#e6e9e8] bg-[#f2f4f3] p-2">
-        <div className="flex gap-2">
-          <button
-            onClick={() => setView('products')}
-            className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${
-              view === 'products'
-                ? 'bg-[#012d1d] text-white'
-                : 'text-[#414844] hover:bg-[#e6e9e8]'
-            }`}
-          >
-            Productos
-          </button>
-          <button
-            onClick={() => setView('movements')}
-            className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${
-              view === 'movements'
-                ? 'bg-[#012d1d] text-white'
-                : 'text-[#414844] hover:bg-[#e6e9e8]'
-            }`}
-          >
-            Movimientos
-          </button>
+      {/* View Tabs + Local */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="rounded-full border border-[#e6e9e8] bg-[#f2f4f3] p-2">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setView('products')}
+              className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${
+                view === 'products'
+                  ? 'bg-[#012d1d] text-white'
+                  : 'text-[#414844] hover:bg-[#e6e9e8]'
+              }`}
+            >
+              Productos
+            </button>
+            <button
+              onClick={() => setView('movements')}
+              className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${
+                view === 'movements'
+                  ? 'bg-[#012d1d] text-white'
+                  : 'text-[#414844] hover:bg-[#e6e9e8]'
+              }`}
+            >
+              Movimientos
+            </button>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {refreshing && <Loader2 size={20} className="animate-spin text-[#005236]" />}
+          <LocationSelector className="w-full sm:w-72" />
         </div>
       </div>
 
@@ -918,6 +952,19 @@ export default function InventarioPage() {
                           <div className="text-xs text-[#414844]">
                             Min: {product.minStock}
                           </div>
+                          {!selectedLocation && product.stockByLocation && product.stockByLocation.length > 0 && (
+                            <div className="mt-1 flex flex-wrap justify-center gap-1">
+                              {product.stockByLocation.map((stock) => (
+                                <span
+                                  key={stock.locationId}
+                                  title={stock.locationName}
+                                  className="whitespace-nowrap rounded-full bg-[#e6e9e8] px-2 py-0.5 text-[10px] font-semibold text-[#414844]"
+                                >
+                                  {stock.locationCode || stock.locationName}: {stock.stock}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-right text-sm font-bold text-[#012d1d]">
                           {formatCurrency(product.unitCost)}
@@ -1023,6 +1070,11 @@ export default function InventarioPage() {
                   <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-[#414844]">
                     Producto
                   </th>
+                  {locationsReady && (
+                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-[#414844]">
+                      Local
+                    </th>
+                  )}
                   <th className="px-6 py-3 text-center text-xs font-bold uppercase tracking-wider text-[#414844]">
                     Tipo
                   </th>
@@ -1046,14 +1098,14 @@ export default function InventarioPage() {
               <tbody className="divide-y divide-[#e6e9e8] bg-white">
                 {movementsLoading && movements.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-6 py-10 text-center text-sm text-[#414844]">
+                    <td colSpan={locationsReady ? 9 : 8} className="px-6 py-10 text-center text-sm text-[#414844]">
                       Cargando movimientos...
                     </td>
                   </tr>
                 )}
                 {!movementsLoading && movements.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-6 py-10 text-center text-sm text-[#414844]">
+                    <td colSpan={locationsReady ? 9 : 8} className="px-6 py-10 text-center text-sm text-[#414844]">
                       No hay movimientos para mostrar.
                     </td>
                   </tr>
@@ -1066,6 +1118,11 @@ export default function InventarioPage() {
                     <td className="px-6 py-4 text-sm font-bold text-[#012d1d]">
                       {movement.productName}
                     </td>
+                    {locationsReady && (
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-[#414844]">
+                        {movement.locationName || '—'}
+                      </td>
+                    )}
                     <td className="px-6 py-4 text-center">
                       {movement.type === 'entry' ? (
                         <span className="rounded-full bg-[#a0f4c8] px-3 py-1 text-xs font-bold text-[#005236]">
@@ -1082,7 +1139,7 @@ export default function InventarioPage() {
                       )}
                     </td>
                     <td className="px-6 py-4 text-center text-sm font-bold text-[#012d1d]">
-                      {movement.type === 'entry' ? '+' : '-'}{movement.quantity}
+                      {movement.newStock >= movement.previousStock ? '+' : '-'}{movement.quantity}
                     </td>
                     <td className="px-6 py-4 text-center text-sm text-[#414844]">
                       {movement.previousStock}
@@ -1114,6 +1171,10 @@ export default function InventarioPage() {
         <ProductModalForm
           product={selectedProduct}
           products={products}
+          stockLocationName={locationsReady ? targetLocation?.name : undefined}
+          // En "Todos los locales" el stock es la suma de locales: se ajusta eligiendo un local
+          stockEditable={!selectedProduct || !locationsReady || Boolean(selectedLocation)}
+          lotsLocationId={inventoryLocationId}
           onClose={() => {
             setShowProductModal(false);
             setSelectedProduct(null);
@@ -1124,24 +1185,17 @@ export default function InventarioPage() {
               const res = await fetch('/api/admin/inventory/product', {
                 method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(product)
+                body: JSON.stringify({ ...product, locationId: inventoryLocationId ?? undefined })
               });
-              
+
               if (!res.ok) {
                 const message = await readErrorMessage(res, 'Error al guardar el producto');
                 throw new Error(message);
               }
-              
-              // Recargar productos desde el servidor para tener los IDs reales
-              const productsRes = await fetch('/api/admin/inventory');
-              if (!productsRes.ok) {
-                throw new Error('Producto guardado, pero no se pudo recargar el listado de inventario');
-              }
 
-              const productsData = await productsRes.json();
-              const mappedProducts = ((productsData.products || []) as InventoryApiRow[]).map(mapInventoryRowToProduct);
-              
-              setProducts(mappedProducts);
+              // Recargar productos desde el servidor para tener los IDs reales
+              await refreshProducts();
+              void fetchMovements();
               setShowProductModal(false);
               setSelectedProduct(null);
               pushMessage(selectedProduct ? 'Producto actualizado correctamente' : 'Producto creado correctamente', 'success');
@@ -1166,16 +1220,24 @@ export default function InventarioPage() {
           open={showReceiveModal}
           onClose={() => setShowReceiveModal(false)}
           products={products.map(p => ({ id: p.id, name: p.name, sku: p.sku }))}
-          onSuccess={() => void refreshProducts()}
+          locations={locationsReady ? activeLocations : []}
+          initialLocationId={targetLocation?.id ?? null}
+          onSuccess={() => {
+            void refreshProducts();
+            void fetchMovements();
+          }}
         />
       )}
 
       {/* Import Excel Modal */}
       {showImportModal && (
         <ImportExcelModal
+          locationId={inventoryLocationId}
+          locationName={locationsReady ? targetLocation?.name : undefined}
           onClose={() => setShowImportModal(false)}
           onSuccess={() => {
             void refreshProducts();
+            void fetchMovements();
             pushMessage('Importación completada. El inventario ha sido actualizado.', 'success');
           }}
         />

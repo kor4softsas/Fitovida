@@ -1,4 +1,5 @@
 import { query } from '@/lib/db';
+import { isLocationsSchemaReady } from '@/lib/admin/locations';
 
 type ColumnRow = { column_name: string };
 
@@ -10,6 +11,15 @@ export type InventoryQueryFilters = {
   status?: string | null;
   searchTerm?: string | null;
   lowStock?: boolean;
+  /** Stock de un local específico. Sin valor = total de todos los locales. */
+  locationId?: number | null;
+};
+
+export type LocationStockRow = {
+  location_id: number;
+  location_name: string;
+  location_code: string | null;
+  current_stock: number;
 };
 
 export type InventoryDatabaseRow = {
@@ -35,6 +45,8 @@ export type InventoryDatabaseRow = {
   status: string | null;
   created_at: string | Date | null;
   updated_at: string | Date | null;
+  /** Desglose por local (solo en la vista de todos los locales). */
+  stock_by_location?: LocationStockRow[];
 };
 
 export type InventoryExportRow = {
@@ -153,7 +165,7 @@ async function getColumnSet(tableName: string): Promise<Set<string>> {
   }
 }
 
-function buildSelectFields(productColumns: Set<string>, inventoryColumns: Set<string>): string[] {
+function buildSelectFields(productColumns: Set<string>, inventoryColumns: Set<string>, stockExpr: string): string[] {
   return [
     'ip.product_id',
     has(productColumns, 'name') ? 'p.name' : "'' as name",
@@ -184,7 +196,7 @@ function buildSelectFields(productColumns: Set<string>, inventoryColumns: Set<st
       : "'sin_fecha' as estado_vencimiento",
     has(inventoryColumns, 'sku') ? 'ip.sku' : 'NULL as sku',
     has(inventoryColumns, 'barcode') ? 'ip.barcode' : 'NULL as barcode',
-    has(inventoryColumns, 'current_stock') ? 'ip.current_stock' : '0 as current_stock',
+    has(inventoryColumns, 'current_stock') ? `${stockExpr} as current_stock` : '0 as current_stock',
     has(inventoryColumns, 'min_stock') ? 'ip.min_stock' : '0 as min_stock',
     has(inventoryColumns, 'max_stock') ? 'ip.max_stock' : 'NULL as max_stock',
     has(inventoryColumns, 'unit_cost') ? 'ip.unit_cost' : '0 as unit_cost',
@@ -204,7 +216,12 @@ function buildSelectFields(productColumns: Set<string>, inventoryColumns: Set<st
   ];
 }
 
-function buildWhereClause(filters: InventoryQueryFilters, productColumns: Set<string>, inventoryColumns: Set<string>): { sql: string; params: Array<string> } {
+function buildWhereClause(
+  filters: InventoryQueryFilters,
+  productColumns: Set<string>,
+  inventoryColumns: Set<string>,
+  stockExpr: string
+): { sql: string; params: Array<string> } {
   let sql = ' WHERE 1=1';
   const params: Array<string> = [];
 
@@ -219,7 +236,7 @@ function buildWhereClause(filters: InventoryQueryFilters, productColumns: Set<st
   }
 
   if (filters.lowStock && has(inventoryColumns, 'current_stock') && has(inventoryColumns, 'min_stock')) {
-    sql += ' AND ip.current_stock <= ip.min_stock';
+    sql += ` AND ${stockExpr} <= ip.min_stock`;
   }
 
   if (filters.searchTerm) {
@@ -246,22 +263,62 @@ export async function getInventoryData(filters: InventoryQueryFilters = {}): Pro
   const productColumns = await getColumnSet('products');
   const inventoryColumns = await getColumnSet('inventory_products');
 
-  const selectFields = buildSelectFields(productColumns, inventoryColumns);
-  const whereClause = buildWhereClause(filters, productColumns, inventoryColumns);
+  const locationsReady = await isLocationsSchemaReady();
+  const locationId = locationsReady && filters.locationId ? filters.locationId : null;
+  // Con un local seleccionado se muestra su stock (0 si el producto nunca ha estado ahí);
+  // sin local, el total global de inventory_products.
+  const stockExpr = locationId ? 'COALESCE(ils.current_stock, 0)' : 'ip.current_stock';
+
+  const selectFields = buildSelectFields(productColumns, inventoryColumns, stockExpr);
+  const whereClause = buildWhereClause(filters, productColumns, inventoryColumns, stockExpr);
 
   const sql = `
     SELECT
       ${selectFields.join(',\n      ')}
     FROM inventory_products ip
     JOIN products p ON ip.product_id = p.id
+    ${locationId ? 'LEFT JOIN inventory_location_stock ils ON ils.product_id = ip.product_id AND ils.location_id = ?' : ''}
     ${whereClause.sql}
     ORDER BY p.name ASC
   `;
 
-  const rows = await query<InventoryDatabaseRow>(sql, whereClause.params);
+  const params: Array<string | number> = locationId ? [locationId, ...whereClause.params] : whereClause.params;
+  const rows = await query<InventoryDatabaseRow>(sql, params);
+
+  if (locationsReady && !locationId && rows.length > 0) {
+    await attachStockByLocation(rows);
+  }
+
   const exportRows = rows.map(normalizeInventoryRow);
 
   return { rows, exportRows, productColumns, inventoryColumns };
+}
+
+async function attachStockByLocation(rows: InventoryDatabaseRow[]): Promise<void> {
+  const stockRows = await query<LocationStockRow & { product_id: number }>(
+    `SELECT ils.product_id, ils.location_id, l.name AS location_name, l.code AS location_code, ils.current_stock
+     FROM inventory_location_stock ils
+     JOIN locations l ON l.id = ils.location_id
+     WHERE ils.current_stock <> 0
+     ORDER BY l.is_default DESC, l.name ASC`
+  );
+
+  const byProduct = new Map<string, LocationStockRow[]>();
+  for (const stock of stockRows) {
+    const key = String(stock.product_id);
+    const list = byProduct.get(key) || [];
+    list.push({
+      location_id: Number(stock.location_id),
+      location_name: stock.location_name,
+      location_code: stock.location_code,
+      current_stock: Number(stock.current_stock)
+    });
+    byProduct.set(key, list);
+  }
+
+  for (const row of rows) {
+    row.stock_by_location = byProduct.get(String(row.product_id)) || [];
+  }
 }
 
 export function normalizeInventoryRow(row: InventoryDatabaseRow): InventoryExportRow {

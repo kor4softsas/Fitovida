@@ -20,13 +20,22 @@ interface ProductModalFormProps {
   products: InventoryProduct[];
   onClose: () => void;
   onSave: (product: InventoryProduct) => void;
+  /** Local al que corresponde el campo de stock (inventario por locales). */
+  stockLocationName?: string;
+  /** false en la vista "Todos los locales": el stock ahí es un total. */
+  stockEditable?: boolean;
+  /** Filtra los lotes mostrados a un local. */
+  lotsLocationId?: number | null;
 }
 
 export default function ProductModalForm({
   product,
   products,
   onClose,
-  onSave
+  onSave,
+  stockLocationName,
+  stockEditable = true,
+  lotsLocationId = null
 }: ProductModalFormProps) {
   const toDateInputValue = (value?: string | Date) => {
     if (!value) return '';
@@ -78,7 +87,8 @@ export default function ProductModalForm({
     const fetchLots = async () => {
       setLotsLoading(true);
       try {
-        const res = await fetch(`/api/admin/inventory/lots?productId=${product.id}`);
+        const locationParam = lotsLocationId ? `&locationId=${lotsLocationId}` : '';
+        const res = await fetch(`/api/admin/inventory/lots?productId=${product.id}${locationParam}`);
         if (!res.ok) throw new Error('No se pudieron cargar los lotes');
         const data = await res.json();
         if (mounted) setLots(data.lots || []);
@@ -92,7 +102,9 @@ export default function ProductModalForm({
 
     void fetchLots();
     return () => { mounted = false; };
-  }, [product]);
+  }, [product, lotsLocationId]);
+
+  const showLotLocation = (lots || []).some((lot) => lot.location_name);
 
   // Generar SKU automático
   const generateSKUFromName = (name: string) => {
@@ -626,9 +638,10 @@ export default function ProductModalForm({
                     type="number"
                     required
                     min="0"
+                    disabled={!stockEditable}
                     value={formData.currentStock}
                     onChange={(e) => setFormData({ ...formData, currentStock: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm disabled:bg-gray-100 disabled:text-gray-500"
                   />
                 </div>
                 <div>
@@ -657,6 +670,17 @@ export default function ProductModalForm({
                   />
                 </div>
               </div>
+              {!stockEditable ? (
+                <p className="text-xs text-amber-700">
+                  Este es el total de todos los locales. Para ajustar el stock, elige un local en el selector de inventario.
+                </p>
+              ) : stockLocationName ? (
+                <p className="text-xs text-gray-600">
+                  {product
+                    ? <>Stock actual en <span className="font-semibold">{stockLocationName}</span>. Si lo cambias se registra un ajuste.</>
+                    : <>El stock inicial se cargará en <span className="font-semibold">{stockLocationName}</span>.</>}
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-3">
@@ -721,6 +745,7 @@ export default function ProductModalForm({
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-3 py-2 text-left">Lote</th>
+                        {showLotLocation && <th className="px-3 py-2 text-left">Local</th>}
                         <th className="px-3 py-2 text-left">Barcode</th>
                         <th className="px-3 py-2 text-center">Cantidad</th>
                         <th className="px-3 py-2 text-center">Vencimiento</th>
@@ -733,6 +758,7 @@ export default function ProductModalForm({
                       {(lots || []).map((l) => (
                         <tr key={l.id} className="border-t">
                           <td className="px-3 py-2">{l.lot_code}</td>
+                          {showLotLocation && <td className="px-3 py-2">{l.location_name || '-'}</td>}
                           <td className="px-3 py-2">{l.barcode || '-'}</td>
                           <td className="px-3 py-2 text-center">{l.quantity}</td>
                           <td className="px-3 py-2 text-center">{l.expiration_date || '-'}</td>
@@ -743,7 +769,9 @@ export default function ProductModalForm({
                       ))}
                       {(!lots || lots.length === 0) && (
                         <tr>
-                          <td colSpan={7} className="px-3 py-4 text-sm text-gray-600">No hay lotes registrados para este producto.</td>
+                          <td colSpan={showLotLocation ? 8 : 7} className="px-3 py-4 text-sm text-gray-600">
+                            {lotsLocationId ? 'No hay lotes de este producto en el local seleccionado.' : 'No hay lotes registrados para este producto.'}
+                          </td>
                         </tr>
                       )}
                     </tbody>

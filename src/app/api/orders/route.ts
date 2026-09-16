@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import pool, { query } from '@/lib/db';
+import { applyStockChange, resolveLocationId } from '@/lib/admin/locations';
 
 interface OrderRow {
   id: string;
@@ -188,52 +189,48 @@ export async function POST(request: NextRequest) {
           [orderId, item.id, item.name, item.image || '', item.quantity, item.price]
         );
 
-        // Obtener información de inventario
-        const inventoryProduct = await query(
-          `SELECT ip.*, p.name FROM inventory_products ip
-           JOIN products p ON ip.product_id = p.id
-           WHERE ip.product_id = ?`,
-          [item.id]
-        );
+        // Los pedidos web descuentan del local principal
+        const stockConn = await pool.getConnection();
+        try {
+          await stockConn.beginTransaction();
 
-        if (inventoryProduct && inventoryProduct.length > 0) {
-          const prod = inventoryProduct[0];
-          const previousStock = prod.current_stock;
-          const newStock = previousStock - item.quantity;
-          
-          // Nota: Permitimos stock negativo para no perder órdenes que ya fueron pagadas
-          // o que el cliente finalizó con éxito en el frontend
-
-          // Registrar movimiento de inventario
-          await query(
-            `INSERT INTO inventory_movements 
-             (product_id, product_name, type, quantity, previous_stock, new_stock, reason, reference, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              item.id,
-              item.name,
-              'exit',
-              item.quantity,
-              previousStock,
-              newStock,
-              'sale',
-              orderNumber,
-              userId || 'guest'
-            ]
+          const [inventoryRows] = await stockConn.query(
+            'SELECT product_id FROM inventory_products WHERE product_id = ?',
+            [item.id]
           );
 
-          // Actualizar stock en inventory_products
-          await query(
-            'UPDATE inventory_products SET current_stock = ? WHERE product_id = ?',
-            [newStock, item.id]
-          );
+          if ((inventoryRows as unknown[]).length > 0) {
+            // Nota: Permitimos stock negativo para no perder órdenes que ya fueron pagadas
+            // o que el cliente finalizó con éxito en el frontend
+            await applyStockChange(stockConn, {
+              productId: Number(item.id),
+              locationId: await resolveLocationId(stockConn, null),
+              type: 'exit',
+              quantity: Number(item.quantity),
+              reason: 'sale',
+              reference: orderNumber,
+              productName: item.name,
+              createdBy: userId || 'guest'
+            });
+          } else {
+            // Actualizar stock en tabla products de la vitrina sin importar inventory_products
+            await stockConn.query(
+              'UPDATE products SET stock = stock - ? WHERE id = ?',
+              [item.quantity, item.id]
+            );
+          }
+
+          await stockConn.commit();
+        } catch (stockError) {
+          try {
+            await stockConn.rollback();
+          } catch {
+            // Ignorar errores de rollback.
+          }
+          throw stockError;
+        } finally {
+          stockConn.release();
         }
-
-        // Actualizar stock en tabla products de la vitrina sin importar inventory_products
-        await query(
-          'UPDATE products SET stock = stock - ? WHERE id = ?',
-          [item.quantity, item.id]
-        );
       }
     } catch (itemsError) {
       console.error('Error creando items:', itemsError);

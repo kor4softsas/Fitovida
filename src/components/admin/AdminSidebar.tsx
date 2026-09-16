@@ -16,11 +16,13 @@ import {
   LogOut,
   Menu,
   X,
-  ShoppingBag
+  ShoppingBag,
+  Store
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import LocationSelector from '@/components/admin/LocationSelector';
 
 interface NavItem {
   name: string;
@@ -33,6 +35,7 @@ const navigation: NavItem[] = [
   { name: 'Ventas', href: '/admin/ventas', icon: ShoppingCart },
   { name: 'Pedidos', href: '/admin/pedidos', icon: ShoppingBag },
   { name: 'Inventario', href: '/admin/inventario', icon: Package },
+  { name: 'Locales', href: '/admin/locales', icon: Store },
   { name: 'Ingresos y Gastos', href: '/admin/finanzas', icon: DollarSign },
   { name: 'Facturación', href: '/admin/facturas', icon: FileText },
   { name: 'Clientes', href: '/admin/clientes', icon: Users },
@@ -102,6 +105,8 @@ export default function AdminSidebar() {
             <p className="text-xs text-emerald-700/70">{user.email}</p>
           </div>
         )}
+
+        <LocationSelector variant="sidebar" className="px-8 mb-6" />
 
         <nav className="flex-1 flex flex-col gap-1 overflow-y-auto w-full">
           {navigation.map((item) => {

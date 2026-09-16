@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, queryOne } from '@/lib/db';
+import pool, { query } from '@/lib/db';
+import {
+  applyStockChange,
+  InventoryLocationError,
+  isLocationsSchemaReady,
+  parseLocationParam,
+  resolveLocationId,
+  type StockChangeInput
+} from '@/lib/admin/locations';
+
+const MOVEMENT_REASONS: StockChangeInput['reason'][] = ['purchase', 'sale', 'return', 'damage', 'adjustment', 'transfer', 'other'];
 
 type ColumnRow = { column_name: string };
 
@@ -73,6 +83,7 @@ export async function GET(request: NextRequest) {
     const toDate = searchParams.get('toDate');
     const rawLimit = parseInt(searchParams.get('limit') || '100', 10);
     const limit = Number.isNaN(rawLimit) ? 100 : Math.max(1, Math.min(rawLimit, 500));
+    const locationId = parseLocationParam(searchParams.get('locationId'));
 
     const movementColumns = await getColumnSet('inventory_movements');
     if (movementColumns.size === 0) {
@@ -81,6 +92,7 @@ export async function GET(request: NextRequest) {
         { status: 200 }
       );
     }
+    const hasLocations = has(movementColumns, 'location_id') && (await isLocationsSchemaReady());
 
     const selectFields = [
       has(movementColumns, 'id') ? 'id' : 'NULL as id',
@@ -96,7 +108,11 @@ export async function GET(request: NextRequest) {
       has(movementColumns, 'reference') ? '`reference`' : 'NULL as `reference`',
       has(movementColumns, 'notes') ? 'notes' : 'NULL as notes',
       has(movementColumns, 'created_by') ? 'created_by' : "'' as created_by",
-      has(movementColumns, 'created_at') ? 'created_at' : 'CURRENT_TIMESTAMP as created_at'
+      has(movementColumns, 'created_at') ? 'created_at' : 'CURRENT_TIMESTAMP as created_at',
+      hasLocations ? 'location_id' : 'NULL as location_id',
+      hasLocations
+        ? '(SELECT l.name FROM locations l WHERE l.id = inventory_movements.location_id) as location_name'
+        : 'NULL as location_name'
     ];
 
     let sql = `
@@ -109,6 +125,11 @@ export async function GET(request: NextRequest) {
     if (productId && has(movementColumns, 'product_id')) {
       sql += ' AND product_id = ?';
       params.push(productId);
+    }
+
+    if (locationId && hasLocations) {
+      sql += ' AND location_id = ?';
+      params.push(locationId);
     }
 
     if (type && type !== 'all' && has(movementColumns, 'type')) {
@@ -137,8 +158,8 @@ export async function GET(request: NextRequest) {
       sql += ' ORDER BY id DESC';
     }
 
-    sql += ' LIMIT ?';
-    params.push(limit);
+    // limit ya es un entero acotado (1-500); MySQL 8.0.22+ rechaza LIMIT ? en sentencias preparadas
+    sql += ` LIMIT ${limit}`;
 
     const movements = await query(sql, params);
 
@@ -163,6 +184,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  let conn: Awaited<ReturnType<typeof pool.getConnection>> | null = null;
+  let transactionStarted = false;
+
   try {
     const body = await request.json();
     const {
@@ -176,88 +200,84 @@ export async function POST(request: NextRequest) {
       unit_cost
     } = body;
 
-    // Validar datos requeridos
-    if (!product_id || !type || !quantity || !reason || !created_by) {
+    // Validar datos requeridos (en ajustes, quantity es el nuevo stock del local y puede ser 0)
+    const hasQuantity = type === 'adjustment' ? Number(quantity) >= 0 : Number(quantity) > 0;
+    if (!product_id || !['entry', 'exit', 'adjustment'].includes(type) || !hasQuantity || !reason || !created_by) {
       return NextResponse.json(
         { error: 'Datos incompletos para registrar movimiento' },
         { status: 400 }
       );
     }
+    if (!MOVEMENT_REASONS.includes(reason)) {
+      return NextResponse.json({ error: 'Motivo de movimiento inválido' }, { status: 400 });
+    }
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    transactionStarted = true;
 
     // Obtener información actual del producto
-    const inventoryProduct = await queryOne(
-      `SELECT ip.*, p.name FROM inventory_products ip
+    const [productRows] = await conn.query(
+      `SELECT ip.unit_cost, p.name FROM inventory_products ip
        JOIN products p ON ip.product_id = p.id
        WHERE ip.product_id = ?`,
       [product_id]
     );
+    const inventoryProduct = (productRows as Array<{ unit_cost: number; name: string }>)[0];
 
     if (!inventoryProduct) {
-      return NextResponse.json(
-        { error: 'Producto no encontrado en inventario' },
-        { status: 404 }
-      );
+      throw new InventoryLocationError('Producto no encontrado en inventario', 404);
     }
 
-    const previousStock = inventoryProduct.current_stock;
-    let newStock = previousStock;
+    const locationId = await resolveLocationId(conn, body.location_id ?? body.locationId);
+    const result = await applyStockChange(conn, {
+      productId: Number(product_id),
+      locationId,
+      type,
+      quantity: type === 'adjustment' ? undefined : Number(quantity),
+      targetStock: type === 'adjustment' ? Number(quantity) : undefined,
+      reason,
+      reference: reference || null,
+      notes: notes || null,
+      unitCost: Number(unit_cost || inventoryProduct.unit_cost || 0),
+      productName: inventoryProduct.name,
+      createdBy: created_by,
+      preventNegative: type === 'exit'
+    });
 
-    // Calcular nuevo stock según tipo de movimiento
-    if (type === 'entry') {
-      newStock = previousStock + quantity;
-    } else if (type === 'exit') {
-      newStock = previousStock - quantity;
-      if (newStock < 0) {
-        return NextResponse.json(
-          { error: 'Stock insuficiente para esta salida' },
-          { status: 400 }
-        );
-      }
-    } else if (type === 'adjustment') {
-      newStock = quantity; // Para ajuste, quantity es el nuevo stock total
-    }
-
-    // Registrar movimiento
-    await query(
-      `INSERT INTO inventory_movements 
-       (product_id, product_name, type, quantity, previous_stock, new_stock, unit_cost, total_cost, reason, reference, notes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        product_id,
-        inventoryProduct.name,
-        type,
-        quantity,
-        previousStock,
-        newStock,
-        unit_cost || inventoryProduct.unit_cost || 0,
-        (unit_cost || inventoryProduct.unit_cost || 0) * (type === 'adjustment' ? 0 : quantity),
-        reason,
-        reference || null,
-        notes || null,
-        created_by
-      ]
-    );
-
-    // Actualizar stock en inventory_products
-    await query(
-      'UPDATE inventory_products SET current_stock = ? WHERE product_id = ?',
-      [newStock, product_id]
-    );
+    await conn.commit();
+    transactionStarted = false;
 
     return NextResponse.json({
       success: true,
       message: 'Movimiento registrado exitosamente',
       data: {
-        previous_stock: previousStock,
-        new_stock: newStock,
-        quantity: quantity
+        previous_stock: result.previousStock,
+        new_stock: result.newStock,
+        total_stock: result.totalStock,
+        quantity: quantity,
+        location_id: locationId
       }
     });
   } catch (error) {
+    if (conn && transactionStarted) {
+      try {
+        await conn.rollback();
+      } catch {
+        // Ignorar errores de rollback.
+      }
+    }
+
+    if (error instanceof InventoryLocationError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
     console.error('Error en POST /api/admin/inventory/movements:', error);
     return NextResponse.json(
       { error: 'Error al registrar movimiento' },
       { status: 500 }
     );
+  } finally {
+    conn?.release();
   }
 }

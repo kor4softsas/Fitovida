@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import {
+  applyStockChange,
+  InventoryLocationError,
+  isLocationsSchemaReady,
+  parseLocationParam,
+  resolveLocationId
+} from '@/lib/admin/locations';
 
 type DbConnection = Awaited<ReturnType<typeof pool.getConnection>>;
 
@@ -7,6 +14,7 @@ const LOTS_TABLE_DDL = `
 CREATE TABLE IF NOT EXISTS inventory_lots (
   id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
   product_id INT NOT NULL,
+  location_id INT NULL COMMENT 'Local donde está físicamente el lote',
   lot_code VARCHAR(150) NOT NULL,
   barcode VARCHAR(150) NULL COMMENT 'Código de barras asignado al lote',
   quantity INT NOT NULL DEFAULT 0,
@@ -31,13 +39,6 @@ function bad(msg: string, status = 400) {
   return NextResponse.json({ error: msg }, { status });
 }
 
-function isMissingProcedure(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const code = String((error as { code?: string }).code || '');
-  const message = String((error as { sqlMessage?: string; message?: string }).sqlMessage || (error as { message?: string }).message || '');
-  return code === 'ER_SP_DOES_NOT_EXIST' || code === 'ER_PROCEDURE_NOT_FOUND' || /register_lot_entry/i.test(message) || /does not exist/i.test(message);
-}
-
 async function tableExists(connection: DbConnection, tableName: string): Promise<boolean> {
   const [rows] = await connection.query(
     `SELECT COUNT(*) AS total
@@ -56,10 +57,12 @@ async function ensureLotsTable(connection: DbConnection) {
   }
 }
 
-async function registerLotInline(
+// Ya no se usa el procedimiento register_lot_entry: no conoce los locales.
+async function registerLot(
   connection: DbConnection,
   data: {
     productId: number;
+    locationId: number | null;
     lotCode: string;
     barcode: string | null;
     quantity: number;
@@ -75,7 +78,7 @@ async function registerLotInline(
   const productName = (productRows as any[])[0]?.name;
 
   if (!productName) {
-    throw new Error('Producto no existe');
+    throw new InventoryLocationError('Producto no existe', 404);
   }
 
   await connection.query(
@@ -86,16 +89,14 @@ async function registerLotInline(
     [data.productId, data.barcode, data.unitCost]
   );
 
-  const [inventoryRows] = await connection.query('SELECT current_stock FROM inventory_products WHERE product_id = ? LIMIT 1', [data.productId]);
-  const currentStock = Number((inventoryRows as any[])[0]?.current_stock || 0);
-  const newStock = currentStock + data.quantity;
-
+  const withLocation = data.locationId !== null;
   await connection.query(
     `INSERT INTO inventory_lots (
-      id, product_id, lot_code, barcode, quantity, unit_cost, sale_price_override, expiration_date, received_date, status, created_by
-    ) VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE, 'active', ?)` ,
+      id, product_id${withLocation ? ', location_id' : ''}, lot_code, barcode, quantity, unit_cost, sale_price_override, expiration_date, received_date, status, created_by
+    ) VALUES (UUID(), ?${withLocation ? ', ?' : ''}, ?, ?, ?, ?, ?, ?, CURRENT_DATE, 'active', ?)`,
     [
       data.productId,
+      ...(withLocation ? [data.locationId] : []),
       data.lotCode,
       data.barcode,
       data.quantity,
@@ -106,30 +107,25 @@ async function registerLotInline(
     ]
   );
 
-  await connection.query(
-    `INSERT INTO inventory_movements (
-      id, product_id, product_name, type, quantity, previous_stock, new_stock, unit_cost, total_cost, reason, reference, notes, created_by
-    ) VALUES (UUID(), ?, ?, 'entry', ?, ?, ?, ?, ?, 'purchase', ?, ?, ?)` ,
-    [
-      data.productId,
-      productName,
-      data.quantity,
-      currentStock,
-      newStock,
-      data.unitCost,
-      data.quantity * data.unitCost,
-      data.reference,
-      data.notes,
-      data.userId
-    ]
-  );
+  const result = await applyStockChange(connection, {
+    productId: data.productId,
+    locationId: data.locationId,
+    type: 'entry',
+    quantity: data.quantity,
+    reason: 'purchase',
+    reference: data.reference,
+    notes: data.notes,
+    unitCost: data.unitCost,
+    productName,
+    createdBy: data.userId
+  });
 
   await connection.query(
-    'UPDATE inventory_products SET current_stock = ?, unit_cost = ?, updated_at = CURRENT_TIMESTAMP WHERE product_id = ?',
-    [newStock, data.unitCost, data.productId]
+    'UPDATE inventory_products SET unit_cost = ?, updated_at = CURRENT_TIMESTAMP WHERE product_id = ?',
+    [data.unitCost, data.productId]
   );
 
-  return newStock;
+  return result;
 }
 
 export async function POST(request: NextRequest) {
@@ -159,37 +155,21 @@ export async function POST(request: NextRequest) {
     await conn.beginTransaction();
     tx = true;
 
-    try {
-      await conn.query('CALL register_lot_entry(?,?,?,?,?,?,?,?,?,?)', [
-        productId,
-        lotCode,
-        barcode,
-        quantity,
-        unitCost,
-        salePriceOverride,
-        expirationDate,
-        reference,
-        notes,
-        userId
-      ]);
-    } catch (procedureError) {
-      if (!isMissingProcedure(procedureError)) {
-        throw procedureError;
-      }
+    const locationId = await resolveLocationId(conn, data.locationId ?? data.location_id);
 
-      await registerLotInline(conn, {
-        productId,
-        lotCode,
-        barcode,
-        quantity,
-        unitCost,
-        salePriceOverride,
-        expirationDate,
-        reference,
-        notes,
-        userId
-      });
-    }
+    const result = await registerLot(conn, {
+      productId,
+      locationId,
+      lotCode,
+      barcode,
+      quantity,
+      unitCost,
+      salePriceOverride,
+      expirationDate,
+      reference,
+      notes,
+      userId
+    });
 
     const updateProductBarcode = Boolean(data.updateProductBarcode);
     if (updateProductBarcode && barcode) {
@@ -208,7 +188,7 @@ export async function POST(request: NextRequest) {
 
     await conn.commit();
     tx = false;
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, locationId, newStock: result.newStock, totalStock: result.totalStock });
   } catch (error: any) {
     if (conn && tx) {
       try {
@@ -216,6 +196,10 @@ export async function POST(request: NextRequest) {
       } catch {
         // Ignore rollback errors.
       }
+    }
+
+    if (error instanceof InventoryLocationError) {
+      return bad(error.message, error.status);
     }
 
     console.error('Error creating lot:', error);
@@ -232,6 +216,7 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const productId = url.searchParams.get('productId');
     const barcode = url.searchParams.get('barcode');
+    const locationId = parseLocationParam(url.searchParams.get('locationId'));
 
     conn = await pool.getConnection();
 
@@ -239,21 +224,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ lots: [] });
     }
 
+    const locationsReady = await isLocationsSchemaReady();
+    const baseSelect = locationsReady
+      ? 'SELECT il.*, l.name AS location_name FROM inventory_lots il LEFT JOIN locations l ON l.id = il.location_id'
+      : 'SELECT il.* FROM inventory_lots il';
+
     if (barcode) {
-      const [rows] = await conn.query('SELECT * FROM inventory_lots WHERE barcode = ? LIMIT 1', [barcode]);
+      const [rows] = await conn.query(`${baseSelect} WHERE il.barcode = ? LIMIT 1`, [barcode]);
       return NextResponse.json({ lot: (rows as any[])[0] || null });
     }
 
     if (productId) {
       const pid = Number(productId);
+      const byLocation = locationsReady && locationId !== null;
       const [rows] = await conn.query(
-        'SELECT * FROM inventory_lots WHERE product_id = ? ORDER BY expiration_date IS NULL, expiration_date ASC, created_at DESC',
-        [pid]
+        `${baseSelect}
+         WHERE il.product_id = ?${byLocation ? ' AND il.location_id = ?' : ''}
+         ORDER BY il.expiration_date IS NULL, il.expiration_date ASC, il.created_at DESC`,
+        byLocation ? [pid, locationId] : [pid]
       );
       return NextResponse.json({ lots: rows as any[] });
     }
 
-    const [rows] = await conn.query('SELECT * FROM inventory_lots ORDER BY created_at DESC LIMIT 100');
+    const [rows] = await conn.query(`${baseSelect} ORDER BY il.created_at DESC LIMIT 100`);
     return NextResponse.json({ lots: rows as any[] });
   } catch (error) {
     console.error('Error fetching lots:', error);

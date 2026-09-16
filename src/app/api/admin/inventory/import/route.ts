@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
+import { applyStockChange, InventoryLocationError, resolveLocationId } from '@/lib/admin/locations';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
   let connection: Awaited<ReturnType<typeof pool.getConnection>> | null = null;
 
   try {
-    const body = await request.json() as { products?: unknown; mode?: string };
+    const body = await request.json() as { products?: unknown; mode?: string; locationId?: unknown };
     const products = body?.products;
     const mode = body?.mode === 'replace' ? 'replace' : 'add';
 
@@ -91,6 +92,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // El stock importado entra al local seleccionado (o al principal)
+    let locationId: number | null;
+    try {
+      locationId = await resolveLocationId(connection, body.locationId);
+    } catch (error) {
+      if (error instanceof InventoryLocationError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+      throw error;
+    }
+
     // ── Replace mode: wipe existing inventory first ────────────────────────
     if (mode === 'replace') {
       await connection.beginTransaction();
@@ -98,6 +110,7 @@ export async function POST(request: NextRequest) {
         // Must delete in FK-safe order:
         // inventory_movements and inventory_lots reference products(id) without CASCADE
         // inventory_products references products(id) WITH CASCADE (but we delete it first anyway)
+        // inventory_location_stock (stock por local) se borra en cascada con products
         await connection.execute('DELETE FROM inventory_movements');
         await connection.execute('DELETE FROM inventory_lots');
         await connection.execute('DELETE FROM inventory_products');
@@ -152,7 +165,7 @@ export async function POST(request: NextRequest) {
             item.description?.trim() ?? '',
             item.salePrice ?? 0,
             productCategory,
-            item.currentStock ?? 0,
+            0,
             item.image ?? '',
             hasInvima,
             invimaRegistryNumber,
@@ -172,7 +185,7 @@ export async function POST(request: NextRequest) {
             productId,
             item.sku?.trim() || null,
             item.barcode?.trim() || null,
-            item.currentStock ?? 0,
+            0,
             item.minStock ?? 5,
             item.maxStock ?? null,
             item.unitCost ?? 0,
@@ -181,6 +194,21 @@ export async function POST(request: NextRequest) {
             item.status ?? 'active',
           ]
         );
+
+        const initialStock = Math.trunc(Number(item.currentStock) || 0);
+        if (initialStock > 0) {
+          await applyStockChange(connection, {
+            productId,
+            locationId,
+            type: 'entry',
+            quantity: initialStock,
+            reason: 'adjustment',
+            reference: 'Importación Excel',
+            unitCost: Number(item.unitCost) || 0,
+            productName,
+            createdBy: 'admin'
+          });
+        }
 
         await connection.commit();
         transactionStarted = false;

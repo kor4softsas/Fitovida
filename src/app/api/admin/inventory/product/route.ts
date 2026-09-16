@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
+import {
+  applyStockChange,
+  InventoryLocationError,
+  isLocationsSchemaReady,
+  resolveLocationId
+} from '@/lib/admin/locations';
 
 type DbError = {
   code?: string;
@@ -9,6 +15,10 @@ type DbError = {
 };
 
 function mapDbError(error: unknown): { status: number; message: string } {
+  if (error instanceof InventoryLocationError) {
+    return { status: error.status, message: error.message };
+  }
+
   const dbError = (error || {}) as DbError;
   const code = String(dbError.code || '');
   const sqlMessage = String(dbError.sqlMessage || dbError.message || '');
@@ -110,6 +120,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // El stock inicial entra al local seleccionado (o al principal)
+    const locationId = await resolveLocationId(connection, data.locationId);
+    const initialStock = Math.max(0, Math.trunc(Number(data.currentStock) || 0));
+
     const [result] = await connection.execute<ResultSetHeader>(
       `INSERT INTO products (
         name,
@@ -130,7 +144,7 @@ export async function POST(request: NextRequest) {
         data.description || '',
         data.salePrice || 0,
         data.category || '',
-        data.currentStock || 0,
+        0,
         data.image || '',
         hasInvima,
         invimaRegistryNumber,
@@ -140,14 +154,14 @@ export async function POST(request: NextRequest) {
     const productId = result.insertId;
 
     await connection.execute(
-      `INSERT INTO inventory_products 
+      `INSERT INTO inventory_products
        (product_id, sku, barcode, current_stock, min_stock, max_stock, unit_cost, tax_rate, supplier, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         productId,
         data.sku || null,
         data.barcode || null,
-        data.currentStock || 0,
+        0,
         data.minStock || 5,
         data.maxStock || null,
         data.unitCost || 0,
@@ -156,6 +170,21 @@ export async function POST(request: NextRequest) {
         data.status || 'active'
       ]
     );
+
+    if (initialStock > 0) {
+      await applyStockChange(connection, {
+        productId,
+        locationId,
+        type: 'entry',
+        quantity: initialStock,
+        reason: 'adjustment',
+        reference: 'Stock inicial',
+        notes: 'Stock inicial al crear el producto',
+        unitCost: Number(data.unitCost) || 0,
+        productName: data.name,
+        createdBy: 'admin'
+      });
+    }
 
     await connection.commit();
     transactionStarted = false;
@@ -217,15 +246,14 @@ export async function PUT(request: NextRequest) {
     }
 
     await connection.execute(
-      `UPDATE products 
-        SET name=?, description=?, price=?, category=?, stock=?, image=?, has_invima=?, invima_registry_number=?, fecha_vencimiento=?, updated_at=NOW()
+      `UPDATE products
+        SET name=?, description=?, price=?, category=?, image=?, has_invima=?, invima_registry_number=?, fecha_vencimiento=?, updated_at=NOW()
        WHERE id=?`,
       [
         data.name,
         data.description || '',
         data.salePrice || 0,
         data.category || '',
-        data.currentStock || 0,
         data.image || '',
         hasInvima,
         invimaRegistryNumber,
@@ -235,13 +263,12 @@ export async function PUT(request: NextRequest) {
     );
 
     await connection.execute(
-      `UPDATE inventory_products 
-       SET sku=?, barcode=?, current_stock=?, min_stock=?, max_stock=?, unit_cost=?, tax_rate=?, supplier=?, status=?
+      `UPDATE inventory_products
+       SET sku=?, barcode=?, min_stock=?, max_stock=?, unit_cost=?, tax_rate=?, supplier=?, status=?
        WHERE product_id=?`,
       [
         data.sku || null,
         data.barcode || null,
-        data.currentStock || 0,
         data.minStock || 5,
         data.maxStock || null,
         data.unitCost || 0,
@@ -251,6 +278,23 @@ export async function PUT(request: NextRequest) {
         productId
       ]
     );
+
+    // El stock se ajusta en el local que se está viendo (queda registrado como movimiento).
+    // En la vista "Todos los locales" no se toca el stock: el total es la suma de locales.
+    const targetStock = Math.trunc(Number(data.currentStock));
+    const locationsReady = await isLocationsSchemaReady();
+    if (Number.isFinite(targetStock) && targetStock >= 0 && (!locationsReady || data.locationId)) {
+      await applyStockChange(connection, {
+        productId: Number(productId),
+        locationId: await resolveLocationId(connection, data.locationId),
+        type: 'adjustment',
+        targetStock,
+        reason: 'adjustment',
+        reference: 'Edición de producto',
+        productName: data.name,
+        createdBy: 'admin'
+      });
+    }
 
     await connection.commit();
     transactionStarted = false;

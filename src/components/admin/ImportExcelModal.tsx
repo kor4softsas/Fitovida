@@ -38,6 +38,9 @@ interface ImportResult {
 interface ImportExcelModalProps {
   onClose: () => void;
   onSuccess: () => void;
+  /** Local donde entra el stock importado (null = local principal). */
+  locationId?: number | null;
+  locationName?: string;
 }
 
 // ─── Column mapping (Spanish and English headers) ────────────────────────────
@@ -420,7 +423,7 @@ function downloadTemplate() {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModalProps) {
+export default function ImportExcelModal({ onClose, onSuccess, locationId = null, locationName }: ImportExcelModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [fileName, setFileName] = useState('');
@@ -514,7 +517,7 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
       const res = await fetch('/api/admin/inventory/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ products: payload, mode: importMode }),
+        body: JSON.stringify({ products: payload, mode: importMode, locationId }),
       });
 
       const result = await res.json() as ImportResult & { error?: string };
@@ -582,6 +585,12 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
             </button>
           </div>
 
+          {locationName && (
+            <div className="rounded-2xl border border-[#cce6d0] bg-[#e7f9ee] px-5 py-3 text-sm text-[#005236]">
+              El stock del Excel se cargará en el local <span className="font-bold">{locationName}</span>.
+            </div>
+          )}
+
           {/* Import mode selector */}
           <div className="space-y-2">
             <p className="text-sm font-bold text-[#012d1d]">Modo de importación</p>
@@ -617,7 +626,7 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
             {importMode === 'replace' && (
               <div className="rounded-2xl border border-[#ba1a1a] bg-[#ffdad6] px-5 py-4">
                 <p className="text-sm font-bold text-[#93000a]">
-                  ⚠️ Advertencia: esta acción eliminará permanentemente todo el inventario actual antes de importar.
+                  ⚠️ Advertencia: esta acción eliminará permanentemente todo el inventario actual{locationName ? ' de TODOS los locales' : ''} antes de importar.
                 </p>
                 <label className="mt-3 flex cursor-pointer items-center gap-2">
                   <input

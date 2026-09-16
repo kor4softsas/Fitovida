@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef } from 'react';
 import BarcodeInput from './BarcodeInput';
 import { X } from 'lucide-react';
+import type { StoreLocation } from '@/types/admin';
 
 type ProductOption = { id: string; name: string; sku?: string | null };
 
@@ -10,13 +11,19 @@ export default function ReceiveStockModal({
   open,
   onClose,
   products,
+  locations = [],
+  initialLocationId = null,
   onSuccess
 }: {
   open: boolean;
   onClose: () => void;
   products: ProductOption[];
+  /** Locales activos (vacío si la BD no tiene locales). */
+  locations?: StoreLocation[];
+  initialLocationId?: number | null;
   onSuccess: () => void;
 }) {
+  const [locationId, setLocationId] = useState<number | null>(initialLocationId);
   const [productId, setProductId] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(0);
   const [lotCode, setLotCode] = useState<string>('');
@@ -73,10 +80,15 @@ export default function ReceiveStockModal({
       setError('Selecciona producto, lote y cantidad válida');
       return;
     }
+    if (locations.length > 0 && !locationId) {
+      setError('Selecciona el local donde entra la mercancía');
+      return;
+    }
 
     setSubmitting(true);
     try {
       const payload = {
+        locationId,
         productId,
         lotCode,
         barcode: barcode || null,
@@ -97,7 +109,13 @@ export default function ReceiveStockModal({
 
       if (!res.ok) {
         const text = await res.text();
-        throw new Error(text || 'Error registrando ingreso');
+        let message = text;
+        try {
+          message = (JSON.parse(text) as { error?: string }).error || text;
+        } catch {
+          // Respuesta sin JSON.
+        }
+        throw new Error(message || 'Error registrando ingreso');
       }
 
       onSuccess();
@@ -121,6 +139,24 @@ export default function ReceiveStockModal({
         </div>
 
         <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+          {locations.length > 0 && (
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700">Local de ingreso</label>
+              <select
+                value={locationId ?? ''}
+                onChange={(e) => setLocationId(e.target.value ? Number(e.target.value) : null)}
+                className="mt-1 w-full rounded-md border p-2 font-medium"
+              >
+                <option value="">Selecciona un local...</option>
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}{location.isDefault ? ' (principal)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700">Buscar o Escanear Producto</label>
             <div className="flex gap-2">

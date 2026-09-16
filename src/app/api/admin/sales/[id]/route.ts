@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, queryOne } from '@/lib/db';
+import pool, { query, queryOne } from '@/lib/db';
+import { applyStockChange, InventoryLocationError, resolveLocationId } from '@/lib/admin/locations';
 
 export async function GET(
   request: NextRequest,
@@ -92,73 +93,82 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let conn: Awaited<ReturnType<typeof pool.getConnection>> | null = null;
+  let transactionStarted = false;
+
   try {
     const { id } = await params;
 
-    const sale = await queryOne(
-      'SELECT id, sale_number FROM admin_sales WHERE id = ?',
-      [id]
-    );
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    transactionStarted = true;
+
+    const [saleRows] = await conn.query('SELECT * FROM admin_sales WHERE id = ? FOR UPDATE', [id]);
+    const sale = (saleRows as Array<{ sale_number: string; payment_status: string; location_id?: number | null }>)[0];
 
     if (!sale) {
-      return NextResponse.json(
-        { error: 'Venta no encontrada' },
-        { status: 404 }
-      );
+      throw new InventoryLocationError('Venta no encontrada', 404);
+    }
+    if (sale.payment_status === 'cancelled') {
+      throw new InventoryLocationError('La venta ya está cancelada');
     }
 
     // Obtener items para revertir movimientos de inventario
-    const items = await query(
-      'SELECT product_id, quantity FROM admin_sale_items WHERE sale_id = ?',
+    const [itemRows] = await conn.query(
+      `SELECT asi.product_id, asi.product_name, asi.quantity
+       FROM admin_sale_items asi
+       JOIN inventory_products ip ON ip.product_id = asi.product_id
+       WHERE asi.sale_id = ?`,
       [id]
     );
 
-    for (const item of items) {
-      // Registrar movimiento de entrada (devolver stock)
-      const inventoryProduct = await queryOne(
-        'SELECT current_stock FROM inventory_products WHERE product_id = ?',
-        [item.product_id]
-      );
+    // El stock vuelve al local donde se hizo la venta
+    const locationId = await resolveLocationId(conn, sale.location_id, { allowInactive: true });
 
-      if (inventoryProduct) {
-        const newStock = inventoryProduct.current_stock + item.quantity;
-
-        await query(
-          `INSERT INTO inventory_movements 
-           (product_id, product_name, type, quantity, previous_stock, new_stock, reason, reference, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            item.product_id,
-            'Cancelación de venta',
-            'entry',
-            item.quantity,
-            inventoryProduct.current_stock,
-            newStock,
-            'return',
-            sale.sale_number,
-            'system'
-          ]
-        );
-
-        // Stock is auto-updated by DB trigger after_inventory_movement_insert
-      }
+    for (const item of itemRows as Array<{ product_id: number; product_name: string; quantity: number }>) {
+      await applyStockChange(conn, {
+        productId: Number(item.product_id),
+        locationId,
+        type: 'entry',
+        quantity: Number(item.quantity),
+        reason: 'return',
+        reference: sale.sale_number,
+        notes: 'Cancelación de venta',
+        productName: item.product_name,
+        createdBy: 'system'
+      });
     }
 
     // Marcar venta como cancelada
-    await query(
+    await conn.query(
       'UPDATE admin_sales SET payment_status = ? WHERE id = ?',
       ['cancelled', id]
     );
+
+    await conn.commit();
+    transactionStarted = false;
 
     return NextResponse.json({
       success: true,
       message: 'Venta cancelada y stock restaurado'
     });
   } catch (error) {
+    if (conn && transactionStarted) {
+      try {
+        await conn.rollback();
+      } catch {
+        // Ignorar errores de rollback.
+      }
+    }
+    if (error instanceof InventoryLocationError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error('Error en DELETE /api/admin/sales/[id]:', error);
     return NextResponse.json(
       { error: 'Error al cancelar venta' },
       { status: 500 }
     );
+  } finally {
+    conn?.release();
   }
 }

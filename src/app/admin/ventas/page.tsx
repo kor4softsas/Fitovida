@@ -11,13 +11,15 @@ import {
   X,
   User,
   Package,
-  RotateCcw
+  RotateCcw,
+  Store
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { PDFDownloadLink, pdf } from '@react-pdf/renderer';
 import FacturaHTML from '@/components/admin/FacturaHTML';
 import type { Sale, SaleItem } from '@/types/admin';
 import { useAdminFeedback } from '@/components/admin/AdminFeedback';
+import { getActiveLocations, getDefaultLocation, useLocations } from '@/lib/admin/location-store';
 
 const STATUS_LABELS: Record<string, string> = {
   completed: 'Completada',
@@ -33,6 +35,16 @@ const PAYMENT_LABELS: Record<string, string> = {
   wompi: 'Wompi',
 };
 
+// Producto de /api/admin/inventory con el stock del local de venta
+type SaleProductRow = {
+  product_id: number | string;
+  name: string;
+  price: number | string;
+  current_stock: number;
+  tax_rate: number | string;
+  barcode?: string | null;
+};
+
 // Fecha local en formato YYYY-MM-DD (para filtros y comparación cronológica por texto)
 const toYMD = (d: Date | string) => {
   const x = new Date(d);
@@ -45,7 +57,6 @@ export default function VentasPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showNewSaleModal, setShowNewSaleModal] = useState(false);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
-  const [inventoryProducts, setInventoryProducts] = useState<any[]>([]);
   // Modal HTML para impresión nativa en la misma página
   const [showFactura, setShowFactura] = useState(false);
   const [facturaSale, setFacturaSale] = useState<Sale | null>(null);
@@ -97,11 +108,9 @@ export default function VentasPage() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [salesRes, inventoryRes] = await Promise.all([
-          fetch('/api/admin/sales?limit=10000'),
-          fetch('/api/admin/inventory')
-        ]);
-        
+        // El inventario se carga en el modal de nueva venta, según el local elegido
+        const salesRes = await fetch('/api/admin/sales?limit=10000');
+
         if (salesRes.ok) {
           const data = await salesRes.json();
           const mappedSales = data.sales.map((s: any) => ({
@@ -119,16 +128,13 @@ export default function VentasPage() {
             total: s.total,
             paymentMethod: s.payment_method,
             status: s.status || 'completed',
+            locationId: s.location_id ?? undefined,
+            locationName: s.location_name ?? undefined,
             createdBy: 'admin',
             createdAt: new Date(s.created_at),
             updatedAt: new Date(s.created_at)
           }));
           setSales(mappedSales);
-        }
-
-        if (inventoryRes.ok) {
-          const invData = await inventoryRes.json();
-          setInventoryProducts(invData.products || []);
         }
       } catch (error) {
         console.error('Error cargando datos:', error);
@@ -226,6 +232,7 @@ export default function VentasPage() {
         'Total': Number(s.total || 0),
         'Método de pago': PAYMENT_LABELS[s.paymentMethod] ?? s.paymentMethod,
         'Estado': STATUS_LABELS[s.status] ?? s.status,
+        'Local': s.locationName || '',
         'Factura DIAN': s.invoiceNumber || '',
         'N° productos': s.items?.length ?? 0,
       }));
@@ -237,7 +244,7 @@ export default function VentasPage() {
         'IVA': filteredSales.reduce((a, s) => a + Number(s.tax || 0), 0),
         'Descuento': filteredSales.reduce((a, s) => a + Number(s.discount || 0), 0),
         'Total': filteredSales.reduce((a, s) => a + Number(s.total || 0), 0),
-        'Método de pago': '', 'Estado': '', 'Factura DIAN': '',
+        'Método de pago': '', 'Estado': '', 'Local': '', 'Factura DIAN': '',
         'N° productos': filteredSales.reduce((a, s) => a + (s.items?.length ?? 0), 0),
       });
 
@@ -262,7 +269,7 @@ export default function VentasPage() {
       const ws1 = XLSX.utils.json_to_sheet(resumen);
       ws1['!cols'] = [
         { wch: 12 }, { wch: 12 }, { wch: 24 }, { wch: 14 }, { wch: 24 }, { wch: 14 },
-        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 12 }, { wch: 14 }, { wch: 12 },
+        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 12 }, { wch: 18 }, { wch: 14 }, { wch: 12 },
       ];
       XLSX.utils.book_append_sheet(wb, ws1, 'Ventas');
 
@@ -546,13 +553,13 @@ export default function VentasPage() {
 
       {/* New Sale Modal */}
       {showNewSaleModal && (
-        <NewSaleModal 
-          products={inventoryProducts}
+        <NewSaleModal
           onClose={() => setShowNewSaleModal(false)}
           onSave={async (sale) => {
             try {
               // Preparar payload para el backend con snake_case
               const payload = {
+                location_id: sale.locationId,
                 customer_name: sale.customerName,
                 customer_email: sale.customerEmail,
                 customer_phone: sale.customerPhone,
@@ -647,6 +654,12 @@ function SaleDetailModal({ sale, onClose, onPrint }: { sale: Sale; onClose: () =
                 <span className="text-[#414844]">Teléfono:</span>
                 <span className="ml-2 font-bold text-[#012d1d]">{sale.customerPhone}</span>
               </div>
+              {sale.locationName && (
+                <div>
+                  <span className="text-[#414844]">Local:</span>
+                  <span className="ml-2 font-bold text-[#012d1d]">{sale.locationName}</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -726,15 +739,56 @@ function SaleDetailModal({ sale, onClose, onPrint }: { sale: Sale; onClose: () =
 }
 
 // New Sale Modal Component
-function NewSaleModal({ 
-  products,
+function NewSaleModal({
   onClose,
-  onSave 
-}: { 
-  products: Array<any>;
+  onSave
+}: {
   onClose: () => void;
   onSave: (sale: Sale) => void;
 }) {
+  // Local de venta: el activo del panel, o el principal si se está viendo "Todos los locales"
+  const { locations, schemaReady, loaded: locationsLoaded, selectedLocationId } = useLocations();
+  const activeLocations = getActiveLocations(locations);
+  const [saleLocationId, setSaleLocationId] = useState<number | null>(() =>
+    typeof selectedLocationId === 'number' ? selectedLocationId : getDefaultLocation(locations)?.id ?? null
+  );
+  const [products, setProducts] = useState<SaleProductRow[]>([]);
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [productsError, setProductsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Si el modal se abrió antes de cargar los locales
+    if (saleLocationId === null && schemaReady) {
+      setSaleLocationId(getDefaultLocation(locations)?.id ?? null);
+    }
+  }, [saleLocationId, schemaReady, locations]);
+
+  useEffect(() => {
+    if (!locationsLoaded || (schemaReady && saleLocationId === null)) return;
+
+    let active = true;
+    setProductsLoading(true);
+    setProductsError(null);
+    fetch(`/api/admin/inventory${schemaReady && saleLocationId ? `?locationId=${saleLocationId}` : ''}`)
+      .then((response) => {
+        if (!response.ok) throw new Error('Error cargando inventario');
+        return response.json();
+      })
+      .then((data) => {
+        if (active) setProducts(data.products || []);
+      })
+      .catch(() => {
+        if (active) setProductsError('No se pudo cargar el inventario del local.');
+      })
+      .finally(() => {
+        if (active) setProductsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [locationsLoaded, schemaReady, saleLocationId]);
+
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -871,6 +925,7 @@ function NewSaleModal({
       total,
       paymentMethod,
       status: 'completed',
+      locationId: saleLocationId ?? undefined,
       createdBy: 'admin',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -898,6 +953,30 @@ function NewSaleModal({
         </div>
         
         <form onSubmit={handleSubmit} className="p-8 space-y-8">
+          {/* Local de venta */}
+          {schemaReady && activeLocations.length > 0 && (
+            <div className="bg-white p-6 rounded-[1.5rem] shadow-sm flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h3 className="font-bold text-[#012d1d] flex items-center gap-2">
+                  <Store size={18} className="text-[#3f6653]" />
+                  Local de venta
+                </h3>
+                <p className="text-xs font-medium text-[#414844]">El stock se descuenta de este local.</p>
+              </div>
+              <select
+                value={saleLocationId ?? ''}
+                onChange={(e) => setSaleLocationId(Number(e.target.value))}
+                className="md:w-72 px-4 py-3 bg-[#f2f4f3] border-none rounded-2xl focus:ring-2 focus:ring-[#012d1d]/20 transition-all font-bold text-[#012d1d] cursor-pointer"
+              >
+                {activeLocations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}{location.isDefault ? ' (principal)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Información del Cliente */}
           <div className="bg-white p-6 rounded-[1.5rem] shadow-sm space-y-4">
             <h3 className="font-bold text-[#012d1d] flex items-center gap-2">
@@ -970,7 +1049,11 @@ function NewSaleModal({
             </div>
 
             <div className="max-h-48 overflow-y-auto rounded-[1.5rem] p-4 bg-[#f2f4f3] flex gap-3 flex-wrap">
-              {filteredProducts.length === 0 ? (
+              {productsLoading || productsError ? (
+                <p className={`w-full py-6 text-center text-sm font-medium ${productsError ? 'text-[#93000a]' : 'text-[#414844]'}`}>
+                  {productsError || 'Cargando productos del local...'}
+                </p>
+              ) : filteredProducts.length === 0 ? (
                 <p className="w-full py-6 text-center text-sm font-medium text-[#414844]">
                   {productQuery
                     ? `No se encontraron productos para “${barcodeInput.trim()}”.`
@@ -990,7 +1073,7 @@ function NewSaleModal({
                 >
                   <span className="font-bold text-[#012d1d] truncate w-full">{product.name}</span>
                   <div className="flex justify-between items-center w-full mt-2">
-                     <span className="text-[#005236] font-extrabold">{formatCurrency(product.price)}</span>
+                     <span className="text-[#005236] font-extrabold">{formatCurrency(Number(product.price))}</span>
                      <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full ${product.current_stock > 0 ? 'bg-[#a0f4c8] text-[#002113]' : 'bg-[#ffdad6] text-[#93000a]'}`}>
                        Stock: {product.current_stock}
                      </span>

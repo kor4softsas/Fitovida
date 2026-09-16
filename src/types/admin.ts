@@ -17,6 +17,8 @@ export interface Sale {
   paymentMethod: 'cash' | 'card' | 'transfer' | 'pse' | 'wompi';
   status: 'completed' | 'pending' | 'cancelled';
   notes?: string;
+  locationId?: number; // Local donde se hizo la venta
+  locationName?: string;
   // ===== CAMPOS DIAN-READY =====
   invoiceNumber?: string;
   invoiceCUFE?: string; // Código Único de Facturación Electrónica
@@ -48,6 +50,30 @@ export interface SaleItem {
   total: number;
 }
 
+// ============= LOCALES =============
+export interface StoreLocation {
+  id: number;
+  name: string;
+  code?: string;
+  address?: string;
+  city?: string;
+  phone?: string;
+  isDefault: boolean; // Local principal: recibe los pedidos web
+  status: 'active' | 'inactive';
+  productCount: number; // Productos con stock en el local
+  totalUnits: number; // Unidades en el local
+}
+
+// Local elegido en el panel: un id o todos los locales
+export type LocationSelection = number | 'all';
+
+export interface LocationStock {
+  locationId: number;
+  locationName: string;
+  locationCode?: string;
+  stock: number;
+}
+
 // ============= INVENTARIO =============
 export interface InventoryProduct {
   id: string;
@@ -69,6 +95,7 @@ export interface InventoryProduct {
   supplier?: string;
   barcode?: string;
   image?: string;
+  stockByLocation?: LocationStock[]; // Desglose por local (vista "Todos los locales")
   createdAt: Date;
   updatedAt: Date;
 }
@@ -86,6 +113,8 @@ export interface InventoryMovement {
   reason: string; // 'purchase' | 'sale' | 'return' | 'damage' | 'adjustment' | 'transfer'
   reference?: string; // Número de compra, venta, etc.
   notes?: string;
+  locationId?: number;
+  locationName?: string;
   createdBy: string;
   createdAt: Date;
 }

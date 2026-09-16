@@ -7,6 +7,7 @@ import type { DocumentProps } from '@react-pdf/renderer';
 import InventoryExportPDF from '@/components/admin/InventoryExportPDF';
 import { query, queryOne } from '@/lib/db';
 import { getInventoryData } from '@/lib/admin/inventory-export';
+import { getLocationById, getLocationFileSuffix, parseLocationParam } from '@/lib/admin/locations';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -63,21 +64,26 @@ async function getLogoDataUrl(): Promise<string | null> {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const locationId = parseLocationParam(searchParams.get('locationId'));
     const data = await getInventoryData({
       category: searchParams.get('category'),
       status: searchParams.get('status'),
       searchTerm: searchParams.get('search'),
-      lowStock: searchParams.get('lowStock') === 'true'
+      lowStock: searchParams.get('lowStock') === 'true',
+      locationId
     });
 
     const generatedAt = new Date();
     const settings = await getCompanySettings();
     const logoDataUrl = await getLogoDataUrl();
+    const fileSuffix = await getLocationFileSuffix(locationId);
+    const location = fileSuffix && locationId ? await getLocationById(locationId) : null;
     const pdfDocument = React.createElement(InventoryExportPDF, {
       rows: data.exportRows,
       generatedAt,
       settings,
-      logoDataUrl
+      logoDataUrl,
+      locationName: location?.name || null
     }) as unknown as React.ReactElement<DocumentProps>;
     const pdfStream = await pdf(pdfDocument).toBuffer();
     const buffer = await new Response(pdfStream as unknown as BodyInit).arrayBuffer();
@@ -86,7 +92,7 @@ export async function GET(request: NextRequest) {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': 'attachment; filename="inventario.pdf"'
+        'Content-Disposition': `attachment; filename="inventario${fileSuffix}.pdf"`
       }
     });
   } catch (error) {

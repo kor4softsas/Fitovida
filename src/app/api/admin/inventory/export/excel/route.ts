@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { getInventoryData } from '@/lib/admin/inventory-export';
+import { getLocationFileSuffix, parseLocationParam } from '@/lib/admin/locations';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -8,12 +9,15 @@ export const revalidate = 0;
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const locationId = parseLocationParam(searchParams.get('locationId'));
     const data = await getInventoryData({
       category: searchParams.get('category'),
       status: searchParams.get('status'),
       searchTerm: searchParams.get('search'),
-      lowStock: searchParams.get('lowStock') === 'true'
+      lowStock: searchParams.get('lowStock') === 'true',
+      locationId
     });
+    const fileSuffix = await getLocationFileSuffix(locationId);
 
     const header = [
       'ID',
@@ -95,7 +99,7 @@ export async function GET(request: NextRequest) {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': 'attachment; filename="inventario.xlsx"'
+        'Content-Disposition': `attachment; filename="inventario${fileSuffix}.xlsx"`
       }
     });
   } catch (error) {

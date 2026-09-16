@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import pool from '@/lib/db';
+import {
+  applyStockChange,
+  InventoryLocationError,
+  isLocationsSchemaReady,
+  lockStock,
+  lotLocationFilter,
+  resolveLocationId
+} from '@/lib/admin/locations';
 
 function isSchemaOrDbIssue(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
@@ -28,7 +36,8 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const fromDate = searchParams.get('fromDate');
     const toDate = searchParams.get('toDate');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const rawLimit = parseInt(searchParams.get('limit') || '50', 10);
+    const limit = Number.isNaN(rawLimit) || rawLimit < 1 ? 50 : rawLimit;
 
     let sales: any[] = [];
     const degradedSources: string[] = [];
@@ -64,8 +73,8 @@ export async function GET(request: NextRequest) {
           clientParams.push(toDate);
         }
 
-        clientSql += ' GROUP BY o.id ORDER BY o.created_at DESC LIMIT ?';
-        clientParams.push(limit);
+        // limit es un entero validado; MySQL 8.0.22+ rechaza LIMIT ? en sentencias preparadas
+        clientSql += ` GROUP BY o.id ORDER BY o.created_at DESC LIMIT ${limit}`;
 
         const clientSales = await query(clientSql, clientParams);
         sales = sales.concat(clientSales);
@@ -81,10 +90,14 @@ export async function GET(request: NextRequest) {
     // Obtener ventas admin (manuales)
     if (type === 'all' || type === 'admin') {
       try {
+        const locationFields = (await isLocationsSchemaReady())
+          ? 'a.location_id, (SELECT l.name FROM locations l WHERE l.id = a.location_id) as location_name,'
+          : '';
         let adminSql = `
-          SELECT 
+          SELECT
             a.id, a.sale_number, a.customer_name, a.customer_email,
             a.total, a.payment_status as status, a.payment_method, a.created_at,
+            ${locationFields}
             'admin' as sale_type,
             COUNT(asi.id) as item_count
           FROM admin_sales a
@@ -109,8 +122,7 @@ export async function GET(request: NextRequest) {
           adminParams.push(toDate);
         }
 
-        adminSql += ' GROUP BY a.id ORDER BY a.created_at DESC LIMIT ?';
-        adminParams.push(limit);
+        adminSql += ` GROUP BY a.id ORDER BY a.created_at DESC LIMIT ${limit}`;
 
         const adminSales = await query(adminSql, adminParams);
         sales = sales.concat(adminSales);
@@ -221,6 +233,14 @@ export async function POST(request: NextRequest) {
     await conn.beginTransaction();
     transactionStarted = true;
 
+    // Local donde se hace la venta (null = BD sin migración de locales, stock global)
+    const locationId = await resolveLocationId(conn, body.location_id ?? body.locationId);
+    let locationLabel = '';
+    if (locationId !== null) {
+      const [locationRows] = await conn.query('SELECT name FROM locations WHERE id = ?', [locationId]);
+      locationLabel = ` en ${(locationRows as Array<{ name: string }>)[0]?.name || 'el local seleccionado'}`;
+    }
+
     // Generar número de venta usando conexión
     const [lastSaleRows] = await conn.query(`SELECT sale_number FROM admin_sales ORDER BY created_at DESC LIMIT 1`);
     const lastSale = (lastSaleRows as any[])[0];
@@ -236,13 +256,14 @@ export async function POST(request: NextRequest) {
     // Insertar venta principal
     console.log('Inserting admin_sales', saleId, saleNumber);
     await conn.query(
-      `INSERT INTO admin_sales 
-       (id, sale_number, customer_name, customer_email, customer_phone, customer_document,
+      `INSERT INTO admin_sales
+       (id, sale_number, ${locationId !== null ? 'location_id, ' : ''}customer_name, customer_email, customer_phone, customer_document,
         subtotal, tax, discount, total, payment_method, payment_status, notes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ${locationId !== null ? '?, ' : ''}?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         saleId,
         saleNumber,
+        ...(locationId !== null ? [locationId] : []),
         customer_name,
         customer_email || null,
         customer_phone || null,
@@ -269,17 +290,42 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Item con product_id o quantity inválidos' }, { status: 400 });
       }
 
-      // Bloquear fila de inventory_products para consistencia
-      const [ipRows] = await conn.query('SELECT current_stock FROM inventory_products WHERE product_id = ? FOR UPDATE', [productId]);
-      const ip = (ipRows as any[])[0];
-      const currentStock = ip ? Number(ip.current_stock || 0) : 0;
+      // Bloquear el stock del producto en el local de la venta (o el global si no hay locales)
+      const currentStock = await lockStock(conn, productId, locationId);
       if (currentStock < required) {
         await conn.rollback();
-        return NextResponse.json({ error: `Stock insuficiente para el producto ${productId}` }, { status: 400 });
+        return NextResponse.json({ error: `Stock insuficiente para el producto ${item.product_name || productId}${locationLabel}` }, { status: 400 });
       }
 
-      // We'll keep track of the remaining global stock locally and update DB after each lot consume
-      let remainingGlobal = currentStock;
+      const [ipRows] = await conn.query('SELECT unit_cost FROM inventory_products WHERE product_id = ?', [productId]);
+      const ip = (ipRows as Array<{ unit_cost: number | string }>)[0];
+      const lotScope = lotLocationFilter(locationId);
+
+      // Lotes = fuente de verdad. Si el producto tiene stock en este local pero NO tiene
+      // NINGÚN lote aquí (dato heredado), creamos una sola vez un "lote de regularización"
+      // con el stock actual del local, para que la venta descuente de un lote y todo quede
+      // cuadrado. Si el producto YA tiene lotes en el local, confiamos en ellos (no inventamos stock).
+      const [lotCountRows] = await conn.query(
+        `SELECT COUNT(*) AS c FROM inventory_lots WHERE product_id = ?${lotScope.sql}`,
+        [productId, ...lotScope.params]
+      );
+      const lotCount = Number((lotCountRows as Array<{ c: number | string }>)[0]?.c || 0);
+      if (lotCount === 0 && currentStock > 0) {
+        const regLotCode = `REG-${saleNumber}-${productId}`;
+        await conn.query(
+          `INSERT INTO inventory_lots (id, product_id, ${locationId !== null ? 'location_id, ' : ''}lot_code, quantity, reserved, unit_cost, expiration_date, status, created_by)
+           VALUES (UUID(), ?, ${locationId !== null ? '?, ' : ''}?, ?, 0, ?, NULL, 'active', ?)`,
+          [
+            productId,
+            ...(locationId !== null ? [locationId] : []),
+            regLotCode,
+            currentStock,
+            Number(ip?.unit_cost || 0) || 0,
+            created_by
+          ]
+        );
+        console.log('Lote de regularización creado', regLotCode, 'qty=', currentStock, 'producto', productId, 'local', locationId);
+      }
 
       // If item has barcode, prefer that specific lot first
       const barcode = item.barcode || item.barcode_lot || null;
@@ -289,20 +335,28 @@ export async function POST(request: NextRequest) {
         let lotRows: any[] = [];
 
         if (barcode && firstLoop) {
-          const [rows] = await conn.query('SELECT * FROM inventory_lots WHERE barcode = ? FOR UPDATE', [barcode]);
+          const [rows] = await conn.query(
+            `SELECT * FROM inventory_lots WHERE barcode = ? AND product_id = ?${lotScope.sql} FOR UPDATE`,
+            [barcode, productId, ...lotScope.params]
+          );
           lotRows = rows as any[];
         } else {
           const [rows] = await conn.query(
-            `SELECT * FROM inventory_lots WHERE product_id = ? AND (quantity - COALESCE(reserved,0)) > 0 ORDER BY (expiration_date IS NULL), expiration_date ASC, created_at ASC LIMIT 1 FOR UPDATE`,
-            [productId]
+            `SELECT * FROM inventory_lots WHERE product_id = ?${lotScope.sql} AND (quantity - COALESCE(reserved,0)) > 0 ORDER BY (expiration_date IS NULL), expiration_date ASC, created_at ASC LIMIT 1 FOR UPDATE`,
+            [productId, ...lotScope.params]
           );
           lotRows = rows as any[];
         }
 
         if (!lotRows || lotRows.length === 0) {
-          console.error('No lot rows for product', productId);
+          // Ya no hay lotes con stock disponible para cubrir lo pendiente.
+          // (El stock puede estar reservado en pedidos en proceso, o los lotes no
+          // alcanzan aunque el stock general dijera otra cosa.) No inventamos stock.
           await conn.rollback();
-          return NextResponse.json({ error: `No hay lotes con stock disponible para el producto ${productId}` }, { status: 400 });
+          return NextResponse.json(
+            { error: `No hay stock disponible en lotes para el producto ${item.product_name || productId}${locationLabel} (puede estar reservado o los lotes no alcanzan)` },
+            { status: 400 }
+          );
         }
 
         const lot = lotRows[0];
@@ -321,31 +375,20 @@ export async function POST(request: NextRequest) {
         await conn.query('UPDATE inventory_lots SET quantity = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [newLotQty, newLotStatus, lot.id]);
         console.log('Updated lot', lot.id, 'newQty=', newLotQty);
 
-        // Registrar movimiento por lote
-        const prevStock = remainingGlobal;
-        remainingGlobal = remainingGlobal - take;
-
-        await conn.query(
-          `INSERT INTO inventory_movements (id, product_id, product_name, type, quantity, previous_stock, new_stock, unit_cost, total_cost, reason, reference, notes, created_by)
-           VALUES (UUID(), ?, ?, 'exit', ?, ?, ?, ?, ?, 'sale', ?, ?, ?)`,
-          [
-            productId,
-            item.product_name || item.name || '',
-            take,
-            prevStock,
-            remainingGlobal,
-            lot.unit_cost || null,
-            (Number(lot.unit_cost || 0) * take) || null,
-            saleNumber,
-            `lot:${lot.id} code:${lot.lot_code}`,
-            created_by
-          ]
-        );
-        console.log('Inserted movement for product', productId, 'lot', lot.id, 'qty', take);
-
-        // Actualizar stock global en inventory_products
-        await conn.query('UPDATE inventory_products SET current_stock = ? WHERE product_id = ?', [remainingGlobal, productId]);
-        console.log('Updated inventory_products for', productId, 'newStock=', remainingGlobal);
+        // Registrar movimiento por lote: descuenta del local y recalcula el total global
+        const stock = await applyStockChange(conn, {
+          productId,
+          locationId,
+          type: 'exit',
+          quantity: take,
+          reason: 'sale',
+          reference: saleNumber,
+          notes: `lot:${lot.id} code:${lot.lot_code}`,
+          unitCost: Number(lot.unit_cost || 0) || null,
+          productName: item.product_name || item.name || '',
+          createdBy: created_by
+        });
+        console.log('Stock actualizado producto', productId, 'lote', lot.id, 'qty', take, 'local', locationId, 'stock=', stock.newStock, 'total=', stock.totalStock);
 
         required -= take;
         firstLoop = false;
@@ -409,6 +452,9 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     if (conn && transactionStarted) {
       try { await conn.rollback(); } catch {}
+    }
+    if (error instanceof InventoryLocationError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error('Error en POST /api/admin/sales:', error);
     return NextResponse.json({ error: 'Error al registrar venta', detail: error?.message || String(error) }, { status: 500 });

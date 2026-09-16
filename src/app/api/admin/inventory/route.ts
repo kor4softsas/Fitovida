@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { queryOne } from '@/lib/db';
 import { getInventoryData } from '@/lib/admin/inventory-export';
+import { parseLocationParam } from '@/lib/admin/locations';
 
 function isSchemaIssue(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
@@ -39,7 +40,8 @@ export async function GET(request: NextRequest) {
       category: searchParams.get('category'),
       status: searchParams.get('status') || 'active',
       searchTerm: searchParams.get('search'),
-      lowStock: searchParams.get('lowStock') === 'true'
+      lowStock: searchParams.get('lowStock') === 'true',
+      locationId: parseLocationParam(searchParams.get('locationId'))
     });
 
     return NextResponse.json({
